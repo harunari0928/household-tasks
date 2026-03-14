@@ -48,10 +48,12 @@ echo "JWT obtained."
 
 # 3. Create API token
 echo "Creating API token..."
-TOKEN_RESPONSE=$(curl -s -X POST "${VIKUNJA_URL}/api/v1/tokens" \
+# Token expires in 10 years
+EXPIRES_AT=$(date -u -d "+10 years" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v+10y "+%Y-%m-%dT%H:%M:%SZ")
+TOKEN_RESPONSE=$(curl -s -X PUT "${VIKUNJA_URL}/api/v1/tokens" \
   -H "Authorization: Bearer ${JWT}" \
   -H "Content-Type: application/json" \
-  -d '{"title":"scheduler","permissions":{"tasks":["create","read","update"],"projects":["read"]}}')
+  -d "{\"title\":\"scheduler\",\"permissions\":{\"tasks\":[\"create\",\"read\",\"update\"],\"projects\":[\"read\"]},\"expires_at\":\"${EXPIRES_AT}\"}")
 
 API_TOKEN=$(echo "${TOKEN_RESPONSE}" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 if [ -z "${API_TOKEN}" ]; then
