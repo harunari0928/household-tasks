@@ -3,8 +3,9 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { getDb } from './db.js';
+import { getDb, getUploadsDir } from './db.js';
 import tasksRouter from './routes/tasks.js';
+import attachmentsRouter from './routes/attachments.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,8 +18,12 @@ app.use(express.json());
 // Initialize DB
 getDb();
 
+// Ensure uploads directory exists
+fs.mkdirSync(getUploadsDir(), { recursive: true });
+
 // API routes
 app.use('/api/tasks', tasksRouter);
+app.use('/api', attachmentsRouter);
 
 // Config routes
 app.get('/api/config', (_req, res) => {
@@ -47,8 +52,16 @@ app.put('/api/config', (req, res) => {
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {
   const db = getDb();
+  db.exec('DELETE FROM attachments');
   db.exec('DELETE FROM execution_log');
   db.exec('DELETE FROM task_definitions');
+  // Clean uploads directory
+  const uploadsDir = getUploadsDir();
+  if (fs.existsSync(uploadsDir)) {
+    for (const file of fs.readdirSync(uploadsDir)) {
+      fs.unlinkSync(path.join(uploadsDir, file));
+    }
+  }
   res.json({ success: true });
 });
 

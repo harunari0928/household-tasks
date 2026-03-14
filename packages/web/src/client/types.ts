@@ -82,6 +82,16 @@ export interface ExecutionLog {
   error_message: string | null;
 }
 
+export interface Attachment {
+  id: string;
+  task_id: number;
+  filename: string;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+}
+
 export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
   daily: [],
   weekly: ['days_of_week'],

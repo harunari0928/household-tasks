@@ -1,1 +1,8 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Remove decorative quotes from blockquotes in prose */
+.prose blockquote p::before,
+.prose blockquote p::after {
+  content: none !important;
+}

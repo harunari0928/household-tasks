@@ -38,20 +38,10 @@ export default function App() {
     {} as Record<CategoryKey, number>,
   );
 
-  const handleSave = async (input: any, id?: number) => {
-    const url = id ? `/api/tasks/${id}` : '/api/tasks';
-    const method = id ? 'PUT' : 'POST';
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (res.ok) {
-      setShowForm(false);
-      setEditingTask(null);
-      await fetchTasks();
-    }
-    return res;
+  const handleSaved = () => {
+    setShowForm(false);
+    setEditingTask(null);
+    fetchTasks();
   };
 
   const handleToggle = async (task: TaskDefinition) => {
@@ -143,7 +133,7 @@ export default function App() {
               <TaskForm
                 task={editingTask}
                 defaultCategory={selectedCategory}
-                onSave={handleSave}
+                onSaved={handleSaved}
                 onCancel={handleCancel}
               />
             </div>

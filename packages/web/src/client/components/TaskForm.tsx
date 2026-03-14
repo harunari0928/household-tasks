@@ -1,15 +1,35 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { CATEGORIES, type CategoryKey, type TaskDefinition, type FrequencyTypeKey } from '../types.js';
 import FrequencySelector from './FrequencySelector.js';
+import MarkdownEditor, { type PendingFile } from './MarkdownEditor.js';
+import AttachmentsList from './AttachmentsList.js';
 
 interface Props {
   task?: TaskDefinition | null;
   defaultCategory: CategoryKey;
-  onSave: (input: any, id?: number) => Promise<Response>;
+  onSaved: () => void;
   onCancel: () => void;
 }
 
-export default function TaskForm({ task, defaultCategory, onSave, onCancel }: Props) {
+async function uploadFile(taskId: number, file: File): Promise<{ id: string; original_name: string } | null> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`/api/tasks/${taskId}/attachments`, { method: 'POST', body: formData });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function saveTaskToApi(input: any, id?: number): Promise<Response> {
+  const url = id ? `/api/tasks/${id}` : '/api/tasks';
+  const method = id ? 'PUT' : 'POST';
+  return fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: Props) {
   const [name, setName] = useState(task?.name || '');
   const [category, setCategory] = useState<CategoryKey>(task?.category || defaultCategory);
   const [frequencyType, setFrequencyType] = useState<FrequencyTypeKey>(
@@ -28,6 +48,33 @@ export default function TaskForm({ task, defaultCategory, onSave, onCancel }: Pr
   const [notes, setNotes] = useState(task?.notes || '');
   const [error, setError] = useState('');
   const [frequencyError, setFrequencyError] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [attachmentRefreshKey, setAttachmentRefreshKey] = useState(0);
+
+  const handleFileQueued = useCallback((pf: PendingFile) => {
+    setPendingFiles((prev) => [...prev, pf]);
+  }, []);
+
+  const handleFileUploaded = useCallback(() => {
+    setAttachmentRefreshKey((k) => k + 1);
+  }, []);
+
+  const handleRemovePending = useCallback((placeholderIndex: number) => {
+    setPendingFiles((prev) => prev.filter((pf) => pf.placeholderIndex !== placeholderIndex));
+    // Remove markdown reference from notes
+    setNotes((prev) =>
+      prev.replace(new RegExp(`!?\\[[^\\]]*\\]\\(pending:${placeholderIndex}\\)\\n?`, 'g'), ''),
+    );
+  }, []);
+
+  const handleMarkForDelete = useCallback((id: string) => {
+    setPendingDeleteIds((prev) => [...prev, id]);
+    // Remove markdown references to this attachment from notes
+    setNotes((prev) =>
+      prev.replace(new RegExp(`!?\\[[^\\]]*\\]\\(/api/attachments/${id}\\)\\n?`, 'g'), ''),
+    );
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +96,8 @@ export default function TaskForm({ task, defaultCategory, onSave, onCancel }: Pr
       return;
     }
 
+    let currentNotes = notes.trim();
+
     const input: any = {
       name: name.trim(),
       category,
@@ -67,15 +116,45 @@ export default function TaskForm({ task, defaultCategory, onSave, onCancel }: Pr
     if (assignee) {
       input.assignee = assignee;
     }
-    if (notes.trim()) {
-      input.notes = notes.trim();
+    if (currentNotes) {
+      input.notes = currentNotes;
     }
 
-    const res = await onSave(input, task?.id);
+    // Save task (create or update)
+    const res = await saveTaskToApi(input, task?.id);
     if (!res.ok) {
       const data = await res.json();
       setError(data.error || '保存に失敗しました');
+      return;
     }
+
+    const saved = await res.json();
+    const taskId = saved.id;
+
+    // Upload queued files and replace placeholders
+    if (pendingFiles.length > 0) {
+      let updatedNotes = currentNotes;
+      for (const pf of pendingFiles) {
+        const attachment = await uploadFile(taskId, pf.file);
+        if (attachment) {
+          updatedNotes = updatedNotes.replace(
+            `pending:${pf.placeholderIndex}`,
+            `/api/attachments/${attachment.id}`,
+          );
+        }
+      }
+      // Re-save notes with real URLs
+      if (updatedNotes !== currentNotes) {
+        await saveTaskToApi({ ...input, notes: updatedNotes }, taskId);
+      }
+    }
+
+    // Execute pending deletions
+    for (const id of pendingDeleteIds) {
+      await fetch(`/api/attachments/${id}`, { method: 'DELETE' });
+    }
+
+    onSaved();
   };
 
   return (
@@ -152,12 +231,21 @@ export default function TaskForm({ task, defaultCategory, onSave, onCancel }: Pr
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
-        <input
-          type="text"
+        <MarkdownEditor
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
-          data-testid="notes-input"
+          onChange={setNotes}
+          taskId={task?.id}
+          pendingFiles={pendingFiles}
+          onFileQueued={handleFileQueued}
+          onFileUploaded={handleFileUploaded}
+        />
+        <AttachmentsList
+          taskId={task?.id}
+          refreshKey={attachmentRefreshKey}
+          pendingFiles={pendingFiles.map((pf) => ({ name: pf.file.name, size: pf.file.size, type: pf.file.type, blobUrl: pf.blobUrl, placeholderIndex: pf.placeholderIndex }))}
+          pendingDeleteIds={pendingDeleteIds}
+          onMarkForDelete={handleMarkForDelete}
+          onRemovePending={handleRemovePending}
         />
       </div>
 
