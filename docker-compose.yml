@@ -12,6 +12,8 @@ services:
       - DB_PATH=/data/task_definitions.db
       - PORT=3100
       - TZ=Asia/Tokyo
+    labels:
+      - "com.centurylinklabs.watchtower.scope=household-tasks"
 
   scheduler:
     image: harunari/household-tasks-scheduler:latest
@@ -25,6 +27,8 @@ services:
       - DB_PATH=/data/task_definitions.db
       - VIKUNJA_URL=http://vikunja:3456/api/v1
       - VIKUNJA_API_TOKEN=${VIKUNJA_API_TOKEN}
+    labels:
+      - "com.centurylinklabs.watchtower.scope=household-tasks"
     depends_on:
       - vikunja
 
@@ -39,4 +43,20 @@ services:
       - VIKUNJA_SERVICE_TIMEZONE=Asia/Tokyo
       - VIKUNJA_SERVICE_PUBLICURL=http://localhost:3456
       - VIKUNJA_CORS_ENABLE=false
+    labels:
+      - "com.centurylinklabs.watchtower.scope=household-tasks"
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Asia/Tokyo
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_STOPPED=true
+      - WATCHTOWER_SCOPE=household-tasks
+    labels:
+      - "com.centurylinklabs.watchtower.scope=household-tasks"
+    restart: unless-stopped
 
