@@ -3,7 +3,7 @@ FROM node:20-slim AS builder
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY shared/ ./shared/
 COPY packages/scheduler/ ./packages/scheduler/
 
