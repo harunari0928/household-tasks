@@ -10,6 +10,7 @@ export default function App() {
   const [allTasks, setAllTasks] = useState<TaskDefinition[]>([]);
   const [editingTask, setEditingTask] = useState<TaskDefinition | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchTasks = useCallback(async () => {
     const res = await fetch('/api/tasks');
@@ -22,8 +23,12 @@ export default function App() {
   }, [fetchTasks]);
 
   useEffect(() => {
-    setTasks(allTasks.filter((t) => t.category === selectedCategory));
-  }, [allTasks, selectedCategory]);
+    if (searchQuery) {
+      setTasks(allTasks.filter((t) => t.name.toLowerCase().includes(searchQuery.toLowerCase())));
+    } else {
+      setTasks(allTasks.filter((t) => t.category === selectedCategory));
+    }
+  }, [allTasks, selectedCategory, searchQuery]);
 
   const categoryCounts = Object.keys(CATEGORIES).reduce(
     (acc, key) => {
@@ -71,6 +76,15 @@ export default function App() {
     setEditingTask(null);
   };
 
+  useEffect(() => {
+    if (!showForm) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showForm]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b border-gray-200">
@@ -81,9 +95,22 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto px-4 py-4">
         <CategoryTabs
-          selected={selectedCategory}
-          onSelect={setSelectedCategory}
+          selected={searchQuery ? null : selectedCategory}
+          onSelect={(key) => {
+            setSearchQuery('');
+            setSelectedCategory(key);
+          }}
           counts={categoryCounts}
+        />
+
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="タスクを検索..."
+          aria-label="タスクを検索"
+          className="mt-3 w-full border border-gray-300 rounded-lg px-3 py-2 min-h-[44px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          data-testid="search-input"
         />
 
         <TaskList
@@ -101,8 +128,18 @@ export default function App() {
         </button>
 
         {showForm && (
-          <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center">
-            <div className="bg-white w-full sm:max-w-lg sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center"
+            data-testid="dialog-overlay"
+            onClick={handleCancel}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={editingTask ? 'タスクを編集' : 'タスクを追加'}
+              className="bg-white w-full sm:max-w-lg sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <TaskForm
                 task={editingTask}
                 defaultCategory={selectedCategory}

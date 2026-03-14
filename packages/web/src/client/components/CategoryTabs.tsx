@@ -1,7 +1,7 @@
 import { CATEGORIES, type CategoryKey } from '../types.js';
 
 interface Props {
-  selected: CategoryKey;
+  selected: CategoryKey | null;
   onSelect: (key: CategoryKey) => void;
   counts: Record<CategoryKey, number>;
 }
