@@ -26,7 +26,7 @@ COPY --from=builder /app/packages/scheduler/dist/ ./packages/scheduler/dist/
 RUN pnpm install --frozen-lockfile --prod
 
 # Setup cron job
-RUN echo '0 6 * * * cd /app && node packages/scheduler/dist/index.js >> /var/log/task-scheduler.log 2>&1' > /etc/cron.d/task-scheduler && \
+RUN echo '0 * * * * cd /app && node packages/scheduler/dist/index.js >> /var/log/task-scheduler.log 2>&1' > /etc/cron.d/task-scheduler && \
     chmod 0644 /etc/cron.d/task-scheduler && \
     crontab /etc/cron.d/task-scheduler && \
     touch /var/log/task-scheduler.log

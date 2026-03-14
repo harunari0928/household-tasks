@@ -1,6 +1,6 @@
 # Scheduler Package
 
-Node.js cron job that runs daily at 06:00 JST. Reads task definitions from SQLite and creates matching tasks in Vikunja.
+Node.js cron job that runs hourly (at :00). Reads task definitions from SQLite and creates matching tasks in Vikunja.
 
 ## Structure
 
