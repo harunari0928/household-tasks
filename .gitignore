@@ -7,3 +7,4 @@ data/*.db-wal
 test-results/
 playwright-report/
 vikunja-data/
+*.png

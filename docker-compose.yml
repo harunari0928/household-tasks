@@ -1,5 +1,6 @@
 services:
   web:
+    image: harunari/household-tasks-web:latest
     build:
       context: .
       dockerfile: packages/web/Dockerfile
@@ -13,6 +14,7 @@ services:
       - TZ=Asia/Tokyo
 
   scheduler:
+    image: harunari/household-tasks-scheduler:latest
     build:
       context: .
       dockerfile: packages/scheduler/Dockerfile
