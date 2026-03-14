@@ -93,6 +93,79 @@ test('バリデーション: 毎週で曜日未選択だとエラー', async ({ 
   await expect(page.getByTestId('frequency-error')).toContainText('曜日を1つ以上選択');
 });
 
+test('備考が長くスクロールが下にある状態でバリデーションエラーが出ると、エラー表示位置までスクロールされる', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('add-task-button').click();
+
+  // Leave task name empty (will trigger validation error)
+  // Fill notes with long content to push save button below viewport
+  const longText = Array(30).fill('これはテスト用の長い備考テキストです。').join('\n');
+  await page.getByTestId('notes-input').fill(longText);
+
+  // Scroll dialog to the bottom (to the save button)
+  const saveButton = page.getByTestId('save-button');
+  await saveButton.scrollIntoViewIfNeeded();
+  await saveButton.click();
+
+  // Error message should be visible in viewport (scrolled into view automatically)
+  const errorEl = page.getByTestId('form-error');
+  await expect(errorEl).toBeVisible();
+  await expect(errorEl).toContainText('タスク名を入力してください');
+
+  // Verify the error is actually within the visible area of the dialog
+  const errorBox = await errorEl.boundingBox();
+  const dialogBox = await page.locator('[role="dialog"]').boundingBox();
+  expect(errorBox).toBeTruthy();
+  expect(dialogBox).toBeTruthy();
+  expect(errorBox!.y).toBeGreaterThanOrEqual(dialogBox!.y);
+  expect(errorBox!.y + errorBox!.height).toBeLessThanOrEqual(dialogBox!.y + dialogBox!.height);
+});
+
+test('既にバリデーションエラーが表示された状態で再度保存しても、エラー位置までスクロールされる', async ({ browser }) => {
+  // Use a small viewport to ensure the form content overflows the dialog
+  const context = await browser.newContext({ viewport: { width: 400, height: 500 } });
+  const page = await context.newPage();
+  // Reset DB
+  await fetch('http://localhost:5174/api/test/reset', { method: 'POST' });
+
+  await page.goto('/');
+  await page.getByTestId('add-task-button').click();
+
+  const longText = Array(30).fill('これはテスト用の長い備考テキストです。').join('\n');
+  await page.getByTestId('notes-input').fill(longText);
+
+  const dialog = page.locator('[role="dialog"]');
+  const saveButton = page.getByTestId('save-button');
+  const errorEl = page.getByTestId('form-error');
+
+  // 1回目: スクロールしてエラーを出す
+  await saveButton.scrollIntoViewIfNeeded();
+  await saveButton.click();
+  await expect(errorEl).toBeVisible();
+  await page.waitForTimeout(500);
+
+  // ユーザーが再び下にスクロール
+  await dialog.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await page.waitForTimeout(100);
+
+  // エラーが見えなくなっていることを確認
+  const box2 = await errorEl.boundingBox();
+  const dBox2 = await dialog.boundingBox();
+  expect(box2!.y + box2!.height).toBeLessThan(dBox2!.y + 1);
+
+  // 2回目: 同じエラーで再度保存
+  await saveButton.click();
+  await page.waitForTimeout(500);
+
+  // エラーが再びビューポート内にスクロールされている
+  const box3 = await errorEl.boundingBox();
+  const dBox3 = await dialog.boundingBox();
+  expect(box3!.y).toBeGreaterThanOrEqual(dBox3!.y);
+  expect(box3!.y + box3!.height).toBeLessThanOrEqual(dBox3!.y + dBox3!.height);
+
+  await context.close();
+});
+
 test('タスクの有効/無効をトグルできる', async ({ page, baseURL }) => {
   await page.goto('/');
 

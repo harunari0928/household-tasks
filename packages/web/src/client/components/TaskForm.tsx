@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { CATEGORIES, type CategoryKey, type TaskDefinition, type FrequencyTypeKey } from '../types.js';
 import FrequencySelector from './FrequencySelector.js';
 import MarkdownEditor, { type PendingFile } from './MarkdownEditor.js';
@@ -51,6 +51,12 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [attachmentRefreshKey, setAttachmentRefreshKey] = useState(0);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const frequencyErrorRef = useRef<HTMLDivElement>(null);
+
+  const scrollToError = useCallback((ref: React.RefObject<HTMLDivElement | null>) => {
+    requestAnimationFrame(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }, []);
 
   const handleFileQueued = useCallback((pf: PendingFile) => {
     setPendingFiles((prev) => [...prev, pf]);
@@ -83,16 +89,19 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
 
     if (!name.trim()) {
       setError('タスク名を入力してください');
+      scrollToError(errorRef);
       return;
     }
 
     if ((frequencyType === 'weekly' || frequencyType === 'n_weeks') && daysOfWeek.length === 0) {
       setFrequencyError('曜日を1つ以上選択してください');
+      scrollToError(frequencyErrorRef);
       return;
     }
 
     if (['n_days', 'n_weeks', 'n_months'].includes(frequencyType) && (!frequencyInterval || frequencyInterval < 2)) {
       setFrequencyError('間隔は2以上の整数で入力してください');
+      scrollToError(frequencyErrorRef);
       return;
     }
 
@@ -125,6 +134,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
     if (!res.ok) {
       const data = await res.json();
       setError(data.error || '保存に失敗しました');
+      scrollToError(errorRef);
       return;
     }
 
@@ -164,7 +174,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
       </h2>
 
       {error && (
-        <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm" data-testid="form-error">
+        <div ref={errorRef} className="bg-red-50 text-red-600 p-3 rounded-lg text-sm" data-testid="form-error">
           {error}
         </div>
       )}
@@ -197,6 +207,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
         </select>
       </div>
 
+      <div ref={frequencyErrorRef}>
       <FrequencySelector
         value={{
           frequency_type: frequencyType,
@@ -213,6 +224,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
         }}
         error={frequencyError}
       />
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">担当</label>
