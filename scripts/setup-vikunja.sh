@@ -53,7 +53,7 @@ EXPIRES_AT=$(date -u -d "+10 years" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u
 TOKEN_RESPONSE=$(curl -s -X PUT "${VIKUNJA_URL}/api/v1/tokens" \
   -H "Authorization: Bearer ${JWT}" \
   -H "Content-Type: application/json" \
-  -d "{\"title\":\"scheduler\",\"permissions\":{\"tasks\":[\"create\",\"read\",\"update\"],\"projects\":[\"read\"]},\"expires_at\":\"${EXPIRES_AT}\"}")
+  -d "{\"title\":\"scheduler\",\"permissions\":{\"tasks\":[\"create\",\"read\",\"update\"]},\"expires_at\":\"${EXPIRES_AT}\"}")
 
 API_TOKEN=$(echo "${TOKEN_RESPONSE}" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 if [ -z "${API_TOKEN}" ]; then
