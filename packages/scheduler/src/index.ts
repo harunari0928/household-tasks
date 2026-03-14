@@ -17,7 +17,9 @@ async function main() {
   const today = getTodayJST();
   const db = getDb();
 
-  const defaultProjectId = parseInt(getConfigValue(db, 'default_project_id')) || 1;
+  const defaultProjectId = process.env.VIKUNJA_PROJECT_ID
+    ? parseInt(process.env.VIKUNJA_PROJECT_ID)
+    : parseInt(getConfigValue(db, 'default_project_id')) || 1;
 
   console.log(`[${new Date().toISOString()}] Scheduler running for date: ${today}${dryRun ? ' (DRY RUN)' : ''}`);
 
