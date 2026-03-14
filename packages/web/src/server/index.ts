@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
@@ -8,7 +8,7 @@ import tasksRouter from './routes/tasks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const app = express();
+const app: Express = express();
 const PORT = parseInt(process.env.PORT || '3100', 10);
 
 app.use(cors());

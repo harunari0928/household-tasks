@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { getDb } from '../db.js';
 import { getTodayJST } from '@household-tasks/shared';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 const VALID_CATEGORIES = ['water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash', 'childcare', 'cooking', 'lifestyle'];
 const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly'];
