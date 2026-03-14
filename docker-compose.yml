@@ -1,0 +1,39 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./data:/data
+    environment:
+      - DB_PATH=/data/task_definitions.db
+      - PORT=3100
+      - TZ=Asia/Tokyo
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: packages/scheduler/Dockerfile
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Asia/Tokyo
+      - DB_PATH=/data/task_definitions.db
+      - VIKUNJA_URL=http://vikunja:3456/api/v1
+      - VIKUNJA_API_TOKEN=${VIKUNJA_API_TOKEN}
+    depends_on:
+      - vikunja
+
+  vikunja:
+    image: vikunja/vikunja
+    ports:
+      - "3456:3456"
+    volumes:
+      - vikunja-data:/app/vikunja/files
+    environment:
+      - VIKUNJA_SERVICE_TIMEZONE=Asia/Tokyo
+
+volumes:
+  vikunja-data:
