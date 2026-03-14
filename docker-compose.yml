@@ -31,11 +31,9 @@ services:
     ports:
       - "3456:3456"
     volumes:
-      - vikunja-data:/app/vikunja/files
+      - ./vikunja-data:/app/vikunja/files
     environment:
       - VIKUNJA_SERVICE_TIMEZONE=Asia/Tokyo
       - VIKUNJA_SERVICE_PUBLICURL=http://localhost:3456
       - VIKUNJA_CORS_ENABLE=false
 
-volumes:
-  vikunja-data:
