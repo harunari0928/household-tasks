@@ -44,6 +44,12 @@ export default function App() {
     fetchTasks();
   };
 
+  const handleDeleted = () => {
+    setShowForm(false);
+    setEditingTask(null);
+    fetchTasks();
+  };
+
   const handleToggle = async (task: TaskDefinition) => {
     const res = await fetch(`/api/tasks/${task.id}/toggle`, { method: 'POST' });
     if (res.ok) {
@@ -135,6 +141,7 @@ export default function App() {
                 defaultCategory={selectedCategory}
                 onSaved={handleSaved}
                 onCancel={handleCancel}
+                onDeleted={handleDeleted}
               />
             </div>
           </div>

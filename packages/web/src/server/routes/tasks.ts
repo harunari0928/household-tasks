@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from 'express';
-import { getDb } from '../db.js';
+import fs from 'fs';
+import path from 'path';
+import { getDb, getUploadsDir } from '../db.js';
 import { getTodayJST } from '@household-tasks/shared';
 
 const router: ReturnType<typeof Router> = Router();
@@ -211,7 +213,7 @@ router.put('/:id', (req: Request, res: Response) => {
   res.json(task);
 });
 
-// DELETE /api/tasks/:id (論理削除)
+// DELETE /api/tasks/:id (物理削除)
 router.delete('/:id', (req: Request, res: Response) => {
   const db = getDb();
   const existing = db.prepare('SELECT * FROM task_definitions WHERE id = ?').get(req.params.id);
@@ -220,7 +222,21 @@ router.delete('/:id', (req: Request, res: Response) => {
     return;
   }
 
-  db.prepare('UPDATE task_definitions SET is_active = 0, updated_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
+  // 添付ファイルを物理削除
+  const attachments = db.prepare('SELECT * FROM attachments WHERE task_id = ?').all(req.params.id) as any[];
+  for (const att of attachments) {
+    try { fs.unlinkSync(path.join(getUploadsDir(), att.filename)); }
+    catch (_) { /* ファイルが無くても続行 */ }
+  }
+
+  // FK制約があるため子テーブルから先に削除
+  const deleteAll = db.transaction(() => {
+    db.prepare('DELETE FROM attachments WHERE task_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM execution_log WHERE task_definition_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM task_definitions WHERE id = ?').run(req.params.id);
+  });
+  deleteAll();
+
   res.json({ success: true });
 });
 

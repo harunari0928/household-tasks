@@ -9,6 +9,7 @@ interface Props {
   defaultCategory: CategoryKey;
   onSaved: () => void;
   onCancel: () => void;
+  onDeleted?: () => void;
 }
 
 async function uploadFile(taskId: number, file: File): Promise<{ id: string; original_name: string } | null> {
@@ -29,7 +30,7 @@ async function saveTaskToApi(input: any, id?: number): Promise<Response> {
   });
 }
 
-export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: Props) {
+export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onDeleted }: Props) {
   const [name, setName] = useState(task?.name || '');
   const [category, setCategory] = useState<CategoryKey>(task?.category || defaultCategory);
   const [frequencyType, setFrequencyType] = useState<FrequencyTypeKey>(
@@ -51,6 +52,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [attachmentRefreshKey, setAttachmentRefreshKey] = useState(0);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
   const frequencyErrorRef = useRef<HTMLDivElement>(null);
 
@@ -81,6 +83,18 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
       prev.replace(new RegExp(`!?\\[[^\\]]*\\]\\(/api/attachments/${id}\\)\\n?`, 'g'), ''),
     );
   }, []);
+
+  const handleDelete = async () => {
+    if (!task || !onDeleted) return;
+    const res = await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      onDeleted();
+    } else {
+      const data = await res.json();
+      setError(data.error || '削除に失敗しました');
+      scrollToError(errorRef);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -278,6 +292,43 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel }: P
           キャンセル
         </button>
       </div>
+
+      {task && onDeleted && !showDeleteConfirm && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-full bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 transition-colors min-h-[44px]"
+            data-testid="delete-button"
+          >
+            削除
+          </button>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="pt-2 space-y-2" data-testid="delete-confirm">
+          <p className="text-sm text-red-600 font-medium text-center">本当に削除しますか？</p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="flex-1 bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 transition-colors min-h-[44px]"
+              data-testid="delete-confirm-button"
+            >
+              削除する
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors min-h-[44px]"
+              data-testid="delete-cancel-button"
+            >
+              やめる
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
