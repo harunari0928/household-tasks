@@ -170,12 +170,13 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
               {btn.label}
             </button>
           ))}
-          <label className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 cursor-pointer inline-flex items-center" title="ファイル添付" data-testid="file-attach-button">
+          <label className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 cursor-pointer inline-flex items-center" title="ファイル添付">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             <input
               type="file"
               className="hidden"
-              data-testid="file-input"
+              aria-label="ファイル添付"
+
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFileUpload(file);
@@ -209,7 +210,9 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
       {preview ? (
         <div
           className="w-full border border-gray-300 rounded-lg px-3 py-2 min-h-[100px] prose prose-sm max-w-none bg-gray-50"
-          data-testid="notes-preview"
+          role="region"
+          aria-label="プレビュー"
+
         >
           {value ? (
             <ReactMarkdown
@@ -238,7 +241,8 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
           rows={4}
           placeholder="マークダウンで記述できます"
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[100px] resize-y"
-          data-testid="notes-input"
+          aria-label="備考"
+
         />
       )}
     </div>

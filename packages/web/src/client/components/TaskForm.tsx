@@ -182,36 +182,38 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 space-y-4" data-testid="task-form">
+    <form onSubmit={handleSubmit} className="p-4 space-y-4">
       <h2 className="text-lg font-bold text-gray-900">
         {task ? 'タスクを編集' : 'タスクを追加'}
       </h2>
 
       {error && (
-        <div ref={errorRef} className="bg-red-50 text-red-600 p-3 rounded-lg text-sm" data-testid="form-error">
+        <div ref={errorRef} className="bg-red-50 text-red-600 p-3 rounded-lg text-sm" role="alert">
           {error}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">タスク名</label>
+        <label htmlFor="task-name" className="block text-sm font-medium text-gray-700 mb-1">タスク名</label>
         <input
+          id="task-name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
-          data-testid="task-name-input"
+
           autoFocus
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
+        <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
         <select
+          id="category"
           value={category}
           onChange={(e) => setCategory(e.target.value as CategoryKey)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
-          data-testid="category-select"
+
         >
           {(Object.entries(CATEGORIES) as [CategoryKey, string][]).map(([key, label]) => (
             <option key={key} value={key}>
@@ -241,12 +243,13 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">担当</label>
+        <label htmlFor="assignee" className="block text-sm font-medium text-gray-700 mb-1">担当</label>
         <select
+          id="assignee"
           value={assignee}
           onChange={(e) => setAssignee(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
-          data-testid="assignee-select"
+
         >
           <option value="">指定なし</option>
           <option value="husband">夫</option>
@@ -279,7 +282,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
         <button
           type="submit"
           className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors min-h-[44px]"
-          data-testid="save-button"
+
         >
           保存
         </button>
@@ -287,7 +290,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           type="button"
           onClick={onCancel}
           className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors min-h-[44px]"
-          data-testid="cancel-button"
+
         >
           キャンセル
         </button>
@@ -299,7 +302,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
             className="w-full bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 transition-colors min-h-[44px]"
-            data-testid="delete-button"
+
           >
             削除
           </button>
@@ -307,14 +310,14 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       )}
 
       {showDeleteConfirm && (
-        <div className="pt-2 space-y-2" data-testid="delete-confirm">
+        <div className="pt-2 space-y-2">
           <p className="text-sm text-red-600 font-medium text-center">本当に削除しますか？</p>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={handleDelete}
               className="flex-1 bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 transition-colors min-h-[44px]"
-              data-testid="delete-confirm-button"
+
             >
               削除する
             </button>
@@ -322,7 +325,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
               type="button"
               onClick={() => setShowDeleteConfirm(false)}
               className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors min-h-[44px]"
-              data-testid="delete-cancel-button"
+
             >
               やめる
             </button>

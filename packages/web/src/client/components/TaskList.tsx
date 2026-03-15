@@ -52,21 +52,21 @@ function formatAssignee(assignee: string | null): string {
 export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
   if (tasks.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400" data-testid="empty-task-list">
+      <div className="text-center py-8 text-gray-400">
         このカテゴリにはタスクがありません
       </div>
     );
   }
 
   return (
-    <div className="space-y-1 mt-3" data-testid="task-list">
+    <div className="space-y-1 mt-3">
       {tasks.map((task) => (
         <div
           key={task.id}
           className={`flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer ${
             !task.is_active ? 'opacity-50' : ''
           }`}
-          data-testid={`task-row-${task.id}`}
+
         >
           <button
             onClick={(e) => {
@@ -74,7 +74,7 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
               onToggleActive(task);
             }}
             className="flex-shrink-0 w-6 h-6 min-w-[44px] min-h-[44px] flex items-center justify-center"
-            data-testid={`toggle-task-${task.id}`}
+
             aria-label={task.is_active ? '無効にする' : '有効にする'}
           >
             {task.is_active ? '☑' : '☐'}
@@ -82,7 +82,7 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
           <div
             className="flex-1 min-w-0"
             onClick={() => onEdit(task)}
-            data-testid={`edit-task-${task.id}`}
+
           >
             <div className="font-medium text-gray-900 truncate">{task.name}</div>
             <div className="text-sm text-gray-500 flex gap-2">

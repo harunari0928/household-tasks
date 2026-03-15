@@ -8,7 +8,7 @@ interface Props {
 
 export default function CategoryTabs({ selected, onSelect, counts }: Props) {
   return (
-    <div className="flex overflow-x-auto gap-1 pb-2 -mx-4 px-4 scrollbar-hide" data-testid="category-tabs">
+    <div className="flex overflow-x-auto gap-1 pb-2 -mx-4 px-4 scrollbar-hide">
       {(Object.entries(CATEGORIES) as [CategoryKey, string][]).map(([key, label]) => (
         <button
           key={key}
@@ -18,7 +18,7 @@ export default function CategoryTabs({ selected, onSelect, counts }: Props) {
               ? 'bg-blue-600 text-white'
               : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
           }`}
-          data-testid={`category-tab-${key}`}
+
         >
           {label}
           {counts[key] > 0 && (

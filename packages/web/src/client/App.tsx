@@ -106,7 +106,7 @@ export default function App() {
           placeholder="タスクを検索..."
           aria-label="タスクを検索"
           className="mt-3 w-full border border-gray-300 rounded-lg px-3 py-2 min-h-[44px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          data-testid="search-input"
+
         />
 
         <TaskList
@@ -118,7 +118,7 @@ export default function App() {
         <button
           onClick={handleAdd}
           className="mt-4 w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors text-base"
-          data-testid="add-task-button"
+
         >
           ＋ タスクを追加
         </button>
@@ -126,7 +126,7 @@ export default function App() {
         {showForm && (
           <div
             className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center"
-            data-testid="dialog-overlay"
+
             onClick={handleCancel}
           >
             <div

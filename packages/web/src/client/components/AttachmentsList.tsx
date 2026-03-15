@@ -46,7 +46,7 @@ export default function AttachmentsList({ taskId, refreshKey, pendingFiles, pend
   if (!hasAttachments && !hasPendingFiles) return null;
 
   return (
-    <div className="space-y-1 mt-2" data-testid="attachments-list">
+    <div className="space-y-1 mt-2" role="region" aria-label="添付ファイル">
       <div className="text-xs font-medium text-gray-500">添付ファイル</div>
       <div className="space-y-1">
         {visibleAttachments.map((att) => (
@@ -76,7 +76,7 @@ export default function AttachmentsList({ taskId, refreshKey, pendingFiles, pend
               onClick={() => onMarkForDelete?.(att.id)}
               className="text-red-400 hover:text-red-600 text-xs px-1"
               title="削除"
-              data-testid={`delete-attachment-${att.id}`}
+
             >
               ✕
             </button>
