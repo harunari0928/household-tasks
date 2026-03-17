@@ -81,6 +81,7 @@ echo "Project created (ID: ${PROJECT_ID})."
 # 5. Write to .env
 cat > "${ENV_FILE}" << EOF
 VIKUNJA_API_TOKEN=${API_TOKEN}
+DEFAULT_PROJECT_ID=${PROJECT_ID}
 EOF
 
 echo ""
@@ -90,9 +91,7 @@ echo "Project ID: ${PROJECT_ID}"
 echo "Written to: ${ENV_FILE}"
 echo ""
 echo "Next steps:"
-echo "  1. Update scheduler_config via API:"
-echo "     curl -X PUT http://localhost:3100/api/config -H 'Content-Type: application/json' -d '{\"default_project_id\":\"${PROJECT_ID}\",\"vikunja_api_token\":\"${API_TOKEN}\"}'"
-echo "  2. Import seed data:"
+echo "  1. Import seed data:"
 echo "     ./scripts/seed.sh"
-echo "  3. Restart containers:"
+echo "  2. Restart containers:"
 echo "     docker compose up -d"

@@ -27,7 +27,7 @@ services:
       - DB_PATH=/data/task_definitions.db
       - VIKUNJA_URL=http://vikunja:3456/api/v1
       - VIKUNJA_API_TOKEN=${VIKUNJA_API_TOKEN}
-      - VIKUNJA_PROJECT_ID=4
+      - DEFAULT_PROJECT_ID=${DEFAULT_PROJECT_ID:-1}
     labels:
       - "com.centurylinklabs.watchtower.scope=household-tasks"
     depends_on:

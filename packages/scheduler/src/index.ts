@@ -6,7 +6,6 @@ import {
   logExecution,
   updateNextDueDate,
   getFailedTasks,
-  getConfigValue,
 } from './db.js';
 import { shouldCreateToday, calculateNextDueDate } from './matcher.js';
 import { createTask, hasUncompletedTask } from './vikunja.js';
@@ -17,9 +16,7 @@ async function main() {
   const today = getTodayJST();
   const db = getDb();
 
-  const defaultProjectId = process.env.VIKUNJA_PROJECT_ID
-    ? parseInt(process.env.VIKUNJA_PROJECT_ID)
-    : parseInt(getConfigValue(db, 'default_project_id')) || 1;
+  const defaultProjectId = parseInt(process.env.DEFAULT_PROJECT_ID || '1', 10);
 
   console.log(`[${new Date().toISOString()}] Scheduler running for date: ${today}${dryRun ? ' (DRY RUN)' : ''}`);
 
@@ -48,7 +45,7 @@ async function main() {
     try {
       const hasDuplicate = await hasUncompletedTask(projectId, task.name);
       if (hasDuplicate) {
-        logExecution(db, task.id, null, 'skipped_duplicate');
+        logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
         skipped++;
         console.log(`  SKIP (duplicate): "${task.name}"`);
         continue;
@@ -56,7 +53,7 @@ async function main() {
 
       const description = `カテゴリ: ${task.category} | 頻度: ${task.frequency_type}`;
       const vikunjaTaskId = await createTask(projectId, task.name, description);
-      logExecution(db, task.id, vikunjaTaskId, 'created');
+      logExecution(db, task.id, vikunjaTaskId, 'created', undefined, today);
       created++;
       console.log(`  CREATED: "${task.name}" (vikunja_id=${vikunjaTaskId})`);
 
@@ -66,7 +63,7 @@ async function main() {
         updateNextDueDate(db, task.id, nextDate);
       }
     } catch (err: any) {
-      logExecution(db, task.id, null, 'failed', err.message);
+      logExecution(db, task.id, null, 'failed', err.message, today);
       failed++;
       console.error(`  FAILED: "${task.name}" - ${err.message}`);
     }
@@ -84,11 +81,11 @@ async function main() {
       try {
         const description = `カテゴリ: ${task.category} | 頻度: ${task.frequency_type}`;
         const vikunjaTaskId = await createTask(projectId, task.name, description);
-        logExecution(db, task.id, vikunjaTaskId, 'created');
+        logExecution(db, task.id, vikunjaTaskId, 'created', undefined, today);
         created++;
         console.log(`  RETRY OK: "${task.name}" (vikunja_id=${vikunjaTaskId})`);
       } catch (err: any) {
-        logExecution(db, task.id, null, 'failed', err.message);
+        logExecution(db, task.id, null, 'failed', err.message, today);
         failed++;
         console.error(`  RETRY FAILED: "${task.name}" - ${err.message}`);
       }

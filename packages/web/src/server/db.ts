@@ -54,15 +54,7 @@ const migrations: Migration[] = [
           FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
         );
 
-        CREATE TABLE IF NOT EXISTS scheduler_config (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        );
-
-        INSERT OR IGNORE INTO scheduler_config (key, value) VALUES ('vikunja_url', 'http://vikunja:3456/api/v1');
-        INSERT OR IGNORE INTO scheduler_config (key, value) VALUES ('vikunja_api_token', '');
-        INSERT OR IGNORE INTO scheduler_config (key, value) VALUES ('default_project_id', '');
-      `);
+`);
     },
   },
   {

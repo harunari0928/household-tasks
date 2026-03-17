@@ -25,30 +25,6 @@ fs.mkdirSync(getUploadsDir(), { recursive: true });
 app.use('/api/tasks', tasksRouter);
 app.use('/api', attachmentsRouter);
 
-// Config routes
-app.get('/api/config', (_req, res) => {
-  const db = getDb();
-  const rows = db.prepare('SELECT key, value FROM scheduler_config').all() as { key: string; value: string }[];
-  const config: Record<string, string> = {};
-  for (const row of rows) {
-    config[row.key] = row.value;
-  }
-  res.json(config);
-});
-
-app.put('/api/config', (req, res) => {
-  const db = getDb();
-  const entries = Object.entries(req.body) as [string, string][];
-  const stmt = db.prepare('INSERT OR REPLACE INTO scheduler_config (key, value) VALUES (?, ?)');
-  const updateAll = db.transaction(() => {
-    for (const [key, value] of entries) {
-      stmt.run(key, String(value));
-    }
-  });
-  updateAll();
-  res.json({ success: true });
-});
-
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {
   const db = getDb();

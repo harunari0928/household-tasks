@@ -49,11 +49,19 @@ export function logExecution(
   vikunjaTaskId: number | null,
   status: 'created' | 'failed' | 'skipped_duplicate',
   errorMessage?: string,
+  executedAt?: string,
 ): void {
-  db.prepare(`
-    INSERT INTO execution_log (task_definition_id, vikunja_task_id, status, error_message)
-    VALUES (?, ?, ?, ?)
-  `).run(taskDefId, vikunjaTaskId, status, errorMessage || null);
+  if (executedAt) {
+    db.prepare(`
+      INSERT INTO execution_log (task_definition_id, vikunja_task_id, status, error_message, executed_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(taskDefId, vikunjaTaskId, status, errorMessage || null, executedAt);
+  } else {
+    db.prepare(`
+      INSERT INTO execution_log (task_definition_id, vikunja_task_id, status, error_message)
+      VALUES (?, ?, ?, ?)
+    `).run(taskDefId, vikunjaTaskId, status, errorMessage || null);
+  }
 }
 
 export function updateNextDueDate(db: Database.Database, taskId: number, nextDate: string): void {
@@ -72,9 +80,4 @@ export function getFailedTasks(db: Database.Database): { task_definition_id: num
       )
       AND td.is_active = 1
   `).all() as { task_definition_id: number; log_id: number }[];
-}
-
-export function getConfigValue(db: Database.Database, key: string): string {
-  const row = db.prepare('SELECT value FROM scheduler_config WHERE key = ?').get(key) as { value: string } | undefined;
-  return row?.value || '';
 }
