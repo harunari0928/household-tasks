@@ -181,36 +181,36 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
 
   return (
     <form onSubmit={handleSubmit} className="p-4 space-y-4">
-      <h2 className="text-lg font-bold text-gray-900">
+      <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
         {task ? 'タスクを編集' : 'タスクを追加'}
       </h2>
 
       {error && (
-        <div ref={errorRef} className="bg-red-50 text-red-600 p-3 rounded-lg text-sm" role="alert">
+        <div ref={errorRef} className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm" role="alert">
           {error}
         </div>
       )}
 
       <div>
-        <label htmlFor="task-name" className="block text-sm font-medium text-gray-700 mb-1">タスク名</label>
+        <label htmlFor="task-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">タスク名</label>
         <input
           id="task-name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
 
           autoFocus
         />
       </div>
 
       <div>
-        <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
+        <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">カテゴリ</label>
         <select
           id="category"
           value={category}
           onChange={(e) => setCategory(e.target.value as CategoryKey)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
 
         >
           {(Object.entries(CATEGORIES) as [CategoryKey, string][]).map(([key, label]) => (
@@ -241,7 +241,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       </div>
 
       <div>
-        <label htmlFor="points" className="block text-sm font-medium text-gray-700 mb-1">ポイント</label>
+        <label htmlFor="points" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ポイント</label>
         <input
           id="points"
           type="number"
@@ -250,12 +250,12 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           step={1}
           value={points}
           onChange={(e) => setPoints(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">備考</label>
         <MarkdownEditor
           value={notes}
           onChange={setNotes}
@@ -285,7 +285,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors min-h-[44px]"
+          className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 py-3 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[44px]"
 
         >
           キャンセル
@@ -307,7 +307,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
 
       {showDeleteConfirm && (
         <div className="pt-2 space-y-2">
-          <p className="text-sm text-red-600 font-medium text-center">本当に削除しますか？</p>
+          <p className="text-sm text-red-600 dark:text-red-400 font-medium text-center">本当に削除しますか？</p>
           <div className="flex gap-3">
             <button
               type="button"
@@ -320,7 +320,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(false)}
-              className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors min-h-[44px]"
+              className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 py-3 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[44px]"
 
             >
               やめる
