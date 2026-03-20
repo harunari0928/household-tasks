@@ -47,10 +47,10 @@ export default function AttachmentsList({ taskId, refreshKey, pendingFiles, pend
 
   return (
     <div className="space-y-1 mt-2" role="region" aria-label="添付ファイル">
-      <div className="text-xs font-medium text-gray-500">添付ファイル</div>
+      <div className="text-xs font-medium text-gray-500 dark:text-gray-400">添付ファイル</div>
       <div className="space-y-1">
         {visibleAttachments.map((att) => (
-          <div key={att.id} className="flex items-center gap-2 text-sm border border-gray-200 rounded px-2 py-1">
+          <div key={att.id} className="flex items-center gap-2 text-sm border border-gray-200 dark:border-gray-700 rounded px-2 py-1">
             {att.mime_type.startsWith('image/') ? (
               <a href={`/api/attachments/${att.id}`} target="_blank" rel="noopener noreferrer">
                 <img
@@ -60,21 +60,21 @@ export default function AttachmentsList({ taskId, refreshKey, pendingFiles, pend
                 />
               </a>
             ) : (
-              <span className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded text-xs">📄</span>
+              <span className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-xs">📄</span>
             )}
             <a
               href={`/api/attachments/${att.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 truncate text-blue-600 hover:underline"
+              className="flex-1 truncate text-blue-600 dark:text-blue-400 hover:underline"
             >
               {att.original_name}
             </a>
-            <span className="text-xs text-gray-400">{formatFileSize(att.size)}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{formatFileSize(att.size)}</span>
             <button
               type="button"
               onClick={() => onMarkForDelete?.(att.id)}
-              className="text-red-400 hover:text-red-600 text-xs px-1"
+              className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-xs px-1"
               title="削除"
 
             >
@@ -83,19 +83,19 @@ export default function AttachmentsList({ taskId, refreshKey, pendingFiles, pend
           </div>
         ))}
         {pendingFiles?.map((pf, i) => (
-          <div key={`pending-${i}`} className="flex items-center gap-2 text-sm border border-gray-200 border-dashed rounded px-2 py-1 opacity-70">
+          <div key={`pending-${i}`} className="flex items-center gap-2 text-sm border border-gray-200 dark:border-gray-700 border-dashed rounded px-2 py-1 opacity-70">
             {pf.type.startsWith('image/') ? (
               <img src={pf.blobUrl} alt={pf.name} className="w-8 h-8 object-cover rounded" />
             ) : (
-              <span className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded text-xs">📄</span>
+              <span className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-xs">📄</span>
             )}
-            <span className="flex-1 truncate">{pf.name}</span>
-            <span className="text-xs text-gray-400">{formatFileSize(pf.size)}</span>
-            <span className="text-xs text-blue-500">保存時にアップロード</span>
+            <span className="flex-1 truncate text-gray-900 dark:text-gray-100">{pf.name}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{formatFileSize(pf.size)}</span>
+            <span className="text-xs text-blue-500 dark:text-blue-400">保存時にアップロード</span>
             <button
               type="button"
               onClick={() => onRemovePending?.(pf.placeholderIndex)}
-              className="text-red-400 hover:text-red-600 text-xs px-1"
+              className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-xs px-1"
               title="削除"
             >
               ✕

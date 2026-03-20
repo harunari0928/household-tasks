@@ -47,7 +47,7 @@ function formatFrequency(task: TaskDefinition): string {
 export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
   if (tasks.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400">
+      <div className="text-center py-8 text-gray-400 dark:text-gray-500">
         このカテゴリにはタスクがありません
       </div>
     );
@@ -58,7 +58,7 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
       {tasks.map((task) => (
         <div
           key={task.id}
-          className={`flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer ${
+          className={`flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer ${
             !task.is_active ? 'opacity-50' : ''
           }`}
 
@@ -74,7 +74,7 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
           >
             {task.is_active ? '☑' : '☐'}
           </button>
-          <span className="flex-shrink-0 text-xs font-semibold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 min-w-[32px] text-center">
+          <span className="flex-shrink-0 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-full px-2 py-0.5 min-w-[32px] text-center">
             {task.points}pt
           </span>
           <div
@@ -82,8 +82,8 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
             onClick={() => onEdit(task)}
 
           >
-            <div className="font-medium text-gray-900 truncate">{task.name}</div>
-            <div className="text-sm text-gray-500 flex gap-2">
+            <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{task.name}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 flex gap-2">
               <span>{formatFrequency(task)}</span>
             </div>
           </div>

@@ -16,7 +16,7 @@ export default function CategoryTabs({ selected, onSelect, counts }: Props) {
           className={`flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap min-h-[44px] ${
             selected === key
               ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
           }`}
 
         >
@@ -24,7 +24,7 @@ export default function CategoryTabs({ selected, onSelect, counts }: Props) {
           {counts[key] > 0 && (
             <span
               className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                selected === key ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'
+                selected === key ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
               }`}
             >
               {counts[key]}

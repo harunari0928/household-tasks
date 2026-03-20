@@ -166,27 +166,27 @@ export default function StatsPage() {
   return (
     <div className="space-y-6">
       {/* Period selector */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3">
-        <h2 className="text-base font-bold text-gray-900">期間</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">期間</h2>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => handlePreset('thisWeek')}
-            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
           >
             今週
           </button>
           <button
             type="button"
             onClick={() => handlePreset('thisMonth')}
-            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
           >
             今月
           </button>
           <button
             type="button"
             onClick={() => handlePreset('lastMonth')}
-            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
           >
             先月
           </button>
@@ -195,8 +195,8 @@ export default function StatsPage() {
             onClick={() => handlePreset('untilToday')}
             className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
               endIsToday
-                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                : 'border-gray-300 hover:bg-gray-50'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
             〜今日
@@ -208,15 +208,15 @@ export default function StatsPage() {
             aria-label="開始日"
             value={startDate}
             onChange={(e) => handleDateChange('start', e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
-          <span className="text-gray-500">〜</span>
+          <span className="text-gray-500 dark:text-gray-400">〜</span>
           <input
             type="date"
             aria-label="終了日"
             value={endDate}
             onChange={(e) => handleDateChange('end', e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
         </div>
         {(startDate !== savedStart || endDate !== savedEnd || endIsToday !== savedEndIsToday) && (
@@ -229,28 +229,28 @@ export default function StatsPage() {
           </button>
         )}
         {saveMessage && (
-          <p className="text-sm text-green-600">{saveMessage}</p>
+          <p className="text-sm text-green-600 dark:text-green-400">{saveMessage}</p>
         )}
       </div>
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm" role="alert">
+        <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm" role="alert">
           {error}
         </div>
       )}
 
       {/* Loading */}
       {loading && (
-        <div className="text-center text-gray-500 py-8">読み込み中...</div>
+        <div className="text-center text-gray-500 dark:text-gray-400 py-8">読み込み中...</div>
       )}
 
       {/* Pie chart */}
       {!loading && data && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <h2 className="text-base font-bold text-gray-900 mb-4">ポイント比較</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 mb-4">ポイント比較</h2>
           {pieData.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">この期間の完了タスクはありません</p>
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">この期間の完了タスクはありません</p>
           ) : (
             <>
               <div className="w-full" style={{ height: 300 }}>
@@ -274,7 +274,7 @@ export default function StatsPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-center text-sm text-gray-500 mt-2">
+              <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-2">
                 合計: {totalPoints}pt
               </p>
             </>
@@ -284,27 +284,27 @@ export default function StatsPage() {
 
       {/* Detail table */}
       {!loading && data && data.details.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <h2 className="text-base font-bold text-gray-900 mb-4">完了タスク一覧</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 mb-4">完了タスク一覧</h2>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm text-gray-900 dark:text-gray-100">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 px-2 font-medium text-gray-700">タスク</th>
-                  <th className="text-left py-2 px-2 font-medium text-gray-700">担当</th>
-                  <th className="text-right py-2 px-2 font-medium text-gray-700">ポイント</th>
-                  <th className="text-left py-2 px-2 font-medium text-gray-700">完了日</th>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">タスク</th>
+                  <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">担当</th>
+                  <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">ポイント</th>
+                  <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">完了日</th>
                 </tr>
               </thead>
               <tbody>
                 {data.details
                   .sort((a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime())
                   .map((d, i) => (
-                    <tr key={i} className="border-b border-gray-100">
+                    <tr key={i} className="border-b border-gray-100 dark:border-gray-700/50">
                       <td className="py-2 px-2">{d.task_name}</td>
                       <td className="py-2 px-2">{d.assignee}</td>
                       <td className="py-2 px-2 text-right">{d.points}</td>
-                      <td className="py-2 px-2 text-gray-500">
+                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400">
                         {new Date(d.done_at).toLocaleDateString('ja-JP')}
                       </td>
                     </tr>
