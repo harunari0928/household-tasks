@@ -4,9 +4,9 @@ set -e
 
 VIKUNJA_URL="${1:-http://localhost:3456}"
 ENV_FILE="${2:-.env}"
-USERNAME="admin"
-EMAIL="admin@localhost.local"
-PASSWORD="changeme123"
+USERNAME="${VIKUNJA_ADMIN_USERNAME:-admin}"
+EMAIL="${VIKUNJA_ADMIN_EMAIL:-admin@localhost.local}"
+PASSWORD="${VIKUNJA_ADMIN_PASSWORD:-changeme123}"
 
 echo "=== Vikunja Initial Setup ==="
 echo "URL: ${VIKUNJA_URL}"
