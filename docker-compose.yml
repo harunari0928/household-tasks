@@ -14,6 +14,7 @@ services:
       - TZ=Asia/Tokyo
     labels:
       - "com.centurylinklabs.watchtower.scope=household-tasks"
+    restart: unless-stopped
 
   scheduler:
     image: harunari/household-tasks-scheduler:latest
@@ -30,13 +31,14 @@ services:
       - DEFAULT_PROJECT_ID=${DEFAULT_PROJECT_ID:-1}
     labels:
       - "com.centurylinklabs.watchtower.scope=household-tasks"
+    restart: unless-stopped
     depends_on:
       - vikunja
 
   vikunja:
     image: vikunja/vikunja
     ports:
-      - "3456:3456"
+      - "127.0.0.1:3456:3456"
     volumes:
       - ./vikunja-data/files:/app/vikunja/files
       - ./vikunja-data/db:/db
@@ -46,6 +48,7 @@ services:
       - VIKUNJA_CORS_ENABLE=false
     labels:
       - "com.centurylinklabs.watchtower.scope=household-tasks"
+    restart: unless-stopped
 
   watchtower:
     image: containrrr/watchtower
