@@ -89,19 +89,15 @@ test('ナビゲーションでポイント集計ページに遷移できる', as
   await expect(page.getByRole('heading', { name: 'ポイント比較' })).toBeVisible();
 });
 
-test('期間設定がDBに永続化される', async ({ page }) => {
+test('期間を変更して保存するとリロード後も設定が維持される', async ({ page }) => {
   await page.goto('/#/stats');
 
-  // Set a custom date range
   await page.getByLabel('開始日').fill('2026-01-01');
   await page.getByLabel('終了日').fill('2026-01-31');
+  await page.getByRole('button', { name: 'みんなに保存' }).click();
+  await expect(page.getByText('保存しました')).toBeVisible();
 
-  // Wait for save to complete
-  await page.waitForTimeout(500);
-
-  // Reload and check persistence
   await page.reload();
-  await page.goto('/#/stats');
 
   await expect(page.getByLabel('開始日')).toHaveValue('2026-01-01');
   await expect(page.getByLabel('終了日')).toHaveValue('2026-01-31');
