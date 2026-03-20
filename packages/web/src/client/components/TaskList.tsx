@@ -74,6 +74,9 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
           >
             {task.is_active ? '☑' : '☐'}
           </button>
+          <span className="flex-shrink-0 text-xs font-semibold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 min-w-[32px] text-center">
+            {task.points}pt
+          </span>
           <div
             className="flex-1 min-w-0"
             onClick={() => onEdit(task)}
