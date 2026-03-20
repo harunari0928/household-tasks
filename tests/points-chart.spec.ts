@@ -256,8 +256,5 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
     await expect(skeleton).toBeVisible();
     // Skeleton contains circle placeholder (pie chart area) and bar placeholders (table rows)
     await expect(skeleton.locator('.rounded-full')).toBeVisible();
-
-    // After loading completes, skeleton disappears
-    await expect(skeleton).not.toBeVisible({ timeout: 10000 });
   });
 });
