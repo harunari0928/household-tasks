@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: packages/web/Dockerfile
     ports:
-      - "3100:3100"
+      - "${WEB_PORT:-3100}:3100"
     volumes:
       - ./data:/data
     environment:
@@ -41,13 +41,13 @@ services:
   vikunja:
     image: vikunja/vikunja
     ports:
-      - "127.0.0.1:3456:3456"
+      - "127.0.0.1:${VIKUNJA_PORT:-3456}:3456"
     volumes:
       - ./vikunja-data/files:/app/vikunja/files
       - ./vikunja-data/db:/db
     environment:
       - VIKUNJA_SERVICE_TIMEZONE=Asia/Tokyo
-      - VIKUNJA_SERVICE_PUBLICURL=http://localhost:3456
+      - VIKUNJA_SERVICE_PUBLICURL=http://localhost:${VIKUNJA_PORT:-3456}
       - VIKUNJA_CORS_ENABLE=false
     labels:
       - "com.centurylinklabs.watchtower.scope=household-tasks"

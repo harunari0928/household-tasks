@@ -57,6 +57,18 @@ docker compose up -d
 - `.env` is NOT loaded by dotenv — variables are passed via `docker-compose.yml`'s `environment` section using `${VAR}` interpolation. For local dev without Docker, pass env vars manually.
 - `VIKUNJA_API_TOKEN` / `VIKUNJA_URL` / `DEFAULT_PROJECT_ID` must be set for both `web` and `scheduler` services.
 
+## Worktree開発
+
+git worktreeで並行作業する場合、Docker Compose環境のポート競合を避けるため:
+
+1. worktreeの`.env`にメインと異なるポートを設定:
+   ```
+   WEB_PORT=3200
+   VIKUNJA_PORT=3557
+   ```
+2. `docker compose up -d` で起動（プロジェクト名はディレクトリ名で自動分離）
+3. ブラウザは `http://localhost:<WEB_PORT>` でアクセス
+
 ## Key conventions
 
 - All dates use JST (Asia/Tokyo). `getTodayJST()` in shared/ returns `YYYY-MM-DD`.
