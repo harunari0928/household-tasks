@@ -168,8 +168,8 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
     vikunjaStub.close();
   });
 
-  test('円グラフに正しいポイント集計が表示される', async ({ page, baseURL }) => {
-    // Create task definitions with points and vikunja_project_id
+  // Helper: create task definitions and navigate to stats with date range
+  async function setupStatsWithTasks(page: any, baseURL: string) {
     await page.request.post(`${baseURL}/api/tasks`, {
       data: { name: '洗面台掃除', category: 'water', frequency_type: 'daily', points: 3, vikunja_project_id: 1 },
     });
@@ -179,15 +179,14 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
     await page.request.post(`${baseURL}/api/tasks`, {
       data: { name: '床拭き', category: 'floor', frequency_type: 'daily', points: 5, vikunja_project_id: 1 },
     });
-
     await page.goto('/#/stats');
-
-    // Set date range to cover stub data
     await page.getByLabel('開始日').fill('2026-03-01');
     await page.getByLabel('終了日').fill('2026-03-31');
-
-    // Wait for data to load
     await expect(page.getByText('完了タスク一覧')).toBeVisible({ timeout: 10000 });
+  }
+
+  test('円グラフに正しいポイント集計が表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
 
     // Verify detail table has correct entries
     // taro: 洗面台掃除(3pt) + 床拭き(5pt) = 8pt
@@ -203,5 +202,62 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
 
     // Verify total
     await expect(page.getByText('合計: 15pt')).toBeVisible();
+  });
+
+  test('検索欄にテキストを入力すると完了タスクがフィルタされる', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByLabel('完了タスクを検索').fill('掃除');
+
+    await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'キッチン掃除' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '床拭き' })).not.toBeVisible();
+  });
+
+  test('検索をクリアすると全タスクが再表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await test.step('検索でフィルタ', async () => {
+      await page.getByLabel('完了タスクを検索').fill('掃除');
+      await expect(page.getByRole('cell', { name: '床拭き' })).not.toBeVisible();
+    });
+
+    await test.step('クリアで全件表示', async () => {
+      await page.getByLabel('完了タスクを検索').fill('');
+      await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'キッチン掃除' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: '床拭き' }).first()).toBeVisible();
+    });
+  });
+
+  test('該当なしの検索語で「該当するタスクがありません」が表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByLabel('完了タスクを検索').fill('zzz');
+
+    await expect(page.getByText('該当するタスクがありません')).toBeVisible();
+    await expect(page.locator('table')).not.toBeVisible();
+  });
+
+  test('ローディング中にスケルトンUIが表示される', async ({ page, baseURL }) => {
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '洗面台掃除', category: 'water', frequency_type: 'daily', points: 3, vikunja_project_id: 1 },
+    });
+
+    // Delay stats API response so skeleton is visible
+    await page.route('**/api/stats/points**', async (route) => {
+      await new Promise((r) => setTimeout(r, 1000));
+      await route.continue();
+    });
+
+    await page.goto('/#/stats');
+
+    const skeleton = page.getByLabel('読み込み中');
+    await expect(skeleton).toBeVisible();
+    // Skeleton contains circle placeholder (pie chart area) and bar placeholders (table rows)
+    await expect(skeleton.locator('.rounded-full')).toBeVisible();
+
+    // After loading completes, skeleton disappears
+    await expect(skeleton).not.toBeVisible({ timeout: 10000 });
   });
 });
