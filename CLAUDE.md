@@ -44,6 +44,11 @@ docker compose up -d
 ./scripts/seed.sh            # Import 77 task definitions
 ```
 
+## Environment variables
+
+- `.env` is NOT loaded by dotenv — variables are passed via `docker-compose.yml`'s `environment` section using `${VAR}` interpolation. For local dev without Docker, pass env vars manually.
+- `VIKUNJA_API_TOKEN` / `VIKUNJA_URL` / `DEFAULT_PROJECT_ID` must be set for both `web` and `scheduler` services.
+
 ## Key conventions
 
 - All dates use JST (Asia/Tokyo). `getTodayJST()` in shared/ returns `YYYY-MM-DD`.
@@ -51,3 +56,5 @@ docker compose up -d
 - Vikunja task creation uses `PUT /api/v1/projects/:id/tasks` (not POST).
 - SQLite timestamps use `new Date().toISOString()` (millisecond precision), not SQLite's `datetime('now')`.
 - Express `app` and `router` require explicit type annotations to avoid TS2742 errors with pnpm's strict module resolution.
+- Vikunja v2 API tokens require `projects: ["read_all"]` permission to access `/projects/:id/tasks`. Without it, tokens get 401 even with `tasks` permissions.
+- `package.json` `pnpm.onlyBuiltDependencies` must include `better-sqlite3`, `esbuild`, `sqlite3` — otherwise Docker builds fail with missing native modules.

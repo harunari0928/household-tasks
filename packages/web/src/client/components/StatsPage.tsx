@@ -48,6 +48,9 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [savedStart, setSavedStart] = useState('');
+  const [savedEnd, setSavedEnd] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
 
   // Load saved period settings
   useEffect(() => {
@@ -57,10 +60,14 @@ export default function StatsPage() {
         if (settings.chart_start_date && settings.chart_end_date) {
           setStartDate(settings.chart_start_date);
           setEndDate(settings.chart_end_date);
+          setSavedStart(settings.chart_start_date);
+          setSavedEnd(settings.chart_end_date);
         } else {
           const range = getMonthRange(0);
           setStartDate(range.start);
           setEndDate(range.end);
+          setSavedStart(range.start);
+          setSavedEnd(range.end);
         }
         setSettingsLoaded(true);
       })
@@ -68,19 +75,28 @@ export default function StatsPage() {
         const range = getMonthRange(0);
         setStartDate(range.start);
         setEndDate(range.end);
+        setSavedStart(range.start);
+        setSavedEnd(range.end);
         setSettingsLoaded(true);
       });
   }, []);
 
-  // Save period settings when changed
-  const savePeriod = useCallback((s: string, e: string) => {
-    if (!s || !e) return;
+  // Save period settings explicitly
+  const savePeriod = useCallback(() => {
+    if (!startDate || !endDate) return;
     fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chart_start_date: s, chart_end_date: e }),
+      body: JSON.stringify({ chart_start_date: startDate, chart_end_date: endDate }),
+    }).then((res) => {
+      if (res.ok) {
+        setSavedStart(startDate);
+        setSavedEnd(endDate);
+        setSaveMessage('保存しました');
+        setTimeout(() => setSaveMessage(''), 2000);
+      }
     });
-  }, []);
+  }, [startDate, endDate]);
 
   // Fetch stats data
   useEffect(() => {
@@ -113,7 +129,6 @@ export default function StatsPage() {
     }
     setStartDate(range.start);
     setEndDate(range.end);
-    savePeriod(range.start, range.end);
   };
 
   const handleDateChange = (field: 'start' | 'end', value: string) => {
@@ -121,7 +136,6 @@ export default function StatsPage() {
     const newEnd = field === 'end' ? value : endDate;
     setStartDate(newStart);
     setEndDate(newEnd);
-    savePeriod(newStart, newEnd);
   };
 
   const pieData = data
@@ -175,6 +189,18 @@ export default function StatsPage() {
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
           />
         </div>
+        {(startDate !== savedStart || endDate !== savedEnd) && (
+          <button
+            type="button"
+            onClick={savePeriod}
+            className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            みんなに保存
+          </button>
+        )}
+        {saveMessage && (
+          <p className="text-sm text-green-600">{saveMessage}</p>
+        )}
       </div>
 
       {/* Error */}

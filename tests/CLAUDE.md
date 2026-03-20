@@ -22,3 +22,7 @@ Scheduler logic tests using a Vikunja stub HTTP server.
 - `stubResponseOverride` allows per-test control of Vikunja responses (e.g., 500 errors, existing tasks).
 - Date arithmetic must use `Date.UTC()` to avoid timezone issues.
 - `TEST_TODAY` env var controls what date the scheduler sees.
+
+## Test conventions
+
+- 1つのテスト内で複数の観点（表示確認・データ確認・状態変化など）を検証する場合は `test.step` で分割すること。
