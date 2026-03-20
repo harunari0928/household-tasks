@@ -41,15 +41,21 @@ function getWeekRange(): { start: string; end: string } {
   };
 }
 
+function todayStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
 export default function StatsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [endIsToday, setEndIsToday] = useState(false);
   const [data, setData] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [savedStart, setSavedStart] = useState('');
   const [savedEnd, setSavedEnd] = useState('');
+  const [savedEndIsToday, setSavedEndIsToday] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
   // Load saved period settings
@@ -58,10 +64,14 @@ export default function StatsPage() {
       .then((res) => res.json())
       .then((settings: Record<string, string>) => {
         if (settings.chart_start_date && settings.chart_end_date) {
+          const isToday = settings.chart_end_date === 'TODAY';
+          const resolvedEnd = isToday ? todayStr() : settings.chart_end_date;
           setStartDate(settings.chart_start_date);
-          setEndDate(settings.chart_end_date);
+          setEndDate(resolvedEnd);
+          setEndIsToday(isToday);
           setSavedStart(settings.chart_start_date);
-          setSavedEnd(settings.chart_end_date);
+          setSavedEnd(resolvedEnd);
+          setSavedEndIsToday(isToday);
         } else {
           const range = getMonthRange(0);
           setStartDate(range.start);
@@ -84,19 +94,21 @@ export default function StatsPage() {
   // Save period settings explicitly
   const savePeriod = useCallback(() => {
     if (!startDate || !endDate) return;
+    const endValue = endIsToday ? 'TODAY' : endDate;
     fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chart_start_date: startDate, chart_end_date: endDate }),
+      body: JSON.stringify({ chart_start_date: startDate, chart_end_date: endValue }),
     }).then((res) => {
       if (res.ok) {
         setSavedStart(startDate);
         setSavedEnd(endDate);
+        setSavedEndIsToday(endIsToday);
         setSaveMessage('保存しました');
         setTimeout(() => setSaveMessage(''), 2000);
       }
     });
-  }, [startDate, endDate]);
+  }, [startDate, endDate, endIsToday]);
 
   // Fetch stats data
   useEffect(() => {
@@ -114,7 +126,13 @@ export default function StatsPage() {
       .finally(() => setLoading(false));
   }, [startDate, endDate, settingsLoaded]);
 
-  const handlePreset = (preset: 'thisMonth' | 'lastMonth' | 'thisWeek') => {
+  const handlePreset = (preset: 'thisMonth' | 'lastMonth' | 'thisWeek' | 'untilToday') => {
+    if (preset === 'untilToday') {
+      setEndDate(todayStr());
+      setEndIsToday(true);
+      return;
+    }
+    setEndIsToday(false);
     let range: { start: string; end: string };
     switch (preset) {
       case 'thisMonth':
@@ -134,6 +152,7 @@ export default function StatsPage() {
   const handleDateChange = (field: 'start' | 'end', value: string) => {
     const newStart = field === 'start' ? value : startDate;
     const newEnd = field === 'end' ? value : endDate;
+    if (field === 'end') setEndIsToday(false);
     setStartDate(newStart);
     setEndDate(newEnd);
   };
@@ -171,6 +190,17 @@ export default function StatsPage() {
           >
             先月
           </button>
+          <button
+            type="button"
+            onClick={() => handlePreset('untilToday')}
+            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+              endIsToday
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            〜今日
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -189,7 +219,7 @@ export default function StatsPage() {
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[44px]"
           />
         </div>
-        {(startDate !== savedStart || endDate !== savedEnd) && (
+        {(startDate !== savedStart || endDate !== savedEnd || endIsToday !== savedEndIsToday) && (
           <button
             type="button"
             onClick={savePeriod}

@@ -12,15 +12,23 @@ pnpm monorepo that manages ~77 household cleaning/childcare/lifestyle tasks with
 
 ## Development
 
+開発サーバーは Docker Compose で動かしている。コード変更を反映するにはコンテナのリビルド＆再起動が必要。
+
+```bash
+# コード変更後の反映
+docker compose up -d --build web        # web のリビルド＆再起動
+docker compose up -d --build scheduler  # scheduler のリビルド＆再起動
+
+# 全サービス起動
+docker compose up -d
+```
+
+ローカルビルド（テスト用）:
 ```bash
 pnpm install
 pnpm --filter shared build          # Must build shared first
 pnpm --filter web build             # Vite (client) + tsc (server)
 pnpm --filter scheduler build       # tsc
-
-# Dev mode (web)
-cd packages/web && npx vite         # Frontend dev server on :5173
-DB_PATH=data/task_definitions.db npx tsx src/server/index.ts  # API on :3100
 ```
 
 ## Testing

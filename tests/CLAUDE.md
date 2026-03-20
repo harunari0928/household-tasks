@@ -26,3 +26,4 @@ Scheduler logic tests using a Vikunja stub HTTP server.
 ## Test conventions
 
 - 1つのテスト内で複数の観点（表示確認・データ確認・状態変化など）を検証する場合は `test.step` で分割すること。
+- E2EテストではAPIやDBを直接確認しない。UIに表示される値（input値、ボタン状態、テキスト等）をユーザ視点で検証すること。保存の確認はリロード後のUI状態で行う。
