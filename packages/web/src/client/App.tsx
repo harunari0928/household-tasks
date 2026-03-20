@@ -3,14 +3,26 @@ import { CATEGORIES, type CategoryKey, type TaskDefinition } from './types.js';
 import CategoryTabs from './components/CategoryTabs.js';
 import TaskList from './components/TaskList.js';
 import TaskForm from './components/TaskForm.js';
+import StatsPage from './components/StatsPage.js';
+
+function getPage(): 'tasks' | 'stats' {
+  return window.location.hash === '#/stats' ? 'stats' : 'tasks';
+}
 
 export default function App() {
+  const [currentPage, setCurrentPage] = useState<'tasks' | 'stats'>(getPage);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('water');
   const [tasks, setTasks] = useState<TaskDefinition[]>([]);
   const [allTasks, setAllTasks] = useState<TaskDefinition[]>([]);
   const [editingTask, setEditingTask] = useState<TaskDefinition | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const onHash = () => setCurrentPage(getPage());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const fetchTasks = useCallback(async () => {
     const res = await fetch('/api/tasks');
@@ -84,12 +96,38 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-4">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">家庭タスク管理</h1>
+          <nav className="flex gap-2">
+            <a
+              href="#/"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                currentPage === 'tasks'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              タスク管理
+            </a>
+            <a
+              href="#/stats"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                currentPage === 'stats'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              ポイント集計
+            </a>
+          </nav>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-4">
+        {currentPage === 'stats' ? (
+          <StatsPage />
+        ) : (
+          <>
         <CategoryTabs
           selected={searchQuery ? null : selectedCategory}
           onSelect={(key) => {
@@ -145,6 +183,8 @@ export default function App() {
               />
             </div>
           </div>
+        )}
+          </>
         )}
       </main>
     </div>

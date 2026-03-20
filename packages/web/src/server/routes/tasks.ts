@@ -9,8 +9,6 @@ const router: ReturnType<typeof Router> = Router();
 const VALID_CATEGORIES = ['water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash', 'childcare', 'cooking', 'lifestyle'];
 const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly'];
 const VALID_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-const VALID_ASSIGNEES = ['husband', 'wife', 'alternate'];
-
 interface TaskInput {
   name: string;
   category: string;
@@ -18,9 +16,9 @@ interface TaskInput {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
-  assignee?: string | null;
   vikunja_project_id?: number;
   notes?: string;
+  points?: number;
 }
 
 function validateTaskInput(body: TaskInput): string | null {
@@ -33,10 +31,6 @@ function validateTaskInput(body: TaskInput): string | null {
   if (!VALID_FREQUENCY_TYPES.includes(body.frequency_type)) {
     return '無効な頻度タイプです';
   }
-  if (body.assignee && !VALID_ASSIGNEES.includes(body.assignee)) {
-    return '無効な担当者です';
-  }
-
   const ft = body.frequency_type;
 
   if (ft === 'weekly' || ft === 'n_weeks') {
@@ -51,6 +45,12 @@ function validateTaskInput(body: TaskInput): string | null {
   if (ft === 'n_days' || ft === 'n_weeks' || ft === 'n_months') {
     if (!body.frequency_interval || typeof body.frequency_interval !== 'number' || body.frequency_interval < 2) {
       return '間隔は2以上の整数で入力してください';
+    }
+  }
+
+  if (body.points !== undefined && body.points !== null) {
+    if (typeof body.points !== 'number' || !Number.isInteger(body.points) || body.points < 1 || body.points > 10) {
+      return 'ポイントは1〜10の整数で入力してください';
     }
   }
 
@@ -131,9 +131,10 @@ router.post('/', (req: Request, res: Response) => {
   const interval = body.frequency_interval ?? null;
   const nextDueDate = calculateNextDueDate(body.frequency_type, interval, today);
 
+  const points = body.points ?? 1;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, assignee, vikunja_project_id, next_due_date, notes, created_at, updated_at)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, vikunja_project_id, next_due_date, notes, points, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
@@ -144,10 +145,10 @@ router.post('/', (req: Request, res: Response) => {
     interval,
     daysOfWeek,
     dayOfMonth,
-    body.assignee || null,
     body.vikunja_project_id || null,
     nextDueDate,
     body.notes || null,
+    points,
     now,
     now,
   );
@@ -186,11 +187,12 @@ router.put('/:id', (req: Request, res: Response) => {
     ? calculateNextDueDate(body.frequency_type, interval, today)
     : existing.next_due_date;
 
+  const points = body.points ?? 1;
   const stmt = db.prepare(`
     UPDATE task_definitions
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
-        days_of_week = ?, day_of_month = ?, assignee = ?, vikunja_project_id = ?,
-        next_due_date = ?, notes = ?, updated_at = ?
+        days_of_week = ?, day_of_month = ?, vikunja_project_id = ?,
+        next_due_date = ?, notes = ?, points = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -201,10 +203,10 @@ router.put('/:id', (req: Request, res: Response) => {
     interval,
     daysOfWeek,
     dayOfMonth,
-    body.assignee || null,
     body.vikunja_project_id || null,
     nextDueDate,
     body.notes || null,
+    points,
     new Date().toISOString(),
     req.params.id,
   );
@@ -271,7 +273,7 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, assignee, vikunja_project_id, next_due_date, notes)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, vikunja_project_id, next_due_date, notes, points)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
@@ -292,13 +294,13 @@ router.post('/import', (req: Request, res: Response) => {
         db.prepare(`
           UPDATE task_definitions
           SET category = ?, frequency_type = ?, frequency_interval = ?,
-              days_of_week = ?, day_of_month = ?, assignee = ?,
-              next_due_date = ?, notes = ?, updated_at = created_at
+              days_of_week = ?, day_of_month = ?,
+              next_due_date = ?, notes = ?, points = ?, updated_at = created_at
           WHERE id = ?
         `).run(
           task.category, task.frequency_type, interval,
-          daysOfWeek, task.day_of_month ?? null, task.assignee || null,
-          nextDueDate, task.notes || null, existing.id,
+          daysOfWeek, task.day_of_month ?? null,
+          nextDueDate, task.notes || null, task.points ?? 1, existing.id,
         );
         inserted.push(existing.id);
       } else {
@@ -307,8 +309,8 @@ router.post('/import', (req: Request, res: Response) => {
         const nextDueDate = calculateNextDueDate(task.frequency_type, interval, today);
         const result = insertStmt.run(
           task.name, task.category, task.frequency_type, interval,
-          daysOfWeek, task.day_of_month ?? null, task.assignee || null,
-          null, nextDueDate, task.notes || null,
+          daysOfWeek, task.day_of_month ?? null,
+          null, nextDueDate, task.notes || null, task.points ?? 1,
         );
         inserted.push(Number(result.lastInsertRowid));
       }

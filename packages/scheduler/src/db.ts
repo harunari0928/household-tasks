@@ -12,7 +12,6 @@ export interface TaskDefinitionRow {
   frequency_interval: number | null;
   days_of_week: string | null;
   day_of_month: number | null;
-  assignee: string | null;
   vikunja_project_id: number | null;
   next_due_date: string | null;
   is_active: number;

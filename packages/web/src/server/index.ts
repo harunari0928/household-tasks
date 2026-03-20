@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { getDb, getUploadsDir } from './db.js';
 import tasksRouter from './routes/tasks.js';
 import attachmentsRouter from './routes/attachments.js';
+import statsRouter from './routes/stats.js';
+import settingsRouter from './routes/settings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +26,8 @@ fs.mkdirSync(getUploadsDir(), { recursive: true });
 // API routes
 app.use('/api/tasks', tasksRouter);
 app.use('/api', attachmentsRouter);
+app.use('/api/stats', statsRouter);
+app.use('/api/settings', settingsRouter);
 
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {
@@ -31,6 +35,7 @@ app.post('/api/test/reset', (_req, res) => {
   db.exec('DELETE FROM attachments');
   db.exec('DELETE FROM execution_log');
   db.exec('DELETE FROM task_definitions');
+  db.exec('DELETE FROM app_settings');
   // Clean uploads directory
   const uploadsDir = getUploadsDir();
   if (fs.existsSync(uploadsDir)) {

@@ -45,7 +45,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const [dayOfMonth, setDayOfMonth] = useState<number | undefined>(
     task?.day_of_month ?? undefined,
   );
-  const [assignee, setAssignee] = useState<string>(task?.assignee || '');
+  const [points, setPoints] = useState<number>(task?.points ?? 1);
   const [notes, setNotes] = useState(task?.notes || '');
   const [error, setError] = useState('');
   const [frequencyError, setFrequencyError] = useState('');
@@ -125,6 +125,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       name: name.trim(),
       category,
       frequency_type: frequencyType,
+      points,
     };
 
     if (['n_days', 'n_weeks', 'n_months'].includes(frequencyType)) {
@@ -135,9 +136,6 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     }
     if (['monthly', 'n_months'].includes(frequencyType) && dayOfMonth) {
       input.day_of_month = dayOfMonth;
-    }
-    if (assignee) {
-      input.assignee = assignee;
     }
     if (currentNotes) {
       input.notes = currentNotes;
@@ -243,19 +241,17 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       </div>
 
       <div>
-        <label htmlFor="assignee" className="block text-sm font-medium text-gray-700 mb-1">担当</label>
-        <select
-          id="assignee"
-          value={assignee}
-          onChange={(e) => setAssignee(e.target.value)}
+        <label htmlFor="points" className="block text-sm font-medium text-gray-700 mb-1">ポイント</label>
+        <input
+          id="points"
+          type="number"
+          min={1}
+          max={10}
+          step={1}
+          value={points}
+          onChange={(e) => setPoints(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
-
-        >
-          <option value="">指定なし</option>
-          <option value="husband">夫</option>
-          <option value="wife">妻</option>
-          <option value="alternate">交互</option>
-        </select>
+        />
       </div>
 
       <div>

@@ -75,6 +75,26 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN points INTEGER NOT NULL DEFAULT 1;
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    },
+  },
+  {
+    version: 4,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions DROP COLUMN assignee');
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

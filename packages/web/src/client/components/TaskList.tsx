@@ -1,4 +1,4 @@
-import { FREQUENCY_TYPES, DAYS_OF_WEEK, ASSIGNEES, type TaskDefinition, type DayOfWeek, type FrequencyTypeKey } from '../types.js';
+import { FREQUENCY_TYPES, DAYS_OF_WEEK, type TaskDefinition, type DayOfWeek, type FrequencyTypeKey } from '../types.js';
 
 interface Props {
   tasks: TaskDefinition[];
@@ -44,11 +44,6 @@ function formatFrequency(task: TaskDefinition): string {
   }
 }
 
-function formatAssignee(assignee: string | null): string {
-  if (!assignee) return '—';
-  return ASSIGNEES[assignee as keyof typeof ASSIGNEES] || assignee;
-}
-
 export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
   if (tasks.length === 0) {
     return (
@@ -87,7 +82,6 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
             <div className="font-medium text-gray-900 truncate">{task.name}</div>
             <div className="text-sm text-gray-500 flex gap-2">
               <span>{formatFrequency(task)}</span>
-              <span>{formatAssignee(task.assignee)}</span>
             </div>
           </div>
         </div>

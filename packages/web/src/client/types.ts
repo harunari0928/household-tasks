@@ -36,14 +36,6 @@ export const DAYS_OF_WEEK = {
 
 export type DayOfWeek = keyof typeof DAYS_OF_WEEK;
 
-export const ASSIGNEES = {
-  husband: '夫',
-  wife: '妻',
-  alternate: '交互',
-} as const;
-
-export type AssigneeKey = keyof typeof ASSIGNEES | null;
-
 export interface TaskDefinition {
   id: number;
   name: string;
@@ -52,11 +44,11 @@ export interface TaskDefinition {
   frequency_interval: number | null;
   days_of_week: string | null;
   day_of_month: number | null;
-  assignee: string | null;
   vikunja_project_id: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
+  points: number;
   created_at: string;
   updated_at: string;
 }
@@ -68,9 +60,9 @@ export interface TaskDefinitionInput {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
-  assignee?: 'husband' | 'wife' | 'alternate' | null;
   vikunja_project_id?: number;
   notes?: string;
+  points?: number;
 }
 
 export interface ExecutionLog {
