@@ -79,6 +79,14 @@ async function main() {
 
       const projectId = task.vikunja_project_id || defaultProjectId;
       try {
+        const hasDuplicate = await hasUncompletedTask(projectId, task.name);
+        if (hasDuplicate) {
+          logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
+          skipped++;
+          console.log(`  RETRY SKIP (duplicate): "${task.name}"`);
+          continue;
+        }
+
         const description = `カテゴリ: ${task.category} | 頻度: ${task.frequency_type}`;
         const vikunjaTaskId = await createTask(projectId, task.name, description);
         logExecution(db, task.id, vikunjaTaskId, 'created', undefined, today);

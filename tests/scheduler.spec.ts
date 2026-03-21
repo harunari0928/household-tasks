@@ -244,6 +244,28 @@ test('同日に2回実行しても重複起票しない', async ({ page, baseURL
   });
 });
 
+test('前日に起票した未完了タスクは翌日に重複起票しない', async ({ page, baseURL }) => {
+  await createTaskViaUI(page, baseURL!, { name: 'cross-day-dup', category: 'water', frequency_type: 'daily' });
+
+  // Day 1: タスク起票
+  await runScheduler('2026-03-14');
+
+  // Day 2: Vikunjaが未完了タスクを返す
+  vikunjaRequests = [];
+  stubResponseOverride = (req) => {
+    if (req.method === 'GET' && req.url!.includes('/tasks')) {
+      return { status: 200, body: [{ title: 'cross-day-dup', done: false }] };
+    }
+    return { status: 200, body: { id: 999 } };
+  };
+  const output = await runScheduler('2026-03-15');
+
+  await test.step('スキップされ起票されない', async () => {
+    expect(output).toContain('SKIP (duplicate)');
+    expect(getCreateRequests()).toHaveLength(0);
+  });
+});
+
 test('Vikunjaに未完了の同名タスクがあればスキップする', async ({ page, baseURL }) => {
   await createTaskViaUI(page, baseURL!, { name: 'duplicate-check', category: 'water', frequency_type: 'daily' });
   stubResponseOverride = (req) => {
@@ -296,6 +318,35 @@ test('Vikunja APIエラー時にfailedが記録され、次回実行でリトラ
     const logsRes2 = await page.request.get(`${baseURL}/api/logs`);
     const logs2 = await logsRes2.json();
     expect(logs2.some((l: any) => l.status === 'created')).toBe(true);
+  });
+});
+
+test('リトライ時もVikunjaに未完了タスクがあればスキップする', async ({ page, baseURL }) => {
+  // 土曜のみのweeklyタスク → Day2(日曜)は通常フローでマッチせずリトライのみ動く
+  await createTaskViaUI(page, baseURL!, { name: 'retry-dup-test', category: 'water', frequency_type: 'weekly', days_of_week: ['sat'] });
+
+  // Day 1 (土曜): APIエラーで失敗
+  stubResponseOverride = (req) => {
+    if (req.method === 'PUT') {
+      return { status: 500, body: { message: 'Internal error' } };
+    }
+    return { status: 200, body: [] };
+  };
+  await runScheduler('2026-03-14');
+
+  // Day 2 (日曜): Vikunjaに未完了タスクが存在 → リトライもスキップされる
+  vikunjaRequests = [];
+  stubResponseOverride = (req) => {
+    if (req.method === 'GET' && req.url!.includes('/tasks')) {
+      return { status: 200, body: [{ title: 'retry-dup-test', done: false }] };
+    }
+    return { status: 200, body: { id: 999 } };
+  };
+  const output = await runScheduler('2026-03-15');
+
+  await test.step('リトライがスキップされ重複起票しない', async () => {
+    expect(output).toContain('RETRY SKIP (duplicate)');
+    expect(getCreateRequests()).toHaveLength(0);
   });
 });
 

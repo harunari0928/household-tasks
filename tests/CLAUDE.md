@@ -1,6 +1,6 @@
 # E2E Tests
 
-Playwright tests with 73 total tests (30 task-crud + 20 stats-page + 11 points-chart + 12 scheduler).
+Playwright E2E tests.
 
 ## Setup
 
@@ -8,22 +8,22 @@ Playwright tests with 73 total tests (30 task-crud + 20 stats-page + 11 points-c
 - `fixtures/setup.ts` overrides `baseURL` to call `POST /api/test/reset` before every test.
 - Test DB: `data/test_task_definitions.db` (separate from production).
 
-## task-crud.spec.ts (30 tests)
+## task-crud.spec.ts
 
 UI tests for task CRUD, validation, search, markdown notes, file attachments, delete, dialog, dark mode.
 - `test.describe` で機能グループごとに分類。
 
-## stats-page.spec.ts (20 tests)
+## stats-page.spec.ts
 
 Stats page period settings, save button visibility, 〜今日 mode, persistence.
 - `test.describe` で保存ボタン表示制御・期間設定の保存・〜今日モード・〜今日モードの保存に分類。
 
-## points-chart.spec.ts (11 tests)
+## points-chart.spec.ts
 
 Points field CRUD, stats page navigation, Vikunja stub integration for chart/search/skeleton.
 - `test.describe` でポイントフィールド・ポイント集計ページ・Vikunjaスタブに分類。
 
-## scheduler.spec.ts (12 tests)
+## scheduler.spec.ts
 
 Scheduler logic tests using a Vikunja stub HTTP server.
 - Stub listens on `127.0.0.1` with dynamic port.
