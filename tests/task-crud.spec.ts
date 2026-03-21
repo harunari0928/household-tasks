@@ -15,7 +15,7 @@ test.describe('タスクCRUD', () => {
     await expect(page.getByText('毎週(月)')).toBeVisible();
   });
 
-  test('タスクの頻度を変更するとnext_due_dateが再計算される', async ({ page, baseURL }) => {
+  test('タスクの頻度を変更すると次回予定日が再計算される', async ({ page, baseURL }) => {
     await page.goto('/');
 
     // n_days/間隔3で作成
@@ -38,7 +38,7 @@ test.describe('タスクCRUD', () => {
     await page.getByLabel('間隔').fill('5');
     await page.getByRole('button', { name: '保存' }).click();
 
-    await test.step('next_due_dateが再計算される', async () => {
+    await test.step('次回予定日が再計算される', async () => {
       const res2 = await page.request.get(`${baseURL}/api/tasks`);
       const tasks2 = await res2.json();
       const updated = tasks2.find((t: any) => t.name === '頻度変更テスト');
@@ -61,7 +61,7 @@ test.describe('タスクCRUD', () => {
     // 無効にする
     await page.getByRole('button', { name: '無効にする' }).click();
 
-    await test.step('is_activeが0になる', async () => {
+    await test.step('非活性になる', async () => {
       const res2 = await page.request.get(`${baseURL}/api/tasks/${task.id}`);
       const updated = await res2.json();
       expect(updated.is_active).toBe(0);
@@ -70,7 +70,7 @@ test.describe('タスクCRUD', () => {
     // 有効にする
     await page.getByRole('button', { name: '有効にする' }).click();
 
-    await test.step('is_activeが1に戻る', async () => {
+    await test.step('活性に戻る', async () => {
       const res3 = await page.request.get(`${baseURL}/api/tasks/${task.id}`);
       const restored = await res3.json();
       expect(restored.is_active).toBe(1);
@@ -110,14 +110,14 @@ test.describe('フォームバリデーション', () => {
     // weekly
     await page.getByLabel('頻度').selectOption('weekly');
 
-    await test.step('weekly → 曜日選択が表示される', async () => {
+    await test.step('毎週 → 曜日選択が表示される', async () => {
       await expect(page.getByRole('group', { name: '曜日' })).toBeVisible();
     });
 
     // n_days
     await page.getByLabel('頻度').selectOption('n_days');
 
-    await test.step('n_days → 間隔が表示され曜日は非表示', async () => {
+    await test.step('N日ごと → 間隔が表示され曜日は非表示', async () => {
       await expect(page.getByLabel('間隔')).toBeVisible();
       await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
     });
@@ -125,7 +125,7 @@ test.describe('フォームバリデーション', () => {
     // monthly
     await page.getByLabel('頻度').selectOption('monthly');
 
-    await test.step('monthly → 日指定が表示され間隔は非表示', async () => {
+    await test.step('毎月 → 日指定が表示され間隔は非表示', async () => {
       await expect(page.getByLabel(/日指定/)).toBeVisible();
       await expect(page.getByLabel('間隔')).not.toBeVisible();
     });
@@ -133,7 +133,7 @@ test.describe('フォームバリデーション', () => {
     // daily
     await page.getByLabel('頻度').selectOption('daily');
 
-    await test.step('daily → すべて非表示', async () => {
+    await test.step('毎日 → すべて非表示', async () => {
       await expect(page.getByLabel('間隔')).not.toBeVisible();
       await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
       await expect(page.getByLabel(/日指定/)).not.toBeVisible();
