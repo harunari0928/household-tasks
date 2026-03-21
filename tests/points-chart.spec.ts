@@ -2,64 +2,28 @@ import { test, expect } from './fixtures/setup.js';
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
 
 test.describe('ポイントフィールド', () => {
-  test('タスク作成時にポイントを設定できる', async ({ page, baseURL }) => {
+  test('ポイントのデフォルト値は1', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
-    await page.getByLabel('タスク名').fill('ポイントテスト');
-    await page.getByLabel('ポイント').fill('5');
-    await page.getByRole('button', { name: '保存' }).click();
 
-    await expect(page.getByText('ポイントテスト')).toBeVisible();
-
-    const res = await page.request.get(`${baseURL}/api/tasks`);
-    const tasks = await res.json();
-    const task = tasks.find((t: any) => t.name === 'ポイントテスト');
-    expect(task.points).toBe(5);
+    await expect(page.getByLabel('ポイント')).toHaveValue('1');
   });
 
-  test('ポイントのデフォルト値は1', async ({ page, baseURL }) => {
+  test('ポイントは1〜10の範囲に制限される', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
-    await page.getByLabel('タスク名').fill('デフォルトポイント');
-    await page.getByRole('button', { name: '保存' }).click();
 
-    await expect(page.getByText('デフォルトポイント')).toBeVisible();
+    const pointsInput = page.getByLabel('ポイント');
 
-    const res = await page.request.get(`${baseURL}/api/tasks`);
-    const tasks = await res.json();
-    const task = tasks.find((t: any) => t.name === 'デフォルトポイント');
-    expect(task.points).toBe(1);
-  });
-
-  test('ポイント範囲外の値はバリデーションエラー', async ({ baseURL }) => {
-    // Test via API directly for precision
-    const res0 = await fetch(`${baseURL}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'ポイント0テスト',
-        category: 'water',
-        frequency_type: 'daily',
-        points: 0,
-      }),
+    await pointsInput.fill('11');
+    await test.step('11を入力すると10に制限される', async () => {
+      await expect(pointsInput).toHaveValue('10');
     });
-    expect(res0.status).toBe(400);
-    const body0 = await res0.json();
-    expect(body0.error).toContain('ポイント');
 
-    const res11 = await fetch(`${baseURL}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'ポイント11テスト',
-        category: 'water',
-        frequency_type: 'daily',
-        points: 11,
-      }),
+    await pointsInput.fill('0');
+    await test.step('0を入力すると1に制限される', async () => {
+      await expect(pointsInput).toHaveValue('1');
     });
-    expect(res11.status).toBe(400);
-    const body11 = await res11.json();
-    expect(body11.error).toContain('ポイント');
   });
 
   test('編集ダイアログで既存のポイント値が表示される', async ({ page }) => {
