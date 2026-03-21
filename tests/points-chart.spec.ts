@@ -1,106 +1,106 @@
 import { test, expect } from './fixtures/setup.js';
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
 
-// --- Points field tests (no Vikunja stub needed) ---
+test.describe('ポイントフィールド', () => {
+  test('タスク作成時にポイントを設定できる', async ({ page, baseURL }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('ポイントテスト');
+    await page.getByLabel('ポイント').fill('5');
+    await page.getByRole('button', { name: '保存' }).click();
 
-test('タスク作成時にポイントを設定できる', async ({ page, baseURL }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: /タスクを追加/ }).click();
-  await page.getByLabel('タスク名').fill('ポイントテスト');
-  await page.getByLabel('ポイント').fill('5');
-  await page.getByRole('button', { name: '保存' }).click();
+    await expect(page.getByText('ポイントテスト')).toBeVisible();
 
-  await expect(page.getByText('ポイントテスト')).toBeVisible();
-
-  const res = await page.request.get(`${baseURL}/api/tasks`);
-  const tasks = await res.json();
-  const task = tasks.find((t: any) => t.name === 'ポイントテスト');
-  expect(task.points).toBe(5);
-});
-
-test('ポイントのデフォルト値は1', async ({ page, baseURL }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: /タスクを追加/ }).click();
-  await page.getByLabel('タスク名').fill('デフォルトポイント');
-  await page.getByRole('button', { name: '保存' }).click();
-
-  await expect(page.getByText('デフォルトポイント')).toBeVisible();
-
-  const res = await page.request.get(`${baseURL}/api/tasks`);
-  const tasks = await res.json();
-  const task = tasks.find((t: any) => t.name === 'デフォルトポイント');
-  expect(task.points).toBe(1);
-});
-
-test('ポイント範囲外の値はバリデーションエラー', async ({ baseURL }) => {
-  // Test via API directly for precision
-  const res0 = await fetch(`${baseURL}/api/tasks`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: 'ポイント0テスト',
-      category: 'water',
-      frequency_type: 'daily',
-      points: 0,
-    }),
+    const res = await page.request.get(`${baseURL}/api/tasks`);
+    const tasks = await res.json();
+    const task = tasks.find((t: any) => t.name === 'ポイントテスト');
+    expect(task.points).toBe(5);
   });
-  expect(res0.status).toBe(400);
-  const body0 = await res0.json();
-  expect(body0.error).toContain('ポイント');
 
-  const res11 = await fetch(`${baseURL}/api/tasks`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: 'ポイント11テスト',
-      category: 'water',
-      frequency_type: 'daily',
-      points: 11,
-    }),
+  test('ポイントのデフォルト値は1', async ({ page, baseURL }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('デフォルトポイント');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByText('デフォルトポイント')).toBeVisible();
+
+    const res = await page.request.get(`${baseURL}/api/tasks`);
+    const tasks = await res.json();
+    const task = tasks.find((t: any) => t.name === 'デフォルトポイント');
+    expect(task.points).toBe(1);
   });
-  expect(res11.status).toBe(400);
-  const body11 = await res11.json();
-  expect(body11.error).toContain('ポイント');
+
+  test('ポイント範囲外の値はバリデーションエラー', async ({ baseURL }) => {
+    // Test via API directly for precision
+    const res0 = await fetch(`${baseURL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'ポイント0テスト',
+        category: 'water',
+        frequency_type: 'daily',
+        points: 0,
+      }),
+    });
+    expect(res0.status).toBe(400);
+    const body0 = await res0.json();
+    expect(body0.error).toContain('ポイント');
+
+    const res11 = await fetch(`${baseURL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'ポイント11テスト',
+        category: 'water',
+        frequency_type: 'daily',
+        points: 11,
+      }),
+    });
+    expect(res11.status).toBe(400);
+    const body11 = await res11.json();
+    expect(body11.error).toContain('ポイント');
+  });
+
+  test('編集ダイアログで既存のポイント値が表示される', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('ポイント確認テスト');
+    await page.getByLabel('ポイント').fill('7');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByText('ポイント確認テスト')).toBeVisible();
+
+    // Open edit dialog
+    await page.getByText('ポイント確認テスト').click();
+
+    const pointsInput = page.getByLabel('ポイント');
+    await expect(pointsInput).toHaveValue('7');
+  });
 });
 
-test('編集ダイアログで既存のポイント値が表示される', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: /タスクを追加/ }).click();
-  await page.getByLabel('タスク名').fill('ポイント確認テスト');
-  await page.getByLabel('ポイント').fill('7');
-  await page.getByRole('button', { name: '保存' }).click();
+test.describe('ポイント集計ページ', () => {
+  test('ナビゲーションでポイント集計ページに遷移できる', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: 'ポイント集計' }).click();
 
-  await expect(page.getByText('ポイント確認テスト')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '期間' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'ポイント比較' })).toBeVisible();
+  });
 
-  // Open edit dialog
-  await page.getByText('ポイント確認テスト').click();
+  test('期間を変更して保存するとリロード後も設定が維持される', async ({ page }) => {
+    await page.goto('/#/stats');
 
-  const pointsInput = page.getByLabel('ポイント');
-  await expect(pointsInput).toHaveValue('7');
-});
+    await page.getByLabel('開始日').fill('2026-01-01');
+    await page.getByLabel('終了日').fill('2026-01-31');
+    await page.getByRole('button', { name: 'みんなに保存' }).click();
+    await page.getByText('保存しました').waitFor();
 
-// --- Stats page tests ---
+    await page.reload();
 
-test('ナビゲーションでポイント集計ページに遷移できる', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('link', { name: 'ポイント集計' }).click();
-
-  await expect(page.getByRole('heading', { name: '期間' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'ポイント比較' })).toBeVisible();
-});
-
-test('期間を変更して保存するとリロード後も設定が維持される', async ({ page }) => {
-  await page.goto('/#/stats');
-
-  await page.getByLabel('開始日').fill('2026-01-01');
-  await page.getByLabel('終了日').fill('2026-01-31');
-  await page.getByRole('button', { name: 'みんなに保存' }).click();
-  await page.getByText('保存しました').waitFor();
-
-  await page.reload();
-
-  await expect(page.getByLabel('開始日')).toHaveValue('2026-01-01');
-  await expect(page.getByLabel('終了日')).toHaveValue('2026-01-31');
+    await expect(page.getByLabel('開始日')).toHaveValue('2026-01-01');
+    await expect(page.getByLabel('終了日')).toHaveValue('2026-01-31');
+  });
 });
 
 // --- Stats page with Vikunja stub ---
@@ -213,13 +213,14 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
   test('検索をクリアすると全タスクが再表示される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
 
-    await test.step('検索でフィルタ', async () => {
-      await page.getByLabel('完了タスクを検索').fill('掃除');
-      await expect(page.getByRole('cell', { name: '床拭き' })).not.toBeVisible();
-    });
+    // 検索でフィルタ
+    await page.getByLabel('完了タスクを検索').fill('掃除');
+    await expect(page.getByRole('cell', { name: '床拭き' })).not.toBeVisible();
 
-    await test.step('クリアで全件表示', async () => {
-      await page.getByLabel('完了タスクを検索').fill('');
+    // クリア
+    await page.getByLabel('完了タスクを検索').fill('');
+
+    await test.step('全件表示される', async () => {
       await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
       await expect(page.getByRole('cell', { name: 'キッチン掃除' })).toBeVisible();
       await expect(page.getByRole('cell', { name: '床拭き' }).first()).toBeVisible();
