@@ -42,7 +42,7 @@ function getWeekRange(): { start: string; end: string } {
 }
 
 function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 }
 
 export default function StatsPage() {
@@ -164,6 +164,11 @@ export default function StatsPage() {
 
   const totalPoints = pieData.reduce((sum, d) => sum + d.value, 0);
 
+  const endChanged = endIsToday && savedEndIsToday
+    ? false
+    : endDate !== savedEnd || endIsToday !== savedEndIsToday;
+  const hasUnsavedChanges = startDate !== savedStart || endChanged;
+
   return (
     <div className="space-y-6">
       {/* Period selector */}
@@ -212,15 +217,24 @@ export default function StatsPage() {
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
           <span className="text-gray-500 dark:text-gray-400">〜</span>
-          <input
-            type="date"
-            aria-label="終了日"
-            value={endDate}
-            onChange={(e) => handleDateChange('end', e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-          />
+          {endIsToday ? (
+            <span
+              aria-label="終了日"
+              className="border border-blue-500 bg-blue-50 dark:bg-blue-900/30 rounded-lg px-3 py-2 text-sm min-h-[44px] text-blue-700 dark:text-blue-300 flex items-center"
+            >
+              {endDate}
+            </span>
+          ) : (
+            <input
+              type="date"
+              aria-label="終了日"
+              value={endDate}
+              onChange={(e) => handleDateChange('end', e.target.value)}
+              className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          )}
         </div>
-        {(startDate !== savedStart || endDate !== savedEnd || endIsToday !== savedEndIsToday) && (
+        {hasUnsavedChanges && (
           <button
             type="button"
             onClick={savePeriod}
