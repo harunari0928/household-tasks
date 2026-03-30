@@ -133,6 +133,27 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 7,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          display_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      // Migrate existing assignees from app_settings
+      const row = db.prepare("SELECT value FROM app_settings WHERE key = 'kanban_assignees'").get() as { value: string } | undefined;
+      if (row) {
+        const assignees: string[] = JSON.parse(row.value);
+        const insert = db.prepare('INSERT OR IGNORE INTO users (name, display_order) VALUES (?, ?)');
+        assignees.forEach((name, i) => insert.run(name, i));
+      }
+      db.exec("DELETE FROM app_settings WHERE key = 'kanban_assignees'");
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

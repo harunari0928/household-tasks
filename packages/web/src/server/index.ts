@@ -39,6 +39,7 @@ app.post('/api/test/reset', (_req, res) => {
   db.exec('DELETE FROM execution_log');
   db.exec('DELETE FROM task_definitions');
   db.exec('DELETE FROM app_settings');
+  db.exec('DELETE FROM users');
   // Clean uploads directory
   const uploadsDir = getUploadsDir();
   if (fs.existsSync(uploadsDir)) {
