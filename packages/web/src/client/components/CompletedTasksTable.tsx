@@ -40,10 +40,16 @@ export default function CompletedTasksTable({ details }: { details: PointDetail[
     }
 
     if (filterDateFrom) {
-      result = result.filter((d) => d.done_at.slice(0, 10) >= filterDateFrom);
+      result = result.filter((d) => {
+        const jstDate = new Date(d.done_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+        return jstDate >= filterDateFrom;
+      });
     }
     if (filterDateTo) {
-      result = result.filter((d) => d.done_at.slice(0, 10) <= filterDateTo);
+      result = result.filter((d) => {
+        const jstDate = new Date(d.done_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+        return jstDate <= filterDateTo;
+      });
     }
 
     result = [...result].sort((a, b) => {

@@ -244,9 +244,8 @@ test.describe('担当フィルタ', () => {
 
   test('「全担当者」に戻すと全タスクが再表示される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
-
     await page.getByLabel('担当フィルタ').selectOption('taro');
-    await expect(page.getByRole('cell', { name: 'キッチン掃除' })).not.toBeVisible();
+    await page.getByRole('cell', { name: 'キッチン掃除' }).waitFor({ state: 'hidden' });
 
     await page.getByLabel('担当フィルタ').selectOption('');
 
@@ -275,11 +274,10 @@ test.describe('担当フィルタ', () => {
 test.describe('完了日フィルタ', () => {
   test('開始日を指定すると完了日がそれ以降のタスクのみ表示される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
-
-    // completed_at is set to current time (today). Setting from to tomorrow should hide all
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+
     await page.getByLabel('完了日From').fill(tomorrowStr);
 
     await expect(page.getByText('該当するタスクがありません')).toBeVisible();
@@ -287,11 +285,10 @@ test.describe('完了日フィルタ', () => {
 
   test('終了日を指定すると完了日がそれ以前のタスクのみ表示される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
-
-    // completed_at is set to current time (today). Setting to to yesterday should hide all
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+
     await page.getByLabel('完了日To').fill(yesterdayStr);
 
     await expect(page.getByText('該当するタスクがありません')).toBeVisible();
@@ -313,8 +310,9 @@ test.describe('ソート', () => {
 
     await page.getByRole('columnheader', { name: /タスク/ }).click();
 
-    const firstRow = page.locator('tbody tr').first();
-    await expect(firstRow.getByRole('cell').first()).toHaveText('キッチン掃除');
+    // ヘッダ行の次の最初のデータ行
+    const firstDataRow = page.getByRole('row').nth(1);
+    await expect(firstDataRow.getByRole('cell').first()).toHaveText('キッチン掃除');
   });
 
   test('「タスク」ヘッダを再クリックするとタスク名の降順に切り替わる', async ({ page, baseURL }) => {
@@ -323,8 +321,8 @@ test.describe('ソート', () => {
     await page.getByRole('columnheader', { name: /タスク/ }).click();
     await page.getByRole('columnheader', { name: /タスク/ }).click();
 
-    const firstRow = page.locator('tbody tr').first();
-    await expect(firstRow.getByRole('cell').first()).toHaveText('洗面台掃除');
+    const firstDataRow = page.getByRole('row').nth(1);
+    await expect(firstDataRow.getByRole('cell').first()).toHaveText('洗面台掃除');
   });
 
   test('「担当」ヘッダをクリックすると担当名の昇順に並ぶ', async ({ page, baseURL }) => {
@@ -332,8 +330,8 @@ test.describe('ソート', () => {
 
     await page.getByRole('columnheader', { name: /担当/ }).click();
 
-    const firstRow = page.locator('tbody tr').first();
-    await expect(firstRow.getByRole('cell').nth(1)).toHaveText('hanako');
+    const firstDataRow = page.getByRole('row').nth(1);
+    await expect(firstDataRow.getByRole('cell').nth(1)).toHaveText('hanako');
   });
 
   test('「完了日」ヘッダをクリックすると完了日の昇順に切り替わる', async ({ page, baseURL }) => {
@@ -398,35 +396,34 @@ test.describe('無限スクロール', () => {
     await page.goto('/#/stats');
     await page.getByLabel('開始日').fill('2026-01-01');
     await page.getByLabel('終了日').fill('2026-12-31');
-    await expect(page.getByText('完了タスク一覧')).toBeVisible({ timeout: 30000 });
+    await page.getByText('完了タスク一覧').waitFor({ timeout: 30000 });
   }
 
   test('初期表示では最初の30件のみ表示される', async ({ page, baseURL }) => {
     test.setTimeout(120000);
     await setupManyTasks(page, baseURL!, 35);
 
-    const rows = page.locator('tbody tr');
-    await expect(rows).toHaveCount(30);
+    // 30データ行 + 1ヘッダ行 = 31行
+    await expect(page.getByRole('row')).toHaveCount(31);
     await expect(page.getByText('残り5件')).toBeVisible();
   });
 
   test('下にスクロールすると追加のタスクが読み込まれる', async ({ page, baseURL }) => {
     test.setTimeout(120000);
     await setupManyTasks(page, baseURL!, 35);
+    await page.getByText('残り5件').waitFor();
 
-    await expect(page.locator('tbody tr')).toHaveCount(30);
-
-    // Scroll to sentinel element
     await page.getByText('残り5件').scrollIntoViewIfNeeded();
 
-    await expect(page.locator('tbody tr')).toHaveCount(35, { timeout: 5000 });
+    // 35データ行 + 1ヘッダ行 = 36行
+    await expect(page.getByRole('row')).toHaveCount(36, { timeout: 5000 });
   });
 
   test('全件表示後に「全N件を表示」が表示される', async ({ page, baseURL }) => {
     test.setTimeout(120000);
     await setupManyTasks(page, baseURL!, 35);
+    await page.getByText('残り5件').waitFor();
 
-    // Scroll to load all
     await page.getByText('残り5件').scrollIntoViewIfNeeded();
 
     await expect(page.getByText('全35件を表示')).toBeVisible({ timeout: 5000 });

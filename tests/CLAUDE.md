@@ -49,7 +49,9 @@ Scheduler logic tests verified via Kanban board UI.
 - テスト記述やテスト名で「他の」等の曖昧な表現を避け、具体的な操作対象（ボタン名等）を明記する。
 - 同じ検証を複数パターンで行う場合は `for...of` 等で全パターンを網羅する。
 - テストファイル内では `test.describe` で機能グループごとにテストをまとめること。観点の異なるテストをフラットに並べない。
-- AAAパターン（Arrange-Act-Assert）を守ること。`test.step` はAssert（検証）にのみ使用する。Arrange（前提条件のセットアップ）やAct（テスト対象の操作）は `test.step` の外に記述する。
+- AAAパターン（Arrange-Act-Assert）を守ること。`test.step` はAssert（検証）にのみ使用する。Arrange（前提条件のセットアップ）やAct（テスト対象の操作）は `test.step` の外に記述する。Arrange/Act/Assertの各セクションは空行で明確に分離する。
+- `expect` はAssertセクションでのみ使用する。Arrange/Actで状態を待機する場合は `waitFor()` 等を使うこと（例: `await element.waitFor({ state: 'hidden' })` ）。
+- Playwright推奨のロケータ（`getByRole`, `getByLabel`, `getByText`等）を優先する。`page.locator(CSSセレクタ)` は最終手段として使用する。
 - テスト名・step名は仕様（ユーザにとっての振る舞い）を表現する。実装の動作（「スキップする」「成功する」「次回予定日が設定される」等）ではなく、ユーザ視点の結果（「起票しない」「起票される」「元のリズムで起票される」等）で書く。
 - `test.step` は検証が1つだけのテストでは不要。複数の観点がある場合にのみ使う。
 - セクション区切りに `// ---` コメントを使わず、`test.describe` でグループ化する。
