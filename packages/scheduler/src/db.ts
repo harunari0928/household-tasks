@@ -16,6 +16,60 @@ export interface TaskDefinitionRow {
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
+  points: number;
+}
+
+type Migration = {
+  version: number;
+  up: (db: Database.Database) => void;
+};
+
+const migrations: Migration[] = [
+  {
+    version: 5,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_instances (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_definition_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'in_progress', 'done')),
+          assignee TEXT DEFAULT NULL,
+          points INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          completed_at TEXT DEFAULT NULL,
+          FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_instances_status ON task_instances(status);
+        CREATE INDEX IF NOT EXISTS idx_task_instances_task_def ON task_instances(task_definition_id);
+        CREATE INDEX IF NOT EXISTS idx_task_instances_completed ON task_instances(completed_at);
+      `);
+    },
+  },
+  {
+    version: 6,
+    up: (db) => {
+      db.exec('ALTER TABLE task_instances ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+    },
+  },
+];
+
+function runMigrations(db: Database.Database): void {
+  db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)');
+
+  const row = db.prepare('SELECT MAX(version) as v FROM schema_version').get() as { v: number | null };
+  const currentVersion = row?.v ?? 0;
+
+  const applyMigration = db.transaction((migration: Migration) => {
+    migration.up(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version);
+  });
+
+  for (const migration of migrations) {
+    if (migration.version > currentVersion) {
+      applyMigration(migration);
+    }
+  }
 }
 
 export function getDb(): Database.Database {
@@ -24,6 +78,7 @@ export function getDb(): Database.Database {
     dbInstance.pragma('journal_mode = WAL');
     dbInstance.pragma('foreign_keys = ON');
     dbInstance.pragma('busy_timeout = 5000');
+    runMigrations(dbInstance);
   }
   return dbInstance;
 }
@@ -45,7 +100,7 @@ export function isAlreadyCreatedToday(db: Database.Database, taskDefId: number, 
 export function logExecution(
   db: Database.Database,
   taskDefId: number,
-  vikunjaTaskId: number | null,
+  taskInstanceId: number | null,
   status: 'created' | 'failed' | 'skipped_duplicate',
   errorMessage?: string,
   executedAt?: string,
@@ -54,13 +109,39 @@ export function logExecution(
     db.prepare(`
       INSERT INTO execution_log (task_definition_id, vikunja_task_id, status, error_message, executed_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run(taskDefId, vikunjaTaskId, status, errorMessage || null, executedAt);
+    `).run(taskDefId, taskInstanceId, status, errorMessage || null, executedAt);
   } else {
     db.prepare(`
       INSERT INTO execution_log (task_definition_id, vikunja_task_id, status, error_message)
       VALUES (?, ?, ?, ?)
-    `).run(taskDefId, vikunjaTaskId, status, errorMessage || null);
+    `).run(taskDefId, taskInstanceId, status, errorMessage || null);
   }
+}
+
+export function hasUncompletedInstance(db: Database.Database, taskDefId: number): boolean {
+  const row = db.prepare(`
+    SELECT 1 FROM task_instances WHERE task_definition_id = ? AND status != 'done' LIMIT 1
+  `).get(taskDefId);
+  return !!row;
+}
+
+export function createTaskInstance(
+  db: Database.Database,
+  taskDefId: number,
+  title: string,
+  points: number,
+  createdAt: string,
+): number {
+  const maxRow = db.prepare(
+    "SELECT COALESCE(MAX(sort_order), -1) as max_order FROM task_instances WHERE status = 'todo'"
+  ).get() as { max_order: number };
+  const sortOrder = maxRow.max_order + 1;
+
+  const result = db.prepare(`
+    INSERT INTO task_instances (task_definition_id, title, status, points, created_at, sort_order)
+    VALUES (?, ?, 'todo', ?, ?, ?)
+  `).run(taskDefId, title, points, createdAt, sortOrder);
+  return Number(result.lastInsertRowid);
 }
 
 export function updateNextDueDate(db: Database.Database, taskId: number, nextDate: string): void {

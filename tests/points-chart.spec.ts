@@ -1,16 +1,102 @@
 import { test, expect } from './fixtures/setup.js';
-import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import type { Page } from '@playwright/test';
+
+const execAsync = promisify(exec);
+
+async function runScheduler(testToday: string): Promise<string> {
+  const { stdout, stderr } = await execAsync('node packages/scheduler/dist/index.js', {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      DB_PATH: 'data/test_task_definitions.db',
+      TEST_TODAY: testToday,
+    },
+    encoding: 'utf-8',
+    timeout: 15000,
+  });
+  if (stderr) console.error('Scheduler stderr:', stderr);
+  return stdout;
+}
+
+async function createTaskViaUI(
+  page: Page,
+  options: { name: string; category?: string; points?: number },
+) {
+  await page.goto('/#/tasks');
+  const category = options.category || 'water';
+  const CATEGORY_MAP: Record<string, string> = {
+    water: '水回り', kitchen: 'キッチン', floor: 'フロア・室内',
+  };
+  await page.getByRole('button', { name: new RegExp(CATEGORY_MAP[category]) }).click();
+  await page.getByRole('button', { name: /タスクを追加/ }).click();
+  await page.getByLabel('タスク名').fill(options.name);
+  await page.getByLabel('カテゴリ').selectOption(category);
+  await page.getByLabel('頻度').selectOption('daily');
+  if (options.points != null) {
+    await page.getByLabel('ポイント').fill(String(options.points));
+  }
+  await page.getByRole('button', { name: '保存' }).click();
+  await page.getByText(options.name).waitFor();
+}
+
+async function setupStatsWithTasks(page: Page, baseURL: string) {
+  // Register assignees
+  await page.request.put(`${baseURL}/api/kanban/assignees`, {
+    data: { assignees: ['taro', 'hanako'] },
+  });
+
+  // Create task definitions via UI
+  await createTaskViaUI(page, { name: '洗面台掃除', category: 'water', points: 3 });
+  await createTaskViaUI(page, { name: 'キッチン掃除', category: 'kitchen', points: 2 });
+  await createTaskViaUI(page, { name: '床拭き', category: 'floor', points: 5 });
+
+  // Run scheduler to create task_instances
+  await runScheduler('2026-03-10');
+
+  // Get kanban tasks to find instance IDs
+  const kanbanRes = await page.request.get(`${baseURL}/api/kanban`);
+  const instances = await kanbanRes.json();
+
+  const find = (title: string) => instances.find((t: any) => t.title === title);
+
+  // Assign and complete tasks via kanban API
+  // 洗面台掃除 → taro, done
+  const senmen = find('洗面台掃除');
+  await page.request.patch(`${baseURL}/api/kanban/${senmen.id}/status`, {
+    data: { status: 'done', assignee: 'taro' },
+  });
+
+  // キッチン掃除 → hanako, done
+  const kitchen = find('キッチン掃除');
+  await page.request.patch(`${baseURL}/api/kanban/${kitchen.id}/status`, {
+    data: { status: 'done', assignee: 'hanako' },
+  });
+
+  // 床拭き → taro, done (will count for taro)
+  const yuka = find('床拭き');
+  await page.request.patch(`${baseURL}/api/kanban/${yuka.id}/status`, {
+    data: { status: 'done', assignee: 'taro' },
+  });
+
+  // Navigate to stats page and set date range
+  await page.goto('/#/stats');
+  await page.getByLabel('開始日').fill('2026-03-01');
+  await page.getByLabel('終了日').fill('2026-03-31');
+  await expect(page.getByText('完了タスク一覧')).toBeVisible({ timeout: 10000 });
+}
 
 test.describe('ポイントフィールド', () => {
   test('ポイントのデフォルト値は1', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     await expect(page.getByLabel('ポイント')).toHaveValue('1');
   });
 
   test('ポイントは1〜10の範囲に制限される', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     const pointsInput = page.getByLabel('ポイント');
@@ -27,7 +113,7 @@ test.describe('ポイントフィールド', () => {
   });
 
   test('編集ダイアログで既存のポイント値が表示される', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('ポイント確認テスト');
     await page.getByLabel('ポイント').fill('7');
@@ -67,101 +153,26 @@ test.describe('ポイント集計ページ', () => {
   });
 });
 
-// --- Stats page with Vikunja stub ---
-
-let vikunjaStub: Server;
-const STUB_PORT = 3199;
-
-test.describe('ポイント集計（Vikunjaスタブ）', () => {
-  test.beforeAll(async () => {
-    vikunjaStub = createServer((req: IncomingMessage, res: ServerResponse) => {
-      let body = '';
-      req.on('data', (chunk: string) => (body += chunk));
-      req.on('end', () => {
-        // Return completed tasks for project tasks endpoint
-        if (req.url?.includes('/projects/') && req.url?.includes('/tasks')) {
-          const tasks = [
-            {
-              id: 1001,
-              title: '洗面台掃除',
-              done: true,
-              done_at: '2026-03-10T10:00:00Z',
-              assignees: [{ id: 1, username: 'taro' }],
-            },
-            {
-              id: 1002,
-              title: 'キッチン掃除',
-              done: true,
-              done_at: '2026-03-11T10:00:00Z',
-              assignees: [{ id: 2, username: 'hanako' }],
-            },
-            {
-              id: 1003,
-              title: '床拭き',
-              done: true,
-              done_at: '2026-03-12T10:00:00Z',
-              assignees: [{ id: 1, username: 'taro' }, { id: 2, username: 'hanako' }],
-            },
-            {
-              id: 1004,
-              title: '未完了タスク',
-              done: false,
-              done_at: null,
-              assignees: [{ id: 1, username: 'taro' }],
-            },
-          ];
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(tasks));
-        } else {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({}));
-        }
-      });
-    });
-    await new Promise<void>((resolve, reject) => {
-      vikunjaStub.on('error', reject);
-      vikunjaStub.listen(STUB_PORT, '127.0.0.1', () => resolve());
-    });
-  });
-
-  test.afterAll(async () => {
-    vikunjaStub.close();
-  });
-
-  // Helper: create task definitions and navigate to stats with date range
-  async function setupStatsWithTasks(page: any, baseURL: string) {
-    await page.request.post(`${baseURL}/api/tasks`, {
-      data: { name: '洗面台掃除', category: 'water', frequency_type: 'daily', points: 3, vikunja_project_id: 1 },
-    });
-    await page.request.post(`${baseURL}/api/tasks`, {
-      data: { name: 'キッチン掃除', category: 'kitchen', frequency_type: 'daily', points: 2, vikunja_project_id: 1 },
-    });
-    await page.request.post(`${baseURL}/api/tasks`, {
-      data: { name: '床拭き', category: 'floor', frequency_type: 'daily', points: 5, vikunja_project_id: 1 },
-    });
-    await page.goto('/#/stats');
-    await page.getByLabel('開始日').fill('2026-03-01');
-    await page.getByLabel('終了日').fill('2026-03-31');
-    await expect(page.getByText('完了タスク一覧')).toBeVisible({ timeout: 10000 });
-  }
-
-  test('円グラフに正しいポイント集計が表示される', async ({ page, baseURL }) => {
+test.describe('ポイント集計の表示', () => {
+  test('完了タスクのポイントが担当者別に集計される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
 
-    // Verify detail table has correct entries
+    await test.step('完了タスクが一覧に表示される', async () => {
+      await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'キッチン掃除' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: '床拭き' })).toBeVisible();
+    });
+
     // taro: 洗面台掃除(3pt) + 床拭き(5pt) = 8pt
-    // hanako: キッチン掃除(2pt) + 床拭き(5pt) = 7pt
-    await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'キッチン掃除' })).toBeVisible();
-    // 床拭きは両方にアサインされているので2行ある
-    await expect(page.getByRole('cell', { name: '床拭き' }).first()).toBeVisible();
+    // hanako: キッチン掃除(2pt) = 2pt
+    await test.step('担当者別の合計ポイントが表示される', async () => {
+      await expect(page.getByText(/taro.*8pt|8pt.*taro/)).toBeVisible();
+      await expect(page.getByText(/hanako.*2pt|2pt.*hanako/)).toBeVisible();
+    });
 
-    // Verify totals in chart labels
-    await expect(page.getByText(/taro.*8pt|8pt.*taro/)).toBeVisible();
-    await expect(page.getByText(/hanako.*7pt|7pt.*hanako/)).toBeVisible();
-
-    // Verify total
-    await expect(page.getByText('合計: 15pt')).toBeVisible();
+    await test.step('全体の合計ポイントが表示される', async () => {
+      await expect(page.getByText('合計: 10pt')).toBeVisible();
+    });
   });
 
   test('検索欄にテキストを入力すると完了タスクがフィルタされる', async ({ page, baseURL }) => {
@@ -177,17 +188,15 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
   test('検索をクリアすると全タスクが再表示される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
 
-    // 検索でフィルタ
     await page.getByLabel('完了タスクを検索').fill('掃除');
     await expect(page.getByRole('cell', { name: '床拭き' })).not.toBeVisible();
 
-    // クリア
     await page.getByLabel('完了タスクを検索').fill('');
 
     await test.step('全件表示される', async () => {
       await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
       await expect(page.getByRole('cell', { name: 'キッチン掃除' })).toBeVisible();
-      await expect(page.getByRole('cell', { name: '床拭き' }).first()).toBeVisible();
+      await expect(page.getByRole('cell', { name: '床拭き' })).toBeVisible();
     });
   });
 
@@ -201,9 +210,7 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
   });
 
   test('ローディング中にスケルトンUIが表示される', async ({ page, baseURL }) => {
-    await page.request.post(`${baseURL}/api/tasks`, {
-      data: { name: '洗面台掃除', category: 'water', frequency_type: 'daily', points: 3, vikunja_project_id: 1 },
-    });
+    await createTaskViaUI(page, { name: '洗面台掃除', category: 'water', points: 3 });
 
     // Delay stats API response so skeleton is visible
     await page.route('**/api/stats/points**', async (route) => {
@@ -215,7 +222,6 @@ test.describe('ポイント集計（Vikunjaスタブ）', () => {
 
     const skeleton = page.getByLabel('読み込み中');
     await expect(skeleton).toBeVisible();
-    // Skeleton contains circle placeholder (pie chart area) and bar placeholders (table rows)
     await expect(skeleton.locator('.rounded-full')).toBeVisible();
   });
 });

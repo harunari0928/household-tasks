@@ -4,15 +4,21 @@ import CategoryTabs from './components/CategoryTabs.js';
 import TaskList from './components/TaskList.js';
 import TaskForm from './components/TaskForm.js';
 import StatsPage from './components/StatsPage.js';
+import KanbanBoard from './components/KanbanBoard.js';
 import useTheme from './hooks/useTheme.js';
 
-function getPage(): 'tasks' | 'stats' {
-  return window.location.hash === '#/stats' ? 'stats' : 'tasks';
+type Page = 'kanban' | 'tasks' | 'stats';
+
+function getPage(): Page {
+  const hash = window.location.hash;
+  if (hash === '#/tasks') return 'tasks';
+  if (hash === '#/stats') return 'stats';
+  return 'kanban';
 }
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
-  const [currentPage, setCurrentPage] = useState<'tasks' | 'stats'>(getPage);
+  const [currentPage, setCurrentPage] = useState<Page>(getPage);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('water');
   const [tasks, setTasks] = useState<TaskDefinition[]>([]);
   const [allTasks, setAllTasks] = useState<TaskDefinition[]>([]);
@@ -20,11 +26,39 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Current user state
+  const [currentUser, setCurrentUser] = useState<string | null>(() =>
+    localStorage.getItem('current_user'),
+  );
+  const [assignees, setAssignees] = useState<string[]>([]);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showHamburger, setShowHamburger] = useState(false);
+
   useEffect(() => {
     const onHash = () => setCurrentPage(getPage());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  // Fetch assignees for user switcher
+  useEffect(() => {
+    fetch('/api/kanban/assignees')
+      .then((r) => r.json())
+      .then((data) => {
+        setAssignees(data);
+        if (!currentUser && data.length > 0) {
+          setCurrentUser(data[0]);
+          localStorage.setItem('current_user', data[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleUserChange = (user: string) => {
+    setCurrentUser(user);
+    localStorage.setItem('current_user', user);
+    setShowUserMenu(false);
+  };
 
   const fetchTasks = useCallback(async () => {
     const res = await fetch('/api/tasks');
@@ -95,34 +129,70 @@ export default function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showForm]);
 
+  const navItems: { page: Page; hash: string; label: string }[] = [
+    { page: 'kanban', hash: '#/', label: 'カンバン' },
+    { page: 'tasks', hash: '#/tasks', label: 'タスク管理' },
+    { page: 'stats', hash: '#/stats', label: 'ポイント集計' },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">家庭タスク管理</h1>
-          <div className="flex items-center gap-2">
-            <nav className="flex gap-2">
-              <a
-                href="#/"
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentPage === 'tasks'
-                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                タスク管理
-              </a>
-              <a
-                href="#/stats"
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentPage === 'stats'
-                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                ポイント集計
-              </a>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-4 flex items-center justify-between">
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">家事</h1>
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* PC: inline nav */}
+            <nav className="hidden sm:flex gap-2">
+              {navItems.map((item) => (
+                <a
+                  key={item.page}
+                  href={item.hash}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage === item.page
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              ))}
             </nav>
+
+            {/* User switcher */}
+            {assignees.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-h-[36px]"
+                  aria-label="ユーザー切替"
+                >
+                  <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center font-bold">
+                    {currentUser?.[0] ?? '?'}
+                  </span>
+                  <span className="hidden sm:inline">{currentUser ?? '未選択'}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {showUserMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]">
+                      {assignees.map((a) => (
+                        <button
+                          key={a}
+                          onClick={() => handleUserChange(a)}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                            a === currentUser ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'
+                          }`}
+                        >
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
@@ -134,12 +204,49 @@ export default function App() {
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
               )}
             </button>
+
+            {/* Mobile: hamburger menu */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowHamburger(!showHamburger)}
+                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+                aria-label="メニュー"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              </button>
+              {showHamburger && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowHamburger(false)} />
+                  <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 min-w-[160px]">
+                    {navItems.map((item) => (
+                      <a
+                        key={item.page}
+                        href={item.hash}
+                        onClick={() => setShowHamburger(false)}
+                        className={`flex items-center gap-2 w-full px-4 py-3 text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                          currentPage === item.page
+                            ? 'text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/20'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {currentPage === item.page && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                        )}
+                        {item.label}
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-4">
-        {currentPage === 'stats' ? (
+      <main className={`mx-auto px-3 sm:px-4 py-3 sm:py-4 ${currentPage === 'kanban' ? 'max-w-full' : 'max-w-5xl'}`}>
+        {currentPage === 'kanban' ? (
+          <KanbanBoard currentUser={currentUser} />
+        ) : currentPage === 'stats' ? (
           <StatsPage />
         ) : (
           <>
@@ -159,7 +266,6 @@ export default function App() {
           placeholder="タスクを検索..."
           aria-label="タスクを検索"
           className="mt-3 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 min-h-[44px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
-
         />
 
         <TaskList
@@ -171,7 +277,6 @@ export default function App() {
         <button
           onClick={handleAdd}
           className="mt-4 w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors text-base"
-
         >
           ＋ タスクを追加
         </button>
@@ -179,7 +284,6 @@ export default function App() {
         {showForm && (
           <div
             className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center"
-
             onClick={handleCancel}
           >
             <div
