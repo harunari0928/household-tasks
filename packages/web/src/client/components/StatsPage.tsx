@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
+import CompletedTasksTable from './CompletedTasksTable.js';
 
 interface PointDetail {
   task_name: string;
@@ -57,7 +58,6 @@ export default function StatsPage() {
   const [savedEnd, setSavedEnd] = useState('');
   const [savedEndIsToday, setSavedEndIsToday] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Load saved period settings
   useEffect(() => {
@@ -314,52 +314,9 @@ export default function StatsPage() {
       )}
 
       {/* Detail table */}
-      {!loading && data && data.details.length > 0 && (() => {
-        const filteredDetails = data.details
-          .filter((d) => d.task_name.toLowerCase().includes(searchQuery.toLowerCase()))
-          .sort((a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime());
-        return (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 mb-4">完了タスク一覧</h2>
-            <input
-              type="text"
-              aria-label="完了タスクを検索"
-              placeholder="タスク名で検索"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm mb-4 min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            />
-            {filteredDetails.length === 0 ? (
-              <p className="text-gray-500 dark:text-gray-400 text-center py-4">該当するタスクがありません</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-gray-900 dark:text-gray-100">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">タスク</th>
-                      <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">担当</th>
-                      <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">ポイント</th>
-                      <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">完了日</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDetails.map((d, i) => (
-                      <tr key={i} className="border-b border-gray-100 dark:border-gray-700/50">
-                        <td className="py-2 px-2">{d.task_name}</td>
-                        <td className="py-2 px-2">{d.assignee}</td>
-                        <td className="py-2 px-2 text-right">{d.points}</td>
-                        <td className="py-2 px-2 text-gray-500 dark:text-gray-400">
-                          {new Date(d.done_at).toLocaleDateString('ja-JP')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {!loading && data && data.details.length > 0 && (
+        <CompletedTasksTable details={data.details} />
+      )}
     </div>
   );
 }
