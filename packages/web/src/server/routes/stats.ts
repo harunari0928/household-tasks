@@ -1,6 +1,5 @@
 import { Router, type Request, type Response } from 'express';
 import { getDb } from '../db.js';
-import { fetchProjectTasks, type VikunjaTask } from '../vikunja.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -12,7 +11,7 @@ interface PointDetail {
 }
 
 // GET /api/stats/points?start=YYYY-MM-DD&end=YYYY-MM-DD
-router.get('/points', async (req: Request, res: Response) => {
+router.get('/points', (req: Request, res: Response) => {
   const startStr = req.query.start as string;
   const endStr = req.query.end as string;
 
@@ -32,59 +31,26 @@ router.get('/points', async (req: Request, res: Response) => {
   try {
     const db = getDb();
 
-    // Get distinct vikunja_project_ids from active task definitions + default project
-    const projects = db.prepare(
-      'SELECT DISTINCT vikunja_project_id FROM task_definitions WHERE vikunja_project_id IS NOT NULL AND is_active = 1'
-    ).all() as { vikunja_project_id: number }[];
+    const rows = db.prepare(`
+      SELECT ti.title AS task_name, ti.points, ti.completed_at AS done_at, ti.assignee
+      FROM task_instances ti
+      WHERE ti.status = 'done'
+        AND ti.completed_at >= ?
+        AND ti.completed_at <= ?
+    `).all(start.toISOString(), end.toISOString()) as PointDetail[];
 
-    const defaultProjectId = process.env.DEFAULT_PROJECT_ID ? parseInt(process.env.DEFAULT_PROJECT_ID, 10) : null;
-    const projectIds = new Set(projects.map((p) => p.vikunja_project_id));
-    if (defaultProjectId) projectIds.add(defaultProjectId);
-
-    if (projectIds.size === 0) {
-      res.json({ totals: {}, details: [] });
-      return;
-    }
-
-    // Build a map of task name -> points from local DB
-    const taskDefs = db.prepare(
-      'SELECT name, points FROM task_definitions'
-    ).all() as { name: string; points: number }[];
-
-    const pointsMap = new Map<string, number>();
-    for (const td of taskDefs) {
-      pointsMap.set(td.name, td.points);
-    }
-
-    // Fetch tasks from all Vikunja projects
-    const allVikunja: VikunjaTask[] = [];
-    for (const pid of projectIds) {
-      const tasks = await fetchProjectTasks(pid);
-      allVikunja.push(...tasks);
-    }
-
-    // Filter completed tasks in date range and aggregate
     const totals: Record<string, number> = {};
     const details: PointDetail[] = [];
 
-    for (const vt of allVikunja) {
-      if (!vt.done || !vt.done_at) continue;
+    for (const row of rows) {
+      const assigneeStr = row.assignee || '未割当';
+      const assigneeList = assigneeStr.includes(',')
+        ? assigneeStr.split(',').map((a: string) => a.trim())
+        : [assigneeStr];
 
-      const doneAt = new Date(vt.done_at);
-      if (doneAt < start || doneAt > end) continue;
-
-      const points = pointsMap.get(vt.title) ?? 1;
-      const assignees = vt.assignees ?? [];
-
-      if (assignees.length === 0) {
-        // No assignee — attribute to "未割当"
-        totals['未割当'] = (totals['未割当'] ?? 0) + points;
-        details.push({ task_name: vt.title, points, done_at: vt.done_at, assignee: '未割当' });
-      } else {
-        for (const a of assignees) {
-          totals[a.username] = (totals[a.username] ?? 0) + points;
-          details.push({ task_name: vt.title, points, done_at: vt.done_at, assignee: a.username });
-        }
+      for (const assignee of assigneeList) {
+        totals[assignee] = (totals[assignee] ?? 0) + row.points;
+        details.push({ ...row, assignee });
       }
     }
 

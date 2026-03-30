@@ -2,7 +2,7 @@ import { test, expect } from './fixtures/setup.js';
 
 test.describe('タスクCRUD', () => {
   test('タスクを新規作成できる', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /水回り/ }).click();
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
@@ -19,7 +19,7 @@ test.describe('タスクCRUD', () => {
 
 test.describe('フォームバリデーション', () => {
   test('頻度タイプに応じてフォームのフィールドが動的に切り替わる', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     // weekly
@@ -56,7 +56,7 @@ test.describe('フォームバリデーション', () => {
   });
 
   test('バリデーション: 毎週で曜日未選択だとエラー', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     await page.getByLabel('タスク名').fill('バリデーションテスト');
@@ -68,7 +68,7 @@ test.describe('フォームバリデーション', () => {
   });
 
   test('備考が長くスクロールが下にある状態でバリデーションエラーが出ると、エラー表示位置までスクロールされる', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     const longText = Array(30).fill('これはテスト用の長い備考テキストです。').join('\n');
@@ -96,7 +96,7 @@ test.describe('フォームバリデーション', () => {
     const context = await browser.newContext({ viewport: { width: 400, height: 500 } });
     const page = await context.newPage();
     await fetch('http://localhost:5174/api/test/reset', { method: 'POST' });
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     const longText = Array(30).fill('これはテスト用の長い備考テキストです。').join('\n');
@@ -145,7 +145,7 @@ test.describe('タスク検索', () => {
     await page.request.post(`${baseURL}/api/tasks`, {
       data: { name: 'リビング掃除', category: 'kitchen', frequency_type: 'daily' },
     });
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await expect(page.getByText('トイレ掃除')).toBeVisible();
 
     await page.getByLabel('タスクを検索').fill('掃除');
@@ -161,7 +161,7 @@ test.describe('タスク検索', () => {
     await page.request.post(`${baseURL}/api/tasks`, {
       data: { name: 'リビング掃除', category: 'kitchen', frequency_type: 'daily' },
     });
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await expect(page.getByText('トイレ掃除')).toBeVisible();
 
     await page.getByLabel('タスクを検索').fill('掃除');
@@ -176,7 +176,7 @@ test.describe('タスク検索', () => {
 
 test.describe('ダイアログ操作', () => {
   test('ダイアログ外をクリックするとダイアログが閉じる', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await expect(page.getByLabel('タスク名')).toBeVisible();
@@ -187,7 +187,7 @@ test.describe('ダイアログ操作', () => {
   });
 
   test('ダイアログ内をクリックしてもダイアログは閉じない', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await expect(page.getByLabel('タスク名')).toBeVisible();
@@ -200,7 +200,7 @@ test.describe('ダイアログ操作', () => {
 
 test.describe('マークダウン備考', () => {
   test('備考にマークダウンを書いて保存すると、再度開いたときに内容が残っている', async ({ page, baseURL }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('マークダウンテスト');
@@ -214,7 +214,7 @@ test.describe('マークダウン備考', () => {
   });
 
   test('備考のプレビューモードで見出しやリストが装飾表示される', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     await page.getByLabel('備考').fill('# 見出し\n- リスト1\n- リスト2');
@@ -233,7 +233,7 @@ test.describe('マークダウン備考', () => {
   });
 
   test('備考のツールバーボタンで各マークダウン記法が挿入される', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     const notes = page.getByLabel('備考');
@@ -285,7 +285,7 @@ test.describe('マークダウン備考', () => {
 
 test.describe('ファイル添付（新規タスク）', () => {
   test('新規タスク作成時にファイルを添付して保存すると、再度開いても添付が残っている', async ({ page, baseURL }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('添付テスト新規');
 
@@ -317,7 +317,7 @@ test.describe('ファイル添付（新規タスク）', () => {
   });
 
   test('新規タスクで画像を添付するとプレビューに実際の画像が表示される', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
     const pngBytes = Buffer.from(
@@ -339,7 +339,7 @@ test.describe('ファイル添付（新規タスク）', () => {
   });
 
   test('新規タスクで添付した画像を削除すると備考からも参照が消える', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('新規削除テスト');
     await page.getByLabel('備考').fill('テスト文章');
@@ -369,7 +369,7 @@ test.describe('ファイル添付（新規タスク）', () => {
   });
 
   test('新規タスクでファイルを添付してからキャンセルすると、タスクもファイルも残らない', async ({ page, baseURL }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('キャンセルテスト');
 
@@ -395,7 +395,7 @@ test.describe('ファイル添付（既存タスク）', () => {
     await page.request.post(`${baseURL}/api/tasks`, {
       data: { name: '既存添付テスト', category: 'water', frequency_type: 'daily' },
     });
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await expect(page.getByText('既存添付テスト')).toBeVisible();
 
     await page.getByText('既存添付テスト').click();
@@ -435,7 +435,7 @@ test.describe('ファイル添付（既存タスク）', () => {
       data: { ...task, notes: `テスト文章\n![delete-me.png](/api/attachments/${attachment.id})\nその他` },
     });
 
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByText('削除テスト').click();
     await expect(page.getByRole('region', { name: '添付ファイル' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByLabel('備考')).toContainText('delete-me.png');
@@ -477,7 +477,7 @@ test.describe('ファイル添付（既存タスク）', () => {
       },
     });
 
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByText('削除キャンセルテスト').click();
     await expect(page.getByRole('region', { name: '添付ファイル' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('keep-me.txt')).toBeVisible();
@@ -515,7 +515,7 @@ test.describe('ファイル添付（既存タスク）', () => {
       data: { ...task, notes: `![テスト画像](/api/attachments/${attachment.id})` },
     });
 
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByText('画像プレビューテスト').click();
     await page.getByRole('button', { name: 'プレビュー' }).click();
 
@@ -525,7 +525,7 @@ test.describe('ファイル添付（既存タスク）', () => {
 
 test.describe('タスク削除', () => {
   test('タスクを削除できる', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('削除テスト用タスク');
@@ -543,7 +543,7 @@ test.describe('タスク削除', () => {
   });
 
   test('削除の確認でキャンセルするとタスクが残る', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('削除キャンセルテスト');
@@ -564,7 +564,7 @@ test.describe('タスク削除', () => {
   });
 
   test('新規作成フォームに削除ボタンが表示されない', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
@@ -572,7 +572,7 @@ test.describe('タスク削除', () => {
   });
 
   test('添付ファイル付きタスクを削除すると添付URLにアクセスできなくなる', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: /タスクを追加/ }).click();
     await page.getByLabel('タスク名').fill('添付削除テスト');
@@ -612,7 +612,7 @@ test.describe('タスク削除', () => {
 
 test.describe('ダークモード', () => {
   test('ダークモードに切り替えるとdarkクラスが付与される', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await expect(page.getByRole('button', { name: 'ダークモードに切り替え' })).toBeVisible();
 
     await page.getByRole('button', { name: 'ダークモードに切り替え' }).click();
@@ -623,7 +623,7 @@ test.describe('ダークモード', () => {
   });
 
   test('ダークモードからライトモードに戻せる', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
     await page.getByRole('button', { name: 'ダークモードに切り替え' }).click();
     await expect(page.getByRole('button', { name: 'ライトモードに切り替え' })).toBeVisible();
 
@@ -635,7 +635,7 @@ test.describe('ダークモード', () => {
   });
 
   test('ダークモードの設定がページリロード後も維持される', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/#/tasks');
 
     await page.getByRole('button', { name: 'ダークモードに切り替え' }).click();
     await expect(page.getByRole('button', { name: 'ライトモードに切り替え' })).toBeVisible();

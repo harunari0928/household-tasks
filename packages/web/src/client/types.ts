@@ -84,6 +84,27 @@ export interface Attachment {
   created_at: string;
 }
 
+export type TaskInstanceStatus = 'todo' | 'in_progress' | 'done';
+
+export const KANBAN_COLUMNS = {
+  todo: '未着手',
+  in_progress: '進行中',
+  done: '完了',
+} as const;
+
+export interface TaskInstance {
+  id: number;
+  task_definition_id: number;
+  title: string;
+  status: TaskInstanceStatus;
+  assignee: string | null;
+  points: number;
+  created_at: string;
+  completed_at: string | null;
+  category: CategoryKey;
+  sort_order: number;
+}
+
 export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
   daily: [],
   weekly: ['days_of_week'],

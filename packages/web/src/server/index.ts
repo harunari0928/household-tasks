@@ -8,6 +8,7 @@ import tasksRouter from './routes/tasks.js';
 import attachmentsRouter from './routes/attachments.js';
 import statsRouter from './routes/stats.js';
 import settingsRouter from './routes/settings.js';
+import kanbanRouter from './routes/kanban.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,10 +29,12 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api', attachmentsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/kanban', kanbanRouter);
 
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {
   const db = getDb();
+  db.exec('DELETE FROM task_instances');
   db.exec('DELETE FROM attachments');
   db.exec('DELETE FROM execution_log');
   db.exec('DELETE FROM task_definitions');

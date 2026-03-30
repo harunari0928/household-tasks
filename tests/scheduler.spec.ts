@@ -1,57 +1,16 @@
 import { test, expect } from './fixtures/setup.js';
-import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { Page } from '@playwright/test';
 
 const execAsync = promisify(exec);
 
-let vikunjaStub: Server;
-let vikunjaRequests: { method: string; url: string; body: any }[];
-let stubPort: number;
-let stubResponseOverride: ((req: IncomingMessage) => { status: number; body: any }) | null = null;
-
-test.beforeAll(async () => {
-  vikunjaStub = createServer((req: IncomingMessage, res: ServerResponse) => {
-    let body = '';
-    req.on('data', (chunk: string) => (body += chunk));
-    req.on('end', () => {
-      vikunjaRequests.push({
-        method: req.method!,
-        url: req.url!,
-        body: body ? JSON.parse(body) : null,
-      });
-      const response = stubResponseOverride?.(req) || { status: 200, body: { id: Date.now() } };
-      res.writeHead(response.status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(response.body));
-    });
-  });
-  await new Promise<void>((resolve) => {
-    vikunjaStub.listen(0, '127.0.0.1', () => {
-      stubPort = (vikunjaStub.address() as any).port;
-      resolve();
-    });
-  });
-});
-
-test.afterAll(async () => {
-  vikunjaStub.close();
-});
-
-test.beforeEach(async () => {
-  vikunjaRequests = [];
-  stubResponseOverride = null;
-});
-
-async function runScheduler(testToday: string, projectId = '1'): Promise<string> {
+async function runScheduler(testToday: string): Promise<string> {
   const { stdout, stderr } = await execAsync('node packages/scheduler/dist/index.js', {
     cwd: process.cwd(),
     env: {
       ...process.env,
       DB_PATH: 'data/test_task_definitions.db',
-      VIKUNJA_URL: `http://127.0.0.1:${stubPort}/api/v1`,
-      VIKUNJA_API_TOKEN: 'test-token',
-      DEFAULT_PROJECT_ID: projectId,
       TEST_TODAY: testToday,
     },
     encoding: 'utf-8',
@@ -59,10 +18,6 @@ async function runScheduler(testToday: string, projectId = '1'): Promise<string>
   });
   if (stderr) console.error('Scheduler stderr:', stderr);
   return stdout;
-}
-
-function getCreateRequests() {
-  return vikunjaRequests.filter((r) => r.method === 'PUT' && r.url.includes('/tasks'));
 }
 
 const DAY_MAP: Record<string, string> = {
@@ -88,7 +43,7 @@ async function createTaskViaUI(
   },
 ) {
   const category = options.category || 'water';
-  await page.goto('/');
+  await page.goto('/#/tasks');
   await page.getByRole('button', { name: new RegExp(CATEGORY_MAP[category]) }).click();
   await page.getByRole('button', { name: /タスクを追加/ }).click();
   await page.getByLabel('タスク名').fill(options.name);
@@ -115,53 +70,67 @@ async function createTaskViaUI(
   return tasks.find((t: any) => t.name === options.name);
 }
 
+function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.toISOString().split('T')[0];
+}
+
+async function goToKanban(page: Page) {
+  // Force full page reload to get fresh data from the database
+  await page.goto('about:blank');
+  await page.goto('/#/');
+  await page.getByText('未着手').waitFor();
+}
+
 test.describe('固定スケジュール', () => {
   test('毎日タスクは毎日起票される', async ({ page, baseURL }) => {
     await createTaskViaUI(page, baseURL!, { name: 'daily-test', category: 'water', frequency_type: 'daily' });
 
-    const output = await runScheduler('2026-03-14');
+    await runScheduler('2026-03-14');
 
-    expect(output).toContain('CREATED');
-    expect(getCreateRequests()).toHaveLength(1);
-    expect(getCreateRequests()[0].body.title).toBe('daily-test');
+    await goToKanban(page);
+    await expect(page.getByText('daily-test')).toBeVisible();
   });
 
   test('毎週タスクは対象曜日にのみ起票される', async ({ page, baseURL }) => {
     await createTaskViaUI(page, baseURL!, { name: 'weekly-mon', category: 'water', frequency_type: 'weekly', days_of_week: ['mon'] });
 
-    // 対象曜日(月曜)
     await runScheduler('2026-03-16'); // Monday
 
+    await goToKanban(page);
     await test.step('対象曜日(月曜)に起票される', async () => {
-      expect(getCreateRequests()).toHaveLength(1);
+      await expect(page.getByText('weekly-mon')).toBeVisible();
     });
+  });
 
-    // 対象外曜日(火曜)
-    vikunjaRequests = [];
+  test('毎週タスクは対象外曜日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, { name: 'weekly-mon-skip', category: 'water', frequency_type: 'weekly', days_of_week: ['mon'] });
+
     await runScheduler('2026-03-17'); // Tuesday
 
-    await test.step('対象外曜日(火曜)は起票されない', async () => {
-      expect(getCreateRequests()).toHaveLength(0);
-    });
+    await goToKanban(page);
+    await expect(page.getByText('weekly-mon-skip')).not.toBeVisible();
   });
 
   test('毎月タスクは指定日にのみ起票される', async ({ page, baseURL }) => {
     await createTaskViaUI(page, baseURL!, { name: 'monthly-15', category: 'water', frequency_type: 'monthly', day_of_month: 15 });
 
-    // 指定日(15日)
     await runScheduler('2026-03-15');
 
+    await goToKanban(page);
     await test.step('指定日(15日)に起票される', async () => {
-      expect(getCreateRequests()).toHaveLength(1);
+      await expect(page.getByText('monthly-15')).toBeVisible();
     });
+  });
 
-    // 指定日以外(16日)
-    vikunjaRequests = [];
+  test('毎月タスクは指定日以外には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, { name: 'monthly-15-skip', category: 'water', frequency_type: 'monthly', day_of_month: 15 });
+
     await runScheduler('2026-03-16');
 
-    await test.step('指定日以外(16日)は起票されない', async () => {
-      expect(getCreateRequests()).toHaveLength(0);
-    });
+    await goToKanban(page);
+    await expect(page.getByText('monthly-15-skip')).not.toBeVisible();
   });
 });
 
@@ -172,7 +141,8 @@ test.describe('N日ごと', () => {
 
     await runScheduler(dueDate);
 
-    expect(getCreateRequests()).toHaveLength(1);
+    await goToKanban(page);
+    await expect(page.getByText('n-days-3')).toBeVisible();
   });
 
   test('間隔変更後、変更前の予定日では起票されない', async ({ page, baseURL }) => {
@@ -186,7 +156,8 @@ test.describe('N日ごと', () => {
 
     await runScheduler(originalDueDate);
 
-    expect(getCreateRequests()).toHaveLength(0);
+    await goToKanban(page);
+    await expect(page.getByText('interval-old')).not.toBeVisible();
   });
 
   test('間隔変更後、変更後の予定日で起票される', async ({ page, baseURL }) => {
@@ -198,200 +169,77 @@ test.describe('N日ごと', () => {
     await page.getByLabel('間隔').fill('5');
     await page.getByRole('button', { name: '保存' }).click();
 
-    function addDays(dateStr: string, n: number): string {
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d + n));
-      return dt.toISOString().split('T')[0];
-    }
     const today = addDays(originalDueDate, -3);
     const newDueDate = addDays(today, 5);
 
     await runScheduler(newDueDate);
 
-    expect(getCreateRequests()).toHaveLength(1);
+    await goToKanban(page);
+    await expect(page.getByText('interval-new')).toBeVisible();
   });
 
   test('次回予定日より前は起票されない', async ({ page, baseURL }) => {
     const task = await createTaskViaUI(page, baseURL!, { name: 'n-days-before', category: 'water', frequency_type: 'n_days', frequency_interval: 3 });
-    const dueDate = new Date(task.next_due_date + 'T00:00:00');
-    dueDate.setDate(dueDate.getDate() - 1);
-    const beforeDue = dueDate.toISOString().split('T')[0];
+    const beforeDue = addDays(task.next_due_date, -1);
 
     await runScheduler(beforeDue);
 
-    expect(getCreateRequests()).toHaveLength(0);
+    await goToKanban(page);
+    await expect(page.getByText('n-days-before')).not.toBeVisible();
   });
 
   test('実行が遅延しても元のリズムで起票される', async ({ page, baseURL }) => {
     const task = await createTaskViaUI(page, baseURL!, { name: 'rhythm-test', category: 'water', frequency_type: 'n_days', frequency_interval: 3 });
     const dueDate = task.next_due_date;
 
-    function addDays(dateStr: string, n: number): string {
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d + n));
-      return dt.toISOString().split('T')[0];
-    }
-
-    // D+1で遅延実行（セットアップ）
+    // D+1で遅延実行
     await runScheduler(addDays(dueDate, 1));
 
     // D+2ではまだ起票されない（元のリズムより前）
-    vikunjaRequests = [];
     await runScheduler(addDays(dueDate, 2));
 
+    await goToKanban(page);
     await test.step('元のリズムより前は起票されない', async () => {
-      expect(getCreateRequests()).toHaveLength(0);
+      await expect(page.getByText('rhythm-test')).toHaveCount(1);
+    });
+
+    // 最初のインスタンスを完了にする（重複チェック回避のため）
+    const instances = await page.request.get(`${baseURL}/api/kanban`);
+    const items = await instances.json();
+    const instance = items.find((i: any) => i.title === 'rhythm-test');
+    await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+      data: { status: 'done', assignee: 'test' },
     });
 
     // D+3で起票される（元のリズム通り）
-    vikunjaRequests = [];
     await runScheduler(addDays(dueDate, 3));
 
+    await goToKanban(page);
     await test.step('元のリズム通りに起票される', async () => {
-      expect(getCreateRequests()).toHaveLength(1);
+      await expect(page.getByText('rhythm-test')).toHaveCount(2);
     });
   });
 });
-
-// --- 重複起票の防止 ---
 
 test.describe('重複起票の防止', () => {
   test('同日に2回実行しても重複起票しない', async ({ page, baseURL }) => {
     await createTaskViaUI(page, baseURL!, { name: 'idempotent-test', category: 'water', frequency_type: 'daily' });
 
-    // 1回目
+    await runScheduler('2026-03-14');
     await runScheduler('2026-03-14');
 
-    await test.step('1回目は起票される', async () => {
-      expect(getCreateRequests()).toHaveLength(1);
-    });
-
-    // 2回目
-    vikunjaRequests = [];
-    await runScheduler('2026-03-14');
-
-    await test.step('2回目は重複起票しない', async () => {
-      expect(getCreateRequests()).toHaveLength(0);
-    });
+    await goToKanban(page);
+    await expect(page.getByText('idempotent-test')).toHaveCount(1);
   });
 
   test('前日に起票した未完了タスクは翌日に重複起票しない', async ({ page, baseURL }) => {
     await createTaskViaUI(page, baseURL!, { name: 'cross-day-dup', category: 'water', frequency_type: 'daily' });
 
-    // Day 1: タスク起票
     await runScheduler('2026-03-14');
-
-    // Day 2: Vikunjaが未完了タスクを返す
-    vikunjaRequests = [];
-    stubResponseOverride = (req) => {
-      if (req.method === 'GET' && req.url!.includes('/tasks')) {
-        return { status: 200, body: [{ title: 'cross-day-dup', done: false }] };
-      }
-      return { status: 200, body: { id: 999 } };
-    };
-    const output = await runScheduler('2026-03-15');
-
-    await test.step('スキップされ起票されない', async () => {
-      expect(output).toContain('SKIP (duplicate)');
-      expect(getCreateRequests()).toHaveLength(0);
-    });
-  });
-
-  test('未完了の同名タスクが残っていれば起票しない', async ({ page, baseURL }) => {
-    await createTaskViaUI(page, baseURL!, { name: 'duplicate-check', category: 'water', frequency_type: 'daily' });
-    stubResponseOverride = (req) => {
-      if (req.method === 'GET' && req.url!.includes('/tasks')) {
-        return { status: 200, body: [{ title: 'duplicate-check', done: false }] };
-      }
-      return { status: 200, body: { id: 999 } };
-    };
-
-    const output = await runScheduler('2026-03-14');
-
-    await test.step('起票されない', async () => {
-      expect(output).toContain('SKIP (duplicate)');
-      expect(getCreateRequests()).toHaveLength(0);
-    });
-
-    await test.step('スキップ履歴が記録される', async () => {
-      const logsRes = await page.request.get(`${baseURL}/api/logs`);
-      const logs = await logsRes.json();
-      expect(logs.some((l: any) => l.status === 'skipped_duplicate')).toBe(true);
-    });
-  });
-});
-
-test.describe('失敗とリトライ', () => {
-  test('タスク作成が失敗しても次回実行でリトライされる', async ({ page, baseURL }) => {
-    await createTaskViaUI(page, baseURL!, { name: 'retry-test', category: 'water', frequency_type: 'daily' });
-    stubResponseOverride = (req) => {
-      if (req.method === 'PUT') {
-        return { status: 500, body: { message: 'Internal error' } };
-      }
-      return { status: 200, body: [] };
-    };
-
-    // エラー発生
-    await runScheduler('2026-03-14');
-
-    await test.step('失敗が記録される', async () => {
-      const logsRes1 = await page.request.get(`${baseURL}/api/logs`);
-      const logs1 = await logsRes1.json();
-      expect(logs1.some((l: any) => l.status === 'failed')).toBe(true);
-    });
-
-    // リトライ
-    vikunjaRequests = [];
-    stubResponseOverride = null;
     await runScheduler('2026-03-15');
 
-    await test.step('次回実行でリトライされ起票される', async () => {
-      const logsRes2 = await page.request.get(`${baseURL}/api/logs`);
-      const logs2 = await logsRes2.json();
-      expect(logs2.some((l: any) => l.status === 'created')).toBe(true);
-    });
-  });
-
-  test('リトライ時も未完了タスクが残っていれば起票しない', async ({ page, baseURL }) => {
-    // 土曜のみのweeklyタスク → Day2(日曜)は通常フローでマッチせずリトライのみ動く
-    await createTaskViaUI(page, baseURL!, { name: 'retry-dup-test', category: 'water', frequency_type: 'weekly', days_of_week: ['sat'] });
-
-    // Day 1 (土曜): APIエラーで失敗
-    stubResponseOverride = (req) => {
-      if (req.method === 'PUT') {
-        return { status: 500, body: { message: 'Internal error' } };
-      }
-      return { status: 200, body: [] };
-    };
-    await runScheduler('2026-03-14');
-
-    // Day 2 (日曜): Vikunjaに未完了タスクが存在 → リトライもスキップされる
-    vikunjaRequests = [];
-    stubResponseOverride = (req) => {
-      if (req.method === 'GET' && req.url!.includes('/tasks')) {
-        return { status: 200, body: [{ title: 'retry-dup-test', done: false }] };
-      }
-      return { status: 200, body: { id: 999 } };
-    };
-    const output = await runScheduler('2026-03-15');
-
-    expect(output).toContain('RETRY SKIP (duplicate)');
-    expect(getCreateRequests()).toHaveLength(0);
-  });
-});
-
-test.describe('リクエスト形式', () => {
-  test('タスク作成リクエストが正しい形式で送信される', async ({ page, baseURL }) => {
-    await createTaskViaUI(page, baseURL!, { name: 'format-test', category: 'kitchen', frequency_type: 'daily' });
-
-    await runScheduler('2026-03-14', '42');
-
-    const createReqs = getCreateRequests();
-    expect(createReqs).toHaveLength(1);
-    expect(createReqs[0].method).toBe('PUT');
-    expect(createReqs[0].url).toContain('/projects/42/tasks');
-    expect(createReqs[0].body.title).toBe('format-test');
-    expect(createReqs[0].body.description).toBeTruthy();
+    await goToKanban(page);
+    await expect(page.getByText('cross-day-dup')).toHaveCount(1);
   });
 });
 
@@ -402,7 +250,8 @@ test.describe('活性・非活性', () => {
 
     await runScheduler('2026-03-14');
 
-    expect(getCreateRequests()).toHaveLength(0);
+    await goToKanban(page);
+    await expect(page.getByText('inactive-test')).not.toBeVisible();
   });
 
   test('一時停止から再開時、次回予定日が過去なら即座に起票される', async ({ page, baseURL }) => {
@@ -412,6 +261,7 @@ test.describe('活性・非活性', () => {
 
     await runScheduler('2026-12-01');
 
-    expect(getCreateRequests()).toHaveLength(1);
+    await goToKanban(page);
+    await expect(page.getByText('resume-test')).toBeVisible();
   });
 });

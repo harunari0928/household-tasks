@@ -12,9 +12,6 @@ services:
       - DB_PATH=/data/task_definitions.db
       - PORT=3100
       - TZ=Asia/Tokyo
-      - VIKUNJA_URL=http://vikunja:3456/api/v1
-      - VIKUNJA_API_TOKEN=${VIKUNJA_API_TOKEN}
-      - DEFAULT_PROJECT_ID=${DEFAULT_PROJECT_ID:-1}
     labels:
       - "com.centurylinklabs.watchtower.scope=household-tasks"
     restart: unless-stopped
@@ -29,26 +26,7 @@ services:
     environment:
       - TZ=Asia/Tokyo
       - DB_PATH=/data/task_definitions.db
-      - VIKUNJA_URL=http://vikunja:3456/api/v1
-      - VIKUNJA_API_TOKEN=${VIKUNJA_API_TOKEN}
-      - DEFAULT_PROJECT_ID=${DEFAULT_PROJECT_ID:-1}
-    labels:
-      - "com.centurylinklabs.watchtower.scope=household-tasks"
-    restart: unless-stopped
-    depends_on:
-      - vikunja
-
-  vikunja:
-    image: vikunja/vikunja
-    ports:
-      - "127.0.0.1:${VIKUNJA_PORT:-3456}:3456"
-    volumes:
-      - ./vikunja-data/files:/app/vikunja/files
-      - ./vikunja-data/db:/db
-    environment:
-      - VIKUNJA_SERVICE_TIMEZONE=Asia/Tokyo
-      - VIKUNJA_SERVICE_PUBLICURL=http://localhost:${VIKUNJA_PORT:-3456}
-      - VIKUNJA_CORS_ENABLE=false
+      - WEB_URL=http://web:3100
     labels:
       - "com.centurylinklabs.watchtower.scope=household-tasks"
     restart: unless-stopped

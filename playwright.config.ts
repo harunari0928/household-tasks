@@ -13,7 +13,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'DB_PATH=data/test_task_definitions.db PORT=3101 VIKUNJA_URL=http://127.0.0.1:3199/api/v1 VIKUNJA_API_TOKEN=test-token npx tsx packages/web/src/server/index.ts',
+      command: 'DB_PATH=data/test_task_definitions.db PORT=3101 npx tsx packages/web/src/server/index.ts',
       url: 'http://localhost:3101/api/tasks',
       reuseExistingServer: !process.env.CI,
       timeout: 15000,

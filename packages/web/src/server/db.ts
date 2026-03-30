@@ -95,6 +95,44 @@ const migrations: Migration[] = [
       db.exec('ALTER TABLE task_definitions DROP COLUMN assignee');
     },
   },
+  {
+    version: 5,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE task_instances (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_definition_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'in_progress', 'done')),
+          assignee TEXT DEFAULT NULL,
+          points INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          completed_at TEXT DEFAULT NULL,
+          FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
+        );
+        CREATE INDEX idx_task_instances_status ON task_instances(status);
+        CREATE INDEX idx_task_instances_task_def ON task_instances(task_definition_id);
+        CREATE INDEX idx_task_instances_completed ON task_instances(completed_at);
+      `);
+    },
+  },
+  {
+    version: 6,
+    up: (db) => {
+      db.exec('ALTER TABLE task_instances ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+      // Initialize sort_order for existing records (oldest first within each status)
+      const rows = db.prepare(
+        'SELECT id, status FROM task_instances ORDER BY status, created_at ASC, id ASC'
+      ).all() as { id: number; status: string }[];
+      const counters: Record<string, number> = {};
+      const stmt = db.prepare('UPDATE task_instances SET sort_order = ? WHERE id = ?');
+      for (const row of rows) {
+        counters[row.status] = (counters[row.status] ?? 0);
+        stmt.run(counters[row.status], row.id);
+        counters[row.status]++;
+      }
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

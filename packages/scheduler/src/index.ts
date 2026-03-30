@@ -6,17 +6,16 @@ import {
   logExecution,
   updateNextDueDate,
   getFailedTasks,
+  hasUncompletedInstance,
+  createTaskInstance,
 } from './db.js';
 import { shouldCreateToday, calculateNextDueDate } from './matcher.js';
-import { createTask, hasUncompletedTask } from './vikunja.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
 async function main() {
   const today = getTodayJST();
   const db = getDb();
-
-  const defaultProjectId = parseInt(process.env.DEFAULT_PROJECT_ID || '1', 10);
 
   console.log(`[${new Date().toISOString()}] Scheduler running for date: ${today}${dryRun ? ' (DRY RUN)' : ''}`);
 
@@ -34,16 +33,14 @@ async function main() {
       continue;
     }
 
-    const projectId = task.vikunja_project_id || defaultProjectId;
-
     if (dryRun) {
-      console.log(`  [DRY RUN] Would create: "${task.name}" in project ${projectId}`);
+      console.log(`  [DRY RUN] Would create: "${task.name}"`);
       created++;
       continue;
     }
 
     try {
-      const hasDuplicate = await hasUncompletedTask(projectId, task.name);
+      const hasDuplicate = hasUncompletedInstance(db, task.id);
       if (hasDuplicate) {
         logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
         skipped++;
@@ -51,11 +48,11 @@ async function main() {
         continue;
       }
 
-      const description = `カテゴリ: ${task.category} | 頻度: ${task.frequency_type}`;
-      const vikunjaTaskId = await createTask(projectId, task.name, description);
-      logExecution(db, task.id, vikunjaTaskId, 'created', undefined, today);
+      const now = new Date().toISOString();
+      const instanceId = createTaskInstance(db, task.id, task.name, task.points, now);
+      logExecution(db, task.id, instanceId, 'created', undefined, today);
       created++;
-      console.log(`  CREATED: "${task.name}" (vikunja_id=${vikunjaTaskId})`);
+      console.log(`  CREATED: "${task.name}" (instance_id=${instanceId})`);
 
       // Update next_due_date for interval-based tasks
       if (task.next_due_date) {
@@ -77,9 +74,8 @@ async function main() {
       const task = tasks.find((t) => t.id === task_definition_id);
       if (!task) continue;
 
-      const projectId = task.vikunja_project_id || defaultProjectId;
       try {
-        const hasDuplicate = await hasUncompletedTask(projectId, task.name);
+        const hasDuplicate = hasUncompletedInstance(db, task.id);
         if (hasDuplicate) {
           logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
           skipped++;
@@ -87,11 +83,11 @@ async function main() {
           continue;
         }
 
-        const description = `カテゴリ: ${task.category} | 頻度: ${task.frequency_type}`;
-        const vikunjaTaskId = await createTask(projectId, task.name, description);
-        logExecution(db, task.id, vikunjaTaskId, 'created', undefined, today);
+        const now = new Date().toISOString();
+        const instanceId = createTaskInstance(db, task.id, task.name, task.points, now);
+        logExecution(db, task.id, instanceId, 'created', undefined, today);
         created++;
-        console.log(`  RETRY OK: "${task.name}" (vikunja_id=${vikunjaTaskId})`);
+        console.log(`  RETRY OK: "${task.name}" (instance_id=${instanceId})`);
       } catch (err: any) {
         logExecution(db, task.id, null, 'failed', err.message, today);
         failed++;
@@ -101,6 +97,20 @@ async function main() {
   }
 
   console.log(`\nSummary: created=${created}, skipped=${skipped}, failed=${failed}`);
+
+  // Notify web server to broadcast SSE update
+  if (created > 0 && !dryRun) {
+    const webUrl = process.env.WEB_URL || 'http://localhost:3100';
+    try {
+      await fetch(`${webUrl}/api/kanban/notify`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(5000),
+      });
+      console.log('Notified web server of new tasks');
+    } catch {
+      console.log('Could not notify web server (non-critical)');
+    }
+  }
 }
 
 main().catch((err) => {
