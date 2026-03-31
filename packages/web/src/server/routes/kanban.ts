@@ -145,9 +145,8 @@ router.patch('/:id/assignee', (req: Request, res: Response) => {
 // GET /api/kanban/assignees — list registered assignees
 router.get('/assignees', (_req: Request, res: Response) => {
   const db = getDb();
-  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'kanban_assignees'").get() as { value: string } | undefined;
-  const assignees: string[] = row ? JSON.parse(row.value) : [];
-  res.json(assignees);
+  const rows = db.prepare('SELECT name FROM users ORDER BY display_order ASC, id ASC').all() as { name: string }[];
+  res.json(rows.map((r) => r.name));
 });
 
 // PUT /api/kanban/assignees — set assignees list
@@ -160,10 +159,19 @@ router.put('/assignees', (req: Request, res: Response) => {
     return;
   }
 
-  const now = new Date().toISOString();
-  db.prepare(
-    "INSERT INTO app_settings (key, value, updated_at) VALUES ('kanban_assignees', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
-  ).run(JSON.stringify(assignees), now);
+  const syncAssignees = db.transaction(() => {
+    if (assignees.length > 0) {
+      const placeholders = assignees.map(() => '?').join(',');
+      db.prepare(`DELETE FROM users WHERE name NOT IN (${placeholders})`).run(...assignees);
+    } else {
+      db.exec('DELETE FROM users');
+    }
+    const upsert = db.prepare(
+      'INSERT INTO users (name, display_order) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET display_order = excluded.display_order'
+    );
+    assignees.forEach((name: string, i: number) => upsert.run(name, i));
+  });
+  syncAssignees();
 
   res.json({ success: true });
 });

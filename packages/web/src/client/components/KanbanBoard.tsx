@@ -20,6 +20,7 @@ import KanbanColumn from './KanbanColumn.js';
 import KanbanCard from './KanbanCard.js';
 import KanbanFilters from './KanbanFilters.js';
 import TaskDetailDialog from './TaskDetailDialog.js';
+import { useAssignees } from '../hooks/useAssignees.js';
 
 interface Props {
   currentUser: string | null;
@@ -27,7 +28,7 @@ interface Props {
 
 export default function KanbanBoard({ currentUser }: Props) {
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
-  const [assignees, setAssignees] = useState<string[]>([]);
+  const { assignees, loaded: assigneesLoaded, fetchAssignees, addAssignee: addRegisteredAssignee, removeAssignee: removeRegisteredAssignee } = useAssignees();
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<CategoryKey | null>(null);
   const [activeTask, setActiveTask] = useState<TaskInstance | null>(null);
@@ -52,12 +53,6 @@ export default function KanbanBoard({ currentUser }: Props) {
     }
   }, []);
 
-  const fetchAssignees = useCallback(async () => {
-    const res = await fetch('/api/kanban/assignees');
-    if (res.ok) {
-      setAssignees(await res.json());
-    }
-  }, []);
 
   useEffect(() => {
     fetchTasks();
@@ -248,25 +243,13 @@ export default function KanbanBoard({ currentUser }: Props) {
   const addNewAssignee = async () => {
     const name = newAssigneeName.trim();
     if (!name || assignees.includes(name)) return;
-    const updated = [...assignees, name];
-    setAssignees(updated);
     setNewAssigneeName('');
-    await fetch('/api/kanban/assignees', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignees: updated }),
-    });
+    await addRegisteredAssignee(name);
   };
 
-  const removeRegisteredAssignee = async (name: string) => {
-    const updated = assignees.filter((a) => a !== name);
-    setAssignees(updated);
+  const handleRemoveAssignee = async (name: string) => {
     setSelectedAssignees((prev) => prev.filter((a) => a !== name));
-    await fetch('/api/kanban/assignees', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignees: updated }),
-    });
+    await removeRegisteredAssignee(name);
   };
 
   const handleDeleteClick = (task: TaskInstance) => {
@@ -281,6 +264,13 @@ export default function KanbanBoard({ currentUser }: Props) {
       return false;
     }
     if (filterCategory && t.category !== filterCategory) return false;
+    // Show only tasks completed within the last 24 hours
+    if (t.status === 'done') {
+      if (!t.completed_at) return false;
+      const completedAt = new Date(t.completed_at).getTime();
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      if (completedAt < oneDayAgo) return false;
+    }
     return true;
   });
 
@@ -290,8 +280,30 @@ export default function KanbanBoard({ currentUser }: Props) {
     items: filtered.filter((t) => t.status === status).sort((a, b) => a.sort_order - b.sort_order),
   }));
 
+  const noUsersRegistered = assigneesLoaded && assignees.length === 0;
+
   return (
-    <div>
+    <div className="select-none">
+      {noUsersRegistered && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="ユーザー未登録"
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 w-80 shadow-xl text-center"
+          >
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+              ユーザーが登録されていません。設定画面からユーザーを追加してください。
+            </p>
+            <a
+              href="#/settings"
+              className="inline-block px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              設定画面へ
+            </a>
+          </div>
+        </div>
+      )}
       <div className="mb-4">
         <KanbanFilters
           assignees={assignees}
@@ -382,7 +394,7 @@ export default function KanbanBoard({ currentUser }: Props) {
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a}</span>
                   </label>
                   <button
-                    onClick={() => removeRegisteredAssignee(a)}
+                    onClick={() => handleRemoveAssignee(a)}
                     className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                     aria-label={`${a}を削除`}
                   >

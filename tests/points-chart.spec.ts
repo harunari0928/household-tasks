@@ -131,6 +131,9 @@ test.describe('ポイントフィールド', () => {
 
 test.describe('ポイント集計ページ', () => {
   test('ナビゲーションでポイント集計ページに遷移できる', async ({ page }) => {
+    await page.request.put('/api/kanban/assignees', {
+      data: { assignees: ['デフォルト'] },
+    });
     await page.goto('/');
     await page.getByRole('link', { name: 'ポイント集計' }).click();
 

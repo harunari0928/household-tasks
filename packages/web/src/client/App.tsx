@@ -5,14 +5,17 @@ import TaskList from './components/TaskList.js';
 import TaskForm from './components/TaskForm.js';
 import StatsPage from './components/StatsPage.js';
 import KanbanBoard from './components/KanbanBoard.js';
+import SettingsPage from './components/SettingsPage.js';
 import useTheme from './hooks/useTheme.js';
+import { useAssignees } from './hooks/useAssignees.js';
 
-type Page = 'kanban' | 'tasks' | 'stats';
+type Page = 'kanban' | 'tasks' | 'stats' | 'settings';
 
 function getPage(): Page {
   const hash = window.location.hash;
   if (hash === '#/tasks') return 'tasks';
   if (hash === '#/stats') return 'stats';
+  if (hash === '#/settings') return 'settings';
   return 'kanban';
 }
 
@@ -30,7 +33,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(() =>
     localStorage.getItem('current_user'),
   );
-  const [assignees, setAssignees] = useState<string[]>([]);
+  const { assignees, fetchAssignees } = useAssignees();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showHamburger, setShowHamburger] = useState(false);
 
@@ -40,19 +43,15 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  // Fetch assignees for user switcher
+  // Fetch assignees for user switcher (refetch on page change to stay in sync)
   useEffect(() => {
-    fetch('/api/kanban/assignees')
-      .then((r) => r.json())
-      .then((data) => {
-        setAssignees(data);
-        if (!currentUser && data.length > 0) {
-          setCurrentUser(data[0]);
-          localStorage.setItem('current_user', data[0]);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    fetchAssignees().then((data) => {
+      if (!currentUser && data.length > 0) {
+        setCurrentUser(data[0]);
+        localStorage.setItem('current_user', data[0]);
+      }
+    });
+  }, [currentPage]);
 
   const handleUserChange = (user: string) => {
     setCurrentUser(user);
@@ -133,6 +132,7 @@ export default function App() {
     { page: 'kanban', hash: '#/', label: 'カンバン' },
     { page: 'tasks', hash: '#/tasks', label: 'タスク管理' },
     { page: 'stats', hash: '#/stats', label: 'ポイント集計' },
+    { page: 'settings', hash: '#/settings', label: '設定' },
   ];
 
   return (
@@ -162,7 +162,10 @@ export default function App() {
             {assignees.length > 0 && (
               <div className="relative">
                 <button
-                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  onClick={() => {
+                    if (!showUserMenu) fetchAssignees();
+                    setShowUserMenu(!showUserMenu);
+                  }}
                   className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-h-[36px]"
                   aria-label="ユーザー切替"
                 >
@@ -248,6 +251,8 @@ export default function App() {
           <KanbanBoard currentUser={currentUser} />
         ) : currentPage === 'stats' ? (
           <StatsPage />
+        ) : currentPage === 'settings' ? (
+          <SettingsPage />
         ) : (
           <>
         <CategoryTabs

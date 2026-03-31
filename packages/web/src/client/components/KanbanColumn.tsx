@@ -92,7 +92,7 @@ export default function KanbanColumn({ status, title, items, onAssigneeClick, on
       )}
 
       <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-2 flex-1 min-h-[60px]">
+        <div className="flex flex-col gap-2 flex-1 min-h-[60px] overflow-y-auto">
           {items.map((task) => (
             <KanbanCard key={task.id} task={task} onAssigneeClick={onAssigneeClick} onDelete={onDelete} onCardClick={onCardClick} />
           ))}

@@ -55,6 +55,14 @@ async function setupAssignees(page: Page, baseURL: string, assignees: string[]) 
 }
 
 async function goToKanban(page: Page) {
+  // Ensure at least one user exists so the blocking dialog doesn't appear
+  const res = await page.request.get('/api/kanban/assignees');
+  const assignees = await res.json();
+  if (assignees.length === 0) {
+    await page.request.put('/api/kanban/assignees', {
+      data: { assignees: ['デフォルト'] },
+    });
+  }
   await page.goto('about:blank');
   await page.goto('/#/');
   await page.getByText('未着手').waitFor();
@@ -93,6 +101,47 @@ async function changeStatus(page: Page, baseURL: string, taskName: string, statu
 function assigneeDialog(page: Page) {
   return page.getByRole('dialog', { name: '担当者を選択' });
 }
+
+test.describe('ユーザー未登録時のブロッキングダイアログ', () => {
+  test('ユーザーが未登録の状態でカンバンボードを開くと、ユーザー登録を促すダイアログが表示される', async ({ page }) => {
+    // Arrange & Act
+    await page.goto('/#/');
+    const dialog = page.getByRole('dialog', { name: 'ユーザー未登録' });
+
+    // Assert
+    await test.step('ユーザー登録を促すダイアログが表示される', async () => {
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText('ユーザーが登録されていません')).toBeVisible();
+    });
+    await test.step('設定画面へのリンクが表示される', async () => {
+      await expect(dialog.getByRole('link', { name: '設定画面へ' })).toBeVisible();
+    });
+  });
+
+  test('ダイアログの「設定画面へ」リンクをクリックすると設定画面に遷移する', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/');
+    const dialog = page.getByRole('dialog', { name: 'ユーザー未登録' });
+    await expect(dialog).toBeVisible();
+
+    // Act
+    await dialog.getByRole('link', { name: '設定画面へ' }).click();
+
+    // Assert
+    await expect(page.getByText('登録ユーザー')).toBeVisible();
+  });
+
+  test('ユーザー登録後にカンバンボードを開くと、ダイアログは表示されない', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+
+    // Act
+    await goToKanban(page);
+
+    // Assert
+    await expect(page.getByRole('dialog', { name: 'ユーザー未登録' })).not.toBeVisible();
+  });
+});
 
 test.describe('カンバンボードの表示', () => {
   test('3列が正しく表示される', async ({ page }) => {
@@ -230,6 +279,26 @@ test.describe('担当者管理', () => {
 
     await test.step('追加した担当者がチェックボックスとして表示される', async () => {
       await expect(assigneeDialog(page).getByRole('checkbox', { name: 'テスト太郎' })).toBeVisible();
+    });
+  });
+
+  test('担当者選択ダイアログでユーザを追加すると、ヘッダーのユーザー切替に反映される', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'header-sync-test', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+
+    // Act
+    await page.getByRole('button', { name: '未割当', exact: true }).click();
+    await page.getByLabel('新しい担当者名').fill('新メンバー');
+    await assigneeDialog(page).getByRole('button', { name: '追加' }).click();
+    await assigneeDialog(page).getByRole('button', { name: 'キャンセル' }).click();
+    await page.getByLabel('ユーザー切替').click();
+
+    // Assert
+    await test.step('追加した担当者がヘッダーのユーザー切替に表示される', async () => {
+      await expect(page.locator('.absolute').getByText('新メンバー')).toBeVisible();
     });
   });
 
@@ -516,6 +585,40 @@ test.describe('同一列内の並べ替え', () => {
   });
 });
 
+test.describe('完了列の表示期間', () => {
+  test('完了から24時間以内のタスクは完了列に表示される', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'recent-done-task', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await changeStatus(page, baseURL!, 'recent-done-task', 'done', 'MTMR');
+
+    // Act
+    const now = Date.now();
+    await page.clock.install({ time: new Date(now + 23 * 60 * 60 * 1000 + 59 * 60 * 1000) });
+    await goToKanban(page);
+
+    // Assert
+    await expect(page.getByText('recent-done-task')).toBeVisible();
+  });
+
+  test('完了から24時間を過ぎたタスクは完了列に表示されない', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'old-done-task', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await changeStatus(page, baseURL!, 'old-done-task', 'done', 'MTMR');
+
+    // Act
+    const now = Date.now();
+    await page.clock.install({ time: new Date(now + 24 * 60 * 60 * 1000 + 60 * 1000) });
+    await goToKanban(page);
+
+    // Assert
+    await expect(page.getByText('old-done-task')).not.toBeVisible();
+  });
+});
+
 test.describe('ドラッグ中の列ハイライト', () => {
   // @dnd-kitのisOver中間状態はPlaywrightのマウスシミュレーションでは再現不可のため、
   // isOverが切り替わった際の背景色を、独立したテスト要素で検証する
@@ -542,7 +645,7 @@ test.describe('ドラッグ中の列ハイライト', () => {
   });
 
   test('ダークモードのハイライト色がデフォルトと視認できる差がある', async ({ page }) => {
-    await page.goto('/#/');
+    await page.goto('/#/settings');
     await page.getByRole('button', { name: 'ダークモードに切り替え' }).click();
     await page.waitForFunction(() => document.documentElement.classList.contains('dark'));
     await goToKanban(page);
