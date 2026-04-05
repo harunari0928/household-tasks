@@ -53,6 +53,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [attachmentRefreshKey, setAttachmentRefreshKey] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [createInstanceStatus, setCreateInstanceStatus] = useState<'idle' | 'loading' | 'success' | 'conflict'>('idle');
   const errorRef = useRef<HTMLDivElement>(null);
   const frequencyErrorRef = useRef<HTMLDivElement>(null);
 
@@ -83,6 +84,27 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       prev.replace(new RegExp(`!?\\[[^\\]]*\\]\\(/api/attachments/${id}\\)\\n?`, 'g'), ''),
     );
   }, []);
+
+  const handleCreateInstance = async () => {
+    if (!task?.id) return;
+    setCreateInstanceStatus('loading');
+    try {
+      const res = await fetch(`/api/kanban/create-from-definition/${task.id}`, { method: 'POST' });
+      if (res.status === 201) {
+        setCreateInstanceStatus('success');
+      } else if (res.status === 409) {
+        setCreateInstanceStatus('conflict');
+      } else {
+        setError('起票に失敗しました');
+        scrollToError(errorRef);
+        setCreateInstanceStatus('idle');
+      }
+    } catch {
+      setError('起票に失敗しました');
+      scrollToError(errorRef);
+      setCreateInstanceStatus('idle');
+    }
+  };
 
   const handleDelete = async () => {
     if (!task || !onDeleted) return;
@@ -291,6 +313,29 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           キャンセル
         </button>
       </div>
+
+      {task && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={handleCreateInstance}
+            disabled={createInstanceStatus === 'loading'}
+            className="w-full bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 transition-colors min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {createInstanceStatus === 'loading' ? '起票中...' : '今すぐ起票する'}
+          </button>
+          {createInstanceStatus === 'success' && (
+            <p className="text-sm text-green-600 dark:text-green-400 mt-1 text-center">
+              カンバンボードに追加しました
+            </p>
+          )}
+          {createInstanceStatus === 'conflict' && (
+            <p className="text-sm text-amber-600 dark:text-amber-400 mt-1 text-center">
+              すでにボード上に未完了のタスクがあります
+            </p>
+          )}
+        </div>
+      )}
 
       {task && onDeleted && !showDeleteConfirm && (
         <div className="pt-2">

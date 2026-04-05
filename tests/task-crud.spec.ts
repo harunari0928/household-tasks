@@ -610,6 +610,49 @@ test.describe('タスク削除', () => {
   });
 });
 
+test.describe('今すぐ起票', () => {
+  test('新規作成フォームに起票ボタンが表示されない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await expect(page.getByRole('button', { name: '今すぐ起票する' })).not.toBeVisible();
+  });
+
+  test('編集フォームで起票するとカンバンに未着手タスクが追加される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('起票テスト');
+    await page.getByRole('button', { name: '保存' }).click();
+    await expect(page.getByText('起票テスト')).toBeVisible();
+
+    await page.getByText('起票テスト').click();
+    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+
+    await expect(page.getByText('カンバンボードに追加しました')).toBeVisible();
+
+    await page.getByRole('button', { name: 'キャンセル' }).click();
+    await page.goto('/#/');
+
+    await expect(page.getByText('起票テスト')).toBeVisible();
+  });
+
+  test('既に未完了タスクがある場合は空振りになる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('重複テスト');
+    await page.getByRole('button', { name: '保存' }).click();
+    await expect(page.getByText('重複テスト')).toBeVisible();
+
+    await page.getByText('重複テスト').click();
+    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+    await expect(page.getByText('カンバンボードに追加しました')).toBeVisible();
+
+    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+
+    await expect(page.getByText('すでにボード上に未完了のタスクがあります')).toBeVisible();
+  });
+});
+
 test.describe('ダークモード', () => {
   test('ダークモードに切り替えるとdarkクラスが付与される', async ({ page }) => {
     await page.goto('/#/tasks');

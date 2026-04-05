@@ -176,6 +176,45 @@ router.put('/assignees', (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// POST /api/kanban/create-from-definition/:taskDefId — manually create a task instance
+router.post('/create-from-definition/:taskDefId', (req: Request, res: Response) => {
+  const db = getDb();
+  const taskDefId = Number(req.params.taskDefId);
+
+  const taskDef = db.prepare('SELECT * FROM task_definitions WHERE id = ?').get(taskDefId) as any;
+  if (!taskDef) {
+    res.status(404).json({ error: 'タスク定義が見つかりません' });
+    return;
+  }
+
+  const existing = db.prepare(
+    "SELECT 1 FROM task_instances WHERE task_definition_id = ? AND status != 'done' LIMIT 1"
+  ).get(taskDefId);
+  if (existing) {
+    res.status(409).json({ error: 'すでに未完了のインスタンスが存在します' });
+    return;
+  }
+
+  const maxRow = db.prepare(
+    "SELECT COALESCE(MAX(sort_order), -1) as max_order FROM task_instances WHERE status = 'todo'"
+  ).get() as { max_order: number };
+  const sortOrder = maxRow.max_order + 1;
+
+  const result = db.prepare(
+    "INSERT INTO task_instances (task_definition_id, title, status, points, created_at, sort_order) VALUES (?, ?, 'todo', ?, ?, ?)"
+  ).run(taskDefId, taskDef.name, taskDef.points, new Date().toISOString(), sortOrder);
+
+  const created = db.prepare(`
+    SELECT ti.*, td.category
+    FROM task_instances ti
+    JOIN task_definitions td ON ti.task_definition_id = td.id
+    WHERE ti.id = ?
+  `).get(result.lastInsertRowid);
+
+  broadcast({ type: 'tasks_changed' });
+  res.status(201).json(created);
+});
+
 // POST /api/kanban/notify — trigger SSE broadcast (called by scheduler)
 router.post('/notify', (_req: Request, res: Response) => {
   broadcast({ type: 'tasks_changed' });
