@@ -241,3 +241,207 @@ test.describe('ポイント集計の表示', () => {
     await expect(skeleton.locator('.rounded-full')).toBeVisible();
   });
 });
+
+test.describe('担当フィルタ', () => {
+  test('担当を選択すると該当タスクのみ表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByLabel('担当フィルタ').selectOption('taro');
+
+    await test.step('taroのタスクが表示される', async () => {
+      await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: '床拭き' })).toBeVisible();
+    });
+
+    await test.step('hanakoのタスクが非表示になる', async () => {
+      await expect(page.getByRole('cell', { name: 'キッチン掃除' })).not.toBeVisible();
+    });
+  });
+
+  test('「全担当者」に戻すと全タスクが再表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+    await page.getByLabel('担当フィルタ').selectOption('taro');
+    await page.getByRole('cell', { name: 'キッチン掃除' }).waitFor({ state: 'hidden' });
+
+    await page.getByLabel('担当フィルタ').selectOption('');
+
+    await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'キッチン掃除' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '床拭き' })).toBeVisible();
+  });
+
+  test('担当フィルタとタスク名検索を組み合わせると両条件に合うタスクのみ表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByLabel('担当フィルタ').selectOption('taro');
+    await page.getByLabel('完了タスクを検索').fill('掃除');
+
+    await test.step('taroかつ「掃除」を含むタスクのみ表示される', async () => {
+      await expect(page.getByRole('cell', { name: '洗面台掃除' })).toBeVisible();
+    });
+
+    await test.step('条件に合わないタスクは非表示', async () => {
+      await expect(page.getByRole('cell', { name: '床拭き' })).not.toBeVisible();
+      await expect(page.getByRole('cell', { name: 'キッチン掃除' })).not.toBeVisible();
+    });
+  });
+});
+
+test.describe('完了日フィルタ', () => {
+  test('開始日を指定すると完了日がそれ以降のタスクのみ表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+
+    await page.getByLabel('完了日From').fill(tomorrowStr);
+
+    await expect(page.getByText('該当するタスクがありません')).toBeVisible();
+  });
+
+  test('終了日を指定すると完了日がそれ以前のタスクのみ表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+
+    await page.getByLabel('完了日To').fill(yesterdayStr);
+
+    await expect(page.getByText('該当するタスクがありません')).toBeVisible();
+  });
+
+  test('該当なしの日付範囲で「該当するタスクがありません」が表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByLabel('完了日From').fill('2099-01-01');
+    await page.getByLabel('完了日To').fill('2099-12-31');
+
+    await expect(page.getByText('該当するタスクがありません')).toBeVisible();
+  });
+});
+
+test.describe('ソート', () => {
+  test('「タスク」ヘッダをクリックするとタスク名の昇順に並ぶ', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByRole('columnheader', { name: /タスク/ }).click();
+
+    // ヘッダ行の次の最初のデータ行
+    const firstDataRow = page.getByRole('row').nth(1);
+    await expect(firstDataRow.getByRole('cell').first()).toHaveText('キッチン掃除');
+  });
+
+  test('「タスク」ヘッダを再クリックするとタスク名の降順に切り替わる', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByRole('columnheader', { name: /タスク/ }).click();
+    await page.getByRole('columnheader', { name: /タスク/ }).click();
+
+    const firstDataRow = page.getByRole('row').nth(1);
+    await expect(firstDataRow.getByRole('cell').first()).toHaveText('洗面台掃除');
+  });
+
+  test('「担当」ヘッダをクリックすると担当名の昇順に並ぶ', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await page.getByRole('columnheader', { name: /担当/ }).click();
+
+    const firstDataRow = page.getByRole('row').nth(1);
+    await expect(firstDataRow.getByRole('cell').nth(1)).toHaveText('hanako');
+  });
+
+  test('「完了日」ヘッダをクリックすると完了日の昇順に切り替わる', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    // Default is done_at DESC, clicking toggles to ASC
+    await page.getByRole('columnheader', { name: /完了日/ }).click();
+
+    await expect(page.getByRole('columnheader', { name: /完了日/ })).toContainText('▲');
+  });
+
+  test('ソート中のヘッダに方向インジケータが表示される', async ({ page, baseURL }) => {
+    await setupStatsWithTasks(page, baseURL!);
+
+    await test.step('デフォルトで完了日に▼が表示される', async () => {
+      await expect(page.getByRole('columnheader', { name: /完了日/ })).toContainText('▼');
+    });
+
+    await page.getByRole('columnheader', { name: /タスク/ }).click();
+
+    await test.step('タスクに▲が表示され完了日のインジケータが消える', async () => {
+      await expect(page.getByRole('columnheader', { name: /タスク/ })).toContainText('▲');
+      await expect(page.getByRole('columnheader', { name: /完了日/ })).not.toContainText('▼');
+      await expect(page.getByRole('columnheader', { name: /完了日/ })).not.toContainText('▲');
+    });
+  });
+});
+
+test.describe('無限スクロール', () => {
+  async function setupManyTasks(page: Page, baseURL: string, count: number) {
+    // Register assignee
+    await page.request.put(`${baseURL}/api/kanban/assignees`, {
+      data: { assignees: ['taro'] },
+    });
+
+    // Create task definitions via API (much faster than UI)
+    for (let i = 1; i <= count; i++) {
+      await page.request.post(`${baseURL}/api/tasks`, {
+        data: {
+          name: `タスク${String(i).padStart(3, '0')}`,
+          category: 'water',
+          frequency_type: 'daily',
+          points: 1,
+        },
+      });
+    }
+
+    // Run scheduler to create task_instances
+    await runScheduler('2026-03-10');
+
+    // Get kanban tasks and complete all
+    const kanbanRes = await page.request.get(`${baseURL}/api/kanban`);
+    const instances = await kanbanRes.json();
+
+    for (const instance of instances) {
+      await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+        data: { status: 'done', assignee: 'taro' },
+      });
+    }
+
+    // Navigate to stats page with wide date range
+    await page.goto('/#/stats');
+    await page.getByLabel('開始日').fill('2026-01-01');
+    await page.getByLabel('終了日').fill('2026-12-31');
+    await page.getByText('完了タスク一覧').waitFor({ timeout: 30000 });
+  }
+
+  test('初期表示では最初の30件のみ表示される', async ({ page, baseURL }) => {
+    test.setTimeout(120000);
+    await setupManyTasks(page, baseURL!, 35);
+
+    // 30データ行 + 1ヘッダ行 = 31行
+    await expect(page.getByRole('row')).toHaveCount(31);
+    await expect(page.getByText('残り5件')).toBeVisible();
+  });
+
+  test('下にスクロールすると追加のタスクが読み込まれる', async ({ page, baseURL }) => {
+    test.setTimeout(120000);
+    await setupManyTasks(page, baseURL!, 35);
+    await page.getByText('残り5件').waitFor();
+
+    await page.getByText('残り5件').scrollIntoViewIfNeeded();
+
+    // 35データ行 + 1ヘッダ行 = 36行
+    await expect(page.getByRole('row')).toHaveCount(36, { timeout: 5000 });
+  });
+
+  test('全件表示後に「全N件を表示」が表示される', async ({ page, baseURL }) => {
+    test.setTimeout(120000);
+    await setupManyTasks(page, baseURL!, 35);
+    await page.getByText('残り5件').waitFor();
+
+    await page.getByText('残り5件').scrollIntoViewIfNeeded();
+
+    await expect(page.getByText('全35件を表示')).toBeVisible({ timeout: 5000 });
+  });
+});
