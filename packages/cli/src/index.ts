@@ -2,6 +2,18 @@
 import { Command } from 'commander';
 import { getDb } from './db.js';
 
+async function notifyWeb(): Promise<void> {
+  const webUrl = process.env.WEB_URL || 'http://localhost:3100';
+  try {
+    await fetch(`${webUrl}/api/kanban/notify`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    console.warn('Could not notify web server (non-critical)');
+  }
+}
+
 const program = new Command();
 
 program
@@ -84,7 +96,7 @@ program
   .description('Move a task instance to a new status')
   .argument('<id>', 'Task instance ID')
   .argument('<status>', 'New status (todo, in_progress, done)')
-  .action((idStr: string, status: string) => {
+  .action(async (idStr: string, status: string) => {
     const validStatuses = ['todo', 'in_progress', 'done'];
     if (!validStatuses.includes(status)) {
       console.error(`Invalid status: ${status}. Must be one of: ${validStatuses.join(', ')}`);
@@ -111,6 +123,7 @@ program
       }
 
       console.log(`Task ${id} moved to ${status}.`);
+      await notifyWeb();
     } finally {
       db.close();
     }
@@ -122,7 +135,7 @@ program
   .description('Assign a task instance to a person')
   .argument('<id>', 'Task instance ID')
   .argument('<assignee>', 'Assignee name')
-  .action((idStr: string, assignee: string) => {
+  .action(async (idStr: string, assignee: string) => {
     const id = parseInt(idStr, 10);
     if (isNaN(id)) {
       console.error(`Invalid ID: ${idStr}`);
@@ -141,6 +154,7 @@ program
       }
 
       console.log(`Task ${id} assigned to ${assignee}.`);
+      await notifyWeb();
     } finally {
       db.close();
     }
