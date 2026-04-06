@@ -21,12 +21,13 @@ function parseAssignees(assignee: string | null): string[] {
 
 interface Props {
   task: TaskInstance;
+  isRecentlyMoved?: boolean;
   onAssigneeClick?: (task: TaskInstance) => void;
   onDelete?: (task: TaskInstance) => void;
   onCardClick?: (task: TaskInstance) => void;
 }
 
-export default function KanbanCard({ task, onAssigneeClick, onDelete, onCardClick }: Props) {
+export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onDelete, onCardClick }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { task },
@@ -44,7 +45,7 @@ export default function KanbanCard({ task, onAssigneeClick, onDelete, onCardClic
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow"
+      className={`group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow${isRecentlyMoved ? ' kanban-card-moved' : ''}`}
       onClick={() => onCardClick?.(task)}
     >
       {/* Drag handle — touch target for drag-and-drop */}

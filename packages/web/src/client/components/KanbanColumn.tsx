@@ -14,13 +14,14 @@ interface Props {
   status: TaskInstanceStatus;
   title: string;
   items: TaskInstance[];
+  recentlyMovedIds?: Set<number>;
   onAssigneeClick?: (task: TaskInstance) => void;
   onDelete?: (task: TaskInstance) => void;
   onClearColumn?: (status: TaskInstanceStatus) => void;
   onCardClick?: (task: TaskInstance) => void;
 }
 
-export default function KanbanColumn({ status, title, items, onAssigneeClick, onDelete, onClearColumn, onCardClick }: Props) {
+export default function KanbanColumn({ status, title, items, recentlyMovedIds, onAssigneeClick, onDelete, onClearColumn, onCardClick }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -94,7 +95,7 @@ export default function KanbanColumn({ status, title, items, onAssigneeClick, on
       <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
         <div className="flex flex-col gap-2 flex-1 min-h-[60px] overflow-y-auto overscroll-y-contain pr-1">
           {items.map((task) => (
-            <KanbanCard key={task.id} task={task} onAssigneeClick={onAssigneeClick} onDelete={onDelete} onCardClick={onCardClick} />
+            <KanbanCard key={task.id} task={task} isRecentlyMoved={recentlyMovedIds?.has(task.id)} onAssigneeClick={onAssigneeClick} onDelete={onDelete} onCardClick={onCardClick} />
           ))}
         </div>
       </SortableContext>

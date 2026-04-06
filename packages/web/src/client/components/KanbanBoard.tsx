@@ -38,6 +38,8 @@ export default function KanbanBoard({ currentUser }: Props) {
   const [selectedTask, setSelectedTask] = useState<TaskInstance | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<TaskInstance | null>(null);
   const prevTasksRef = useRef<TaskInstance[]>([]);
+  const localMovedRef = useRef<Set<number>>(new Set());
+  const [recentlyMovedIds, setRecentlyMovedIds] = useState<Set<number>>(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -47,7 +49,23 @@ export default function KanbanBoard({ currentUser }: Props) {
   const fetchTasks = useCallback(async () => {
     const res = await fetch('/api/kanban');
     if (res.ok) {
-      const data = await res.json();
+      const data: TaskInstance[] = await res.json();
+
+      // Detect tasks moved by other users (SSE) — exclude self-initiated moves
+      if (prevTasksRef.current.length > 0) {
+        const prevMap = new Map(prevTasksRef.current.map((t) => [t.id, t.status]));
+        const movedIds = data
+          .filter((t: TaskInstance) => {
+            const prev = prevMap.get(t.id);
+            return prev && prev !== t.status && !localMovedRef.current.has(t.id);
+          })
+          .map((t: TaskInstance) => t.id);
+        if (movedIds.length > 0) {
+          setRecentlyMovedIds(new Set(movedIds));
+          setTimeout(() => setRecentlyMovedIds(new Set()), 1500);
+        }
+      }
+
       setTasks(data);
       prevTasksRef.current = data;
     }
@@ -172,7 +190,10 @@ export default function KanbanBoard({ currentUser }: Props) {
       return;
     }
 
-    // Cross-column move
+    // Cross-column move — mark as local so SSE echo won't highlight
+    localMovedRef.current.add(task.id);
+    setTimeout(() => localMovedRef.current.delete(task.id), 3000);
+
     if (targetStatus === 'done' && !task.assignee) {
       setAssigneeModal({ task, targetStatus });
       setSelectedAssignees([]);
@@ -215,7 +236,9 @@ export default function KanbanBoard({ currentUser }: Props) {
     const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.join(',') : null;
 
     if (targetStatus !== task.status) {
-      // Status change (e.g., moving to done)
+      // Status change (e.g., moving to done) — mark as local so SSE echo won't highlight
+      localMovedRef.current.add(task.id);
+      setTimeout(() => localMovedRef.current.delete(task.id), 3000);
       setTasks((prev) =>
         prev.map((t) =>
           t.id === task.id
@@ -322,6 +345,7 @@ export default function KanbanBoard({ currentUser }: Props) {
               status={col.status}
               title={col.title}
               items={col.items}
+              recentlyMovedIds={recentlyMovedIds}
               onAssigneeClick={(task) => openAssigneeModal(task)}
               onDelete={handleDeleteClick}
               onClearColumn={clearColumn}
