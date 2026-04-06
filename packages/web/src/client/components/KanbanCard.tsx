@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { TaskInstance } from '../types.js';
@@ -41,18 +42,35 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
 
   const assignees = parseAssignees(task.assignee);
 
+  // Split listeners: onMouseDown for card (desktop), onTouchStart for handle (mobile)
+  const { mouseListeners, touchListeners } = useMemo(() => {
+    const mouse: Record<string, unknown> = {};
+    const touch: Record<string, unknown> = {};
+    for (const [key, handler] of Object.entries(listeners ?? {})) {
+      if (key.toLowerCase().includes('mouse')) {
+        mouse[key] = handler;
+      }
+      if (key.toLowerCase().includes('touch') || key.toLowerCase().includes('key')) {
+        touch[key] = handler;
+      }
+    }
+    return { mouseListeners: mouse, touchListeners: touch };
+  }, [listeners]);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow${isRecentlyMoved ? ' kanban-card-moved' : ''}`}
+      className={`group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow sm:cursor-grab sm:active:cursor-grabbing${isRecentlyMoved ? ' kanban-card-moved' : ''}`}
       onClick={() => onCardClick?.(task)}
+      {...attributes}
+      {...mouseListeners}
     >
-      {/* Drag handle — touch target for drag-and-drop */}
+      {/* Drag handle — touch-only (mobile). On desktop, the entire card is draggable. */}
       <button
         {...attributes}
-        {...listeners}
-        className="absolute left-0 top-0 bottom-0 w-7 flex items-center justify-center text-gray-300 dark:text-gray-600 text-[10px] leading-none select-none cursor-grab active:cursor-grabbing rounded-l-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        {...touchListeners}
+        className="absolute left-0 top-0 bottom-0 w-7 flex items-center justify-center text-gray-300 dark:text-gray-600 text-[10px] leading-none select-none sm:hidden cursor-grab active:cursor-grabbing rounded-l-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         style={{ touchAction: 'none' }}
         aria-label="ドラッグして移動"
       >⠿</button>
