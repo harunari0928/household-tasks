@@ -16,7 +16,6 @@ interface TaskInput {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
-  vikunja_project_id?: number;
   notes?: string;
   points?: number;
 }
@@ -134,8 +133,8 @@ router.post('/', (req: Request, res: Response) => {
   const points = body.points ?? 1;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, vikunja_project_id, next_due_date, notes, points, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -145,7 +144,6 @@ router.post('/', (req: Request, res: Response) => {
     interval,
     daysOfWeek,
     dayOfMonth,
-    body.vikunja_project_id || null,
     nextDueDate,
     body.notes || null,
     points,
@@ -191,7 +189,7 @@ router.put('/:id', (req: Request, res: Response) => {
   const stmt = db.prepare(`
     UPDATE task_definitions
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
-        days_of_week = ?, day_of_month = ?, vikunja_project_id = ?,
+        days_of_week = ?, day_of_month = ?,
         next_due_date = ?, notes = ?, points = ?, updated_at = ?
     WHERE id = ?
   `);
@@ -203,7 +201,6 @@ router.put('/:id', (req: Request, res: Response) => {
     interval,
     daysOfWeek,
     dayOfMonth,
-    body.vikunja_project_id || null,
     nextDueDate,
     body.notes || null,
     points,
@@ -273,8 +270,8 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, vikunja_project_id, next_due_date, notes, points)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const findStmt = db.prepare('SELECT id, created_at, updated_at FROM task_definitions WHERE name = ?');
@@ -310,7 +307,7 @@ router.post('/import', (req: Request, res: Response) => {
         const result = insertStmt.run(
           task.name, task.category, task.frequency_type, interval,
           daysOfWeek, task.day_of_month ?? null,
-          null, nextDueDate, task.notes || null, task.points ?? 1,
+          nextDueDate, task.notes || null, task.points ?? 1,
         );
         inserted.push(Number(result.lastInsertRowid));
       }

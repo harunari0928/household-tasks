@@ -36,7 +36,6 @@ export default function KanbanCard({ task, onAssigneeClick, onDelete, onCardClic
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    touchAction: 'none' as const,
   };
 
   const assignees = parseAssignees(task.assignee);
@@ -45,13 +44,17 @@ export default function KanbanCard({ task, onAssigneeClick, onDelete, onCardClic
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className="group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"
+      className="group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow"
       onClick={() => onCardClick?.(task)}
     >
-      {/* Drag handle indicator */}
-      <span className="absolute left-1 top-1/2 -translate-y-1/2 text-gray-300 dark:text-gray-600 text-[10px] leading-none select-none" aria-hidden="true">⠿</span>
+      {/* Drag handle — touch target for drag-and-drop */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="absolute left-0 top-0 bottom-0 w-7 flex items-center justify-center text-gray-300 dark:text-gray-600 text-[10px] leading-none select-none cursor-grab active:cursor-grabbing rounded-l-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        style={{ touchAction: 'none' }}
+        aria-label="ドラッグして移動"
+      >⠿</button>
 
       {/* Delete button — always visible on mobile, hover on desktop */}
       {onDelete && (
