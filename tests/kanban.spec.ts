@@ -76,7 +76,8 @@ async function dragCardToColumn(page: Page, cardName: string, columnTitle: strin
   const headingBox = await columnHeading.boundingBox();
   if (!cardBox || !headingBox) throw new Error('Could not get bounding boxes');
 
-  const startX = cardBox.x + cardBox.width / 2;
+  // Drag handle is at the left edge of the card
+  const startX = cardBox.x + 10;
   const startY = cardBox.y + cardBox.height / 2;
   const endX = headingBox.x + headingBox.width / 2;
   const endY = headingBox.y + headingBox.height + 40;
@@ -517,7 +518,8 @@ test.describe('同一列内の並べ替え', () => {
     const targetBox = await target.boundingBox();
     if (!cardBox || !targetBox) throw new Error('Could not get bounding boxes');
 
-    const startX = cardBox.x + cardBox.width / 2;
+    // Drag handle is at the left edge of the card
+    const startX = cardBox.x + 10;
     const startY = cardBox.y + cardBox.height / 2;
     const endX = targetBox.x + targetBox.width / 2;
     const endY = targetBox.y - 5;
@@ -533,13 +535,15 @@ test.describe('同一列内の並べ替え', () => {
     const heading = page.getByRole('heading', { name: columnTitle });
     // The column is the snap-start container wrapping the heading and cards
     const column = heading.locator('xpath=ancestor::div[contains(@class,"snap-start")]');
-    // Each card is a div with role="button" from useSortable
-    const cards = column.locator('[role="button"][aria-roledescription="sortable"]');
-    const count = await cards.count();
+    // Each card contains a drag handle button with aria-roledescription="sortable"
+    // Get the card container (parent div) for each handle
+    const handles = column.locator('[aria-roledescription="sortable"]');
+    const count = await handles.count();
     const names: string[] = [];
     for (let i = 0; i < count; i++) {
-      const text = await cards.nth(i).innerText();
-      // Card text: "⠿\ntitle\n担当者\npoints" — title is the second line
+      const card = handles.nth(i).locator('..');
+      const text = await card.innerText();
+      // Card text includes handle text "⠿", title, assignee, points — title is the second line
       const title = text.split('\n')[1]?.trim() ?? '';
       names.push(title);
     }

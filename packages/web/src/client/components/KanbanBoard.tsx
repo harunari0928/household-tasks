@@ -315,7 +315,7 @@ export default function KanbanBoard({ currentUser }: Props) {
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-4 h-[calc(100vh-160px)] sm:h-[calc(100vh-180px)] snap-x snap-mandatory sm:snap-none">
+        <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-4 h-[calc(100vh-160px)] sm:h-[calc(100vh-180px)] snap-x snap-proximity sm:snap-none">
           {columns.map((col) => (
             <KanbanColumn
               key={col.status}
