@@ -156,10 +156,15 @@ const migrations: Migration[] = [
   {
     version: 8,
     up: (db) => {
-      db.exec(`
-        ALTER TABLE execution_log RENAME COLUMN vikunja_task_id TO task_instance_id;
-        ALTER TABLE task_definitions DROP COLUMN vikunja_project_id;
-      `);
+      // Rename/drop only if columns exist (they won't on fresh DBs created after v1 cleanup)
+      const elCols = db.pragma('table_info(execution_log)') as { name: string }[];
+      if (elCols.some((c) => c.name === 'vikunja_task_id')) {
+        db.exec('ALTER TABLE execution_log RENAME COLUMN vikunja_task_id TO task_instance_id');
+      }
+      const tdCols = db.pragma('table_info(task_definitions)') as { name: string }[];
+      if (tdCols.some((c) => c.name === 'vikunja_project_id')) {
+        db.exec('ALTER TABLE task_definitions DROP COLUMN vikunja_project_id');
+      }
     },
   },
 ];
