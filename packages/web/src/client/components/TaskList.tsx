@@ -44,6 +44,10 @@ function formatFrequency(task: TaskDefinition): string {
   }
 }
 
+function formatScheduledHour(task: TaskDefinition): string {
+  return `${task.scheduled_hour}時`;
+}
+
 export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
   if (tasks.length === 0) {
     return (
@@ -84,7 +88,7 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
           >
             <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{task.name}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400 flex gap-2">
-              <span>{formatFrequency(task)}</span>
+              <span>{formatFrequency(task)} {formatScheduledHour(task)}</span>
             </div>
           </div>
         </div>

@@ -1,1 +1,1 @@
-export { getTodayJST } from './date.js';
+export { getTodayJST, getCurrentHourJST } from './date.js';

@@ -63,6 +63,10 @@ export function shouldCreateToday(task: TaskDefinitionRow, today: string): boole
   }
 }
 
+export function shouldCreateThisHour(task: TaskDefinitionRow, currentHour: number): boolean {
+  return currentHour >= task.scheduled_hour;
+}
+
 export function calculateNextDueDate(task: TaskDefinitionRow, currentDueDate: string): string {
   const ft = task.frequency_type;
   const d = parseDate(currentDueDate);

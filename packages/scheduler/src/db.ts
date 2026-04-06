@@ -16,6 +16,7 @@ export interface TaskDefinitionRow {
   is_active: number;
   notes: string | null;
   points: number;
+  scheduled_hour: number;
 }
 
 type Migration = {
@@ -49,6 +50,12 @@ const migrations: Migration[] = [
     version: 6,
     up: (db) => {
       db.exec('ALTER TABLE task_instances ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+    },
+  },
+  {
+    version: 9,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN scheduled_hour INTEGER NOT NULL DEFAULT 0');
     },
   },
 ];

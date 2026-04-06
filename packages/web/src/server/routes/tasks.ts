@@ -18,6 +18,7 @@ interface TaskInput {
   day_of_month?: number;
   notes?: string;
   points?: number;
+  scheduled_hour?: number;
 }
 
 function validateTaskInput(body: TaskInput): string | null {
@@ -58,6 +59,12 @@ function validateTaskInput(body: TaskInput): string | null {
       if (typeof body.day_of_month !== 'number' || body.day_of_month < 1 || body.day_of_month > 28) {
         return '日指定は1〜28の範囲で入力してください';
       }
+    }
+  }
+
+  if (body.scheduled_hour !== undefined && body.scheduled_hour !== null) {
+    if (typeof body.scheduled_hour !== 'number' || !Number.isInteger(body.scheduled_hour) || body.scheduled_hour < 0 || body.scheduled_hour > 23) {
+      return '起票時刻は0〜23の整数で入力してください';
     }
   }
 
@@ -131,10 +138,11 @@ router.post('/', (req: Request, res: Response) => {
   const nextDueDate = calculateNextDueDate(body.frequency_type, interval, today);
 
   const points = body.points ?? 1;
+  const scheduledHour = body.scheduled_hour ?? 0;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points, scheduled_hour, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -147,6 +155,7 @@ router.post('/', (req: Request, res: Response) => {
     nextDueDate,
     body.notes || null,
     points,
+    scheduledHour,
     now,
     now,
   );
@@ -186,11 +195,12 @@ router.put('/:id', (req: Request, res: Response) => {
     : existing.next_due_date;
 
   const points = body.points ?? 1;
+  const scheduledHour = body.scheduled_hour ?? 0;
   const stmt = db.prepare(`
     UPDATE task_definitions
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
         days_of_week = ?, day_of_month = ?,
-        next_due_date = ?, notes = ?, points = ?, updated_at = ?
+        next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -204,6 +214,7 @@ router.put('/:id', (req: Request, res: Response) => {
     nextDueDate,
     body.notes || null,
     points,
+    scheduledHour,
     new Date().toISOString(),
     req.params.id,
   );
@@ -270,8 +281,8 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points, scheduled_hour)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const findStmt = db.prepare('SELECT id, created_at, updated_at FROM task_definitions WHERE name = ?');
@@ -292,12 +303,12 @@ router.post('/import', (req: Request, res: Response) => {
           UPDATE task_definitions
           SET category = ?, frequency_type = ?, frequency_interval = ?,
               days_of_week = ?, day_of_month = ?,
-              next_due_date = ?, notes = ?, points = ?, updated_at = created_at
+              next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = created_at
           WHERE id = ?
         `).run(
           task.category, task.frequency_type, interval,
           daysOfWeek, task.day_of_month ?? null,
-          nextDueDate, task.notes || null, task.points ?? 1, existing.id,
+          nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0, existing.id,
         );
         inserted.push(existing.id);
       } else {
@@ -307,7 +318,7 @@ router.post('/import', (req: Request, res: Response) => {
         const result = insertStmt.run(
           task.name, task.category, task.frequency_type, interval,
           daysOfWeek, task.day_of_month ?? null,
-          nextDueDate, task.notes || null, task.points ?? 1,
+          nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
         );
         inserted.push(Number(result.lastInsertRowid));
       }

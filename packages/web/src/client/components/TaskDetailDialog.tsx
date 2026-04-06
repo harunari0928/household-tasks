@@ -31,6 +31,7 @@ function formatFrequency(task: TaskDefinition): string {
   if (task.day_of_month) {
     parts.push(`${task.day_of_month}日`);
   }
+  parts.push(`${task.scheduled_hour}時`);
   return parts.join(' ');
 }
 
