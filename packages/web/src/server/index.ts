@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getDb, getUploadsDir } from './db.js';
+import { setTestNow } from './test-time.js';
 import tasksRouter from './routes/tasks.js';
 import attachmentsRouter from './routes/attachments.js';
 import statsRouter from './routes/stats.js';
@@ -40,6 +41,7 @@ app.post('/api/test/reset', (_req, res) => {
   db.exec('DELETE FROM task_definitions');
   db.exec('DELETE FROM app_settings');
   db.exec('DELETE FROM users');
+  setTestNow(null);
   // Clean uploads directory
   const uploadsDir = getUploadsDir();
   if (fs.existsSync(uploadsDir)) {
@@ -47,6 +49,12 @@ app.post('/api/test/reset', (_req, res) => {
       fs.unlinkSync(path.join(uploadsDir, file));
     }
   }
+  res.json({ success: true });
+});
+
+// Test-only: override server time
+app.post('/api/test/set-time', (req, res) => {
+  setTestNow(req.body.time || null);
   res.json({ success: true });
 });
 

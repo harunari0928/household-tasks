@@ -41,6 +41,8 @@ async function createTaskViaUI(
   await page.getByText(options.name).waitFor();
 }
 
+const TEST_TIME = '2026-03-15T12:00:00.000Z';
+
 async function setupStatsWithTasks(page: Page, baseURL: string) {
   // Register assignees
   await page.request.put(`${baseURL}/api/kanban/assignees`, {
@@ -54,6 +56,11 @@ async function setupStatsWithTasks(page: Page, baseURL: string) {
 
   // Run scheduler to create task_instances
   await runScheduler('2026-03-10');
+
+  // Fix server time so completed_at falls within March
+  await page.request.post(`${baseURL}/api/test/set-time`, {
+    data: { time: TEST_TIME },
+  });
 
   // Get kanban tasks to find instance IDs
   const kanbanRes = await page.request.get(`${baseURL}/api/kanban`);
@@ -80,10 +87,16 @@ async function setupStatsWithTasks(page: Page, baseURL: string) {
     data: { status: 'done', assignee: 'taro' },
   });
 
-  // Navigate to stats page and set date range
+  // Reset server time
+  await page.request.post(`${baseURL}/api/test/set-time`, {
+    data: { time: null },
+  });
+
+  // Fix browser clock to March so stats page defaults to March range
+  await page.clock.install({ time: new Date(TEST_TIME) });
+
+  // Navigate to stats page — defaults to March via getMonthRange(0)
   await page.goto('/#/stats');
-  await page.getByLabel('開始日').fill('2026-03-01');
-  await page.getByLabel('終了日').fill('2026-03-31');
   await expect(page.getByText('完了タスク一覧')).toBeVisible({ timeout: 10000 });
 }
 

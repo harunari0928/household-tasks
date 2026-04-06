@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { getDb } from '../db.js';
+import { getNowISO } from '../test-time.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -89,7 +90,7 @@ router.patch('/:id/status', (req: Request, res: Response) => {
     return;
   }
 
-  const completedAt = status === 'done' ? new Date().toISOString() : null;
+  const completedAt = status === 'done' ? getNowISO() : null;
 
   // Append to end of target column
   const maxRow = db.prepare(
