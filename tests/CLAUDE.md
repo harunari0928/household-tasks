@@ -23,15 +23,15 @@ Stats page period settings, save button visibility, 〜今日 mode, persistence.
 Points field CRUD, stats page navigation, stats display with task_instances data.
 - `test.describe` でポイントフィールド・ポイント集計ページ・ポイント集計の表示に分類。
 - Stats tests create task definitions via UI, run scheduler to create task_instances, then assign/complete via kanban API.
-- No Vikunja dependency — stats reads from `task_instances` SQLite table.
+- Stats reads from `task_instances` SQLite table.
 
 ## scheduler.spec.ts
 
 Scheduler logic tests verified via Kanban board UI.
-- Scheduler inserts `task_instances` directly into SQLite (no Vikunja dependency).
+- Scheduler inserts `task_instances` directly into SQLite.
 - Scheduler runs as async child process via `promisify(exec)` — do NOT use `execSync`.
 - Uses `node packages/scheduler/dist/index.js` (requires `pnpm --filter scheduler build` first).
-- Only `DB_PATH` and `TEST_TODAY` env vars needed (no Vikunja URL/token).
+- Only `DB_PATH` and `TEST_TODAY` env vars needed.
 - After running the scheduler, navigate to `/#/` (Kanban board) to verify task cards appear.
 - Date arithmetic must use `Date.UTC()` to avoid timezone issues.
 - `TEST_TODAY` env var controls what date the scheduler sees.

@@ -44,7 +44,6 @@ export interface TaskDefinition {
   frequency_interval: number | null;
   days_of_week: string | null;
   day_of_month: number | null;
-  vikunja_project_id: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -60,7 +59,6 @@ export interface TaskDefinitionInput {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
-  vikunja_project_id?: number;
   notes?: string;
   points?: number;
 }
@@ -69,7 +67,6 @@ export interface ExecutionLog {
   id: number;
   task_definition_id: number;
   executed_at: string;
-  vikunja_task_id: number | null;
   status: 'created' | 'failed' | 'skipped_duplicate';
   error_message: string | null;
 }

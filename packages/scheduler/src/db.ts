@@ -12,7 +12,6 @@ export interface TaskDefinitionRow {
   frequency_interval: number | null;
   days_of_week: string | null;
   day_of_month: number | null;
-  vikunja_project_id: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -107,12 +106,12 @@ export function logExecution(
 ): void {
   if (executedAt) {
     db.prepare(`
-      INSERT INTO execution_log (task_definition_id, vikunja_task_id, status, error_message, executed_at)
+      INSERT INTO execution_log (task_definition_id, task_instance_id, status, error_message, executed_at)
       VALUES (?, ?, ?, ?, ?)
     `).run(taskDefId, taskInstanceId, status, errorMessage || null, executedAt);
   } else {
     db.prepare(`
-      INSERT INTO execution_log (task_definition_id, vikunja_task_id, status, error_message)
+      INSERT INTO execution_log (task_definition_id, task_instance_id, status, error_message)
       VALUES (?, ?, ?, ?)
     `).run(taskDefId, taskInstanceId, status, errorMessage || null);
   }

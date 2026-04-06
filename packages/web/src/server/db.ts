@@ -36,7 +36,6 @@ const migrations: Migration[] = [
           days_of_week TEXT DEFAULT NULL,
           day_of_month INTEGER DEFAULT NULL,
           assignee TEXT DEFAULT NULL,
-          vikunja_project_id INTEGER DEFAULT NULL,
           next_due_date TEXT DEFAULT NULL,
           is_active INTEGER NOT NULL DEFAULT 1,
           notes TEXT DEFAULT NULL,
@@ -48,7 +47,7 @@ const migrations: Migration[] = [
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           task_definition_id INTEGER NOT NULL,
           executed_at TEXT NOT NULL DEFAULT (datetime('now')),
-          vikunja_task_id INTEGER DEFAULT NULL,
+          task_instance_id INTEGER DEFAULT NULL,
           status TEXT NOT NULL DEFAULT 'created',
           error_message TEXT DEFAULT NULL,
           FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
@@ -152,6 +151,15 @@ const migrations: Migration[] = [
         assignees.forEach((name, i) => insert.run(name, i));
       }
       db.exec("DELETE FROM app_settings WHERE key = 'kanban_assignees'");
+    },
+  },
+  {
+    version: 8,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE execution_log RENAME COLUMN vikunja_task_id TO task_instance_id;
+        ALTER TABLE task_definitions DROP COLUMN vikunja_project_id;
+      `);
     },
   },
 ];

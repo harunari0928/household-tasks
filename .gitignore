@@ -6,5 +6,4 @@ data/*.db-wal
 .env
 test-results/
 playwright-report/
-vikunja-data/
 *.png
