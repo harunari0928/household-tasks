@@ -167,6 +167,12 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 9,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN scheduled_hour INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

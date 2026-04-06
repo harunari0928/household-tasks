@@ -48,6 +48,7 @@ export interface TaskDefinition {
   is_active: number;
   notes: string | null;
   points: number;
+  scheduled_hour: number;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +62,7 @@ export interface TaskDefinitionInput {
   day_of_month?: number;
   notes?: string;
   points?: number;
+  scheduled_hour: number;
 }
 
 export interface ExecutionLog {

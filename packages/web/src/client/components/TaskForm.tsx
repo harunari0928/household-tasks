@@ -45,6 +45,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const [dayOfMonth, setDayOfMonth] = useState<number | undefined>(
     task?.day_of_month ?? undefined,
   );
+  const [scheduledHour, setScheduledHour] = useState<number>(task?.scheduled_hour ?? 0);
   const [points, setPoints] = useState<number>(task?.points ?? 1);
   const [notes, setNotes] = useState(task?.notes || '');
   const [error, setError] = useState('');
@@ -148,6 +149,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       category,
       frequency_type: frequencyType,
       points,
+      scheduled_hour: scheduledHour,
     };
 
     if (['n_days', 'n_weeks', 'n_months'].includes(frequencyType)) {
@@ -250,12 +252,14 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           frequency_interval: frequencyInterval,
           days_of_week: daysOfWeek,
           day_of_month: dayOfMonth,
+          scheduled_hour: scheduledHour,
         }}
         onChange={(val) => {
           setFrequencyType(val.frequency_type);
           setFrequencyInterval(val.frequency_interval);
           setDaysOfWeek(val.days_of_week || []);
           setDayOfMonth(val.day_of_month);
+          setScheduledHour(val.scheduled_hour);
           setFrequencyError('');
         }}
         error={frequencyError}
