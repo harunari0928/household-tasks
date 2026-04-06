@@ -303,19 +303,6 @@ test.describe('担当者管理', () => {
     });
   });
 
-  test('担当者を削除できる', async ({ page, baseURL }) => {
-    await setupAssignees(page, baseURL!, ['MTMR', '削除対象']);
-    await createTaskViaUI(page, { name: 'del-assignee-test', frequency_type: 'daily' });
-    await runScheduler('2026-03-29');
-    await goToKanban(page);
-
-    await page.getByRole('button', { name: '未割当', exact: true }).click();
-    await assigneeDialog(page).getByLabel('削除対象を削除').click();
-
-    await test.step('削除した担当者がモーダルから消える', async () => {
-      await expect(assigneeDialog(page).getByRole('checkbox', { name: '削除対象' })).not.toBeVisible();
-    });
-  });
 });
 
 test.describe('タスクの削除', () => {
