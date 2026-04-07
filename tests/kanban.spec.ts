@@ -518,23 +518,8 @@ test.describe('同一列内の並べ替え', () => {
     await page.mouse.up();
   }
 
-  async function getCardOrder(page: Page, columnTitle: string): Promise<string[]> {
-    const heading = page.getByRole('heading', { name: columnTitle });
-    // The column is the snap-start container wrapping the heading and cards
-    const column = heading.locator('xpath=ancestor::div[contains(@class,"snap-start")]');
-    // Each card contains a drag handle button with aria-roledescription="sortable"
-    // Get the card container (parent div) for each handle
-    const handles = column.locator('[aria-roledescription="sortable"]');
-    const count = await handles.count();
-    const names: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const card = handles.nth(i).locator('..');
-      const text = await card.innerText();
-      // Card text includes handle text "⠿", title, assignee, points — title is the second line
-      const title = text.split('\n')[1]?.trim() ?? '';
-      names.push(title);
-    }
-    return names;
+  async function getColumnText(page: Page, status: string): Promise<string> {
+    return page.locator(`[data-column-status="${status}"]`).innerText();
   }
 
   test('カードを上にドラッグして並び順が変わる', async ({ page }) => {
@@ -547,10 +532,8 @@ test.describe('同一列内の並べ替え', () => {
     await dragCardWithinColumn(page, 'reorder-c', 'reorder-a');
 
     await test.step('reorder-cがreorder-aより上に表示される', async () => {
-      const order = await getCardOrder(page, '未着手');
-      const idxC = order.findIndex((n) => n.includes('reorder-c'));
-      const idxA = order.findIndex((n) => n.includes('reorder-a'));
-      expect(idxC).toBeLessThan(idxA);
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('reorder-c')).toBeLessThan(text.indexOf('reorder-a'));
     });
   });
 
@@ -561,17 +544,13 @@ test.describe('同一列内の並べ替え', () => {
     await goToKanban(page);
 
     await dragCardWithinColumn(page, 'persist-b', 'persist-a');
-    // Wait for API to persist
-    await page.waitForTimeout(500);
 
     await page.reload();
     await page.getByText('未着手').waitFor();
 
     await test.step('リロード後もpersist-bがpersist-aより上に表示される', async () => {
-      const order = await getCardOrder(page, '未着手');
-      const idxB = order.findIndex((n) => n.includes('persist-b'));
-      const idxA = order.findIndex((n) => n.includes('persist-a'));
-      expect(idxB).toBeLessThan(idxA);
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('persist-b')).toBeLessThan(text.indexOf('persist-a'));
     });
   });
 });

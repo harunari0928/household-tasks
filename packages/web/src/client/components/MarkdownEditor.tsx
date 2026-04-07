@@ -44,7 +44,8 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
       }
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
-      const newValue = value.substring(0, start) + text + value.substring(end);
+      const current = ta.value;
+      const newValue = current.substring(0, start) + text + current.substring(end);
       onChange(newValue);
       requestAnimationFrame(() => {
         ta.selectionStart = ta.selectionEnd = start + text.length;
@@ -116,9 +117,10 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
       if (!ta) return;
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
-      const selected = value.substring(start, end);
+      const current = ta.value;
+      const selected = current.substring(start, end);
       const newText = before + (selected || 'テキスト') + after;
-      const newValue = value.substring(0, start) + newText + value.substring(end);
+      const newValue = current.substring(0, start) + newText + current.substring(end);
       onChange(newValue);
       requestAnimationFrame(() => {
         if (selected) {
@@ -144,7 +146,7 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
       action: () => {
         const ta = textareaRef.current;
         if (!ta) return;
-        const selected = value.substring(ta.selectionStart, ta.selectionEnd);
+        const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd);
         insertAtCursor(`[${selected || 'リンク'}](url)`);
       },
     },

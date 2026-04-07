@@ -9,6 +9,17 @@
 }
 
 /* Dark mode support for native form controls */
+/* Kanban card move highlight animation (SSE) */
+@keyframes kanban-card-highlight {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); background-color: rgba(59, 130, 246, 0.08); }
+  40% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3); background-color: rgba(59, 130, 246, 0.08); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); background-color: transparent; }
+}
+
+.kanban-card-moved {
+  animation: kanban-card-highlight 1.5s ease-out;
+}
+
 .dark select,
 .dark input[type="date"],
 .dark input[type="number"],
