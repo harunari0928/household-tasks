@@ -290,22 +290,22 @@ test.describe('担当フィルタ', () => {
 test.describe('完了日フィルタ', () => {
   test('開始日を指定すると完了日がそれ以降のタスクのみ表示される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+    const dayAfterTest = new Date(TEST_TIME);
+    dayAfterTest.setDate(dayAfterTest.getDate() + 1);
+    const dayAfterStr = dayAfterTest.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 
-    await page.getByLabel('完了日From').fill(tomorrowStr);
+    await page.getByLabel('完了日From').fill(dayAfterStr);
 
     await expect(page.getByText('該当するタスクがありません')).toBeVisible();
   });
 
   test('終了日を指定すると完了日がそれ以前のタスクのみ表示される', async ({ page, baseURL }) => {
     await setupStatsWithTasks(page, baseURL!);
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+    const dayBeforeTest = new Date(TEST_TIME);
+    dayBeforeTest.setDate(dayBeforeTest.getDate() - 1);
+    const dayBeforeStr = dayBeforeTest.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 
-    await page.getByLabel('完了日To').fill(yesterdayStr);
+    await page.getByLabel('完了日To').fill(dayBeforeStr);
 
     await expect(page.getByText('該当するタスクがありません')).toBeVisible();
   });
