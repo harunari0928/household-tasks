@@ -44,6 +44,7 @@ async function createTaskViaUI(
     days_of_week?: string[];
     frequency_interval?: number;
     day_of_month?: number;
+    month_of_year?: number;
     scheduled_hour?: number;
   },
 ) {
@@ -62,6 +63,9 @@ async function createTaskViaUI(
   }
   if (options.frequency_interval != null) {
     await page.getByLabel('間隔').fill(String(options.frequency_interval));
+  }
+  if (options.month_of_year != null) {
+    await page.getByLabel(/月指定/).fill(String(options.month_of_year));
   }
   if (options.day_of_month != null) {
     await page.getByLabel(/日指定/).fill(String(options.day_of_month));
@@ -310,5 +314,62 @@ test.describe('起票時刻', () => {
 
     await goToKanban(page);
     await expect(page.getByText('hour-idempotent')).toHaveCount(1);
+  });
+});
+
+test.describe('1年ごと（月日指定あり）', () => {
+  test('指定月日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'yearly-oct1',
+      category: 'lifestyle',
+      frequency_type: 'yearly',
+      month_of_year: 10,
+      day_of_month: 1,
+    });
+
+    await runScheduler('2026-10-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('yearly-oct1')).toBeVisible();
+  });
+
+  test('指定月日以外には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'yearly-oct1-skip',
+      category: 'lifestyle',
+      frequency_type: 'yearly',
+      month_of_year: 10,
+      day_of_month: 1,
+    });
+
+    await runScheduler('2026-09-30');
+
+    await goToKanban(page);
+    await expect(page.getByText('yearly-oct1-skip')).not.toBeVisible();
+  });
+
+  test('翌年の指定月日に再び起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'yearly-recur',
+      category: 'lifestyle',
+      frequency_type: 'yearly',
+      month_of_year: 10,
+      day_of_month: 1,
+    });
+
+    await runScheduler('2026-10-01');
+
+    // 最初のインスタンスを完了にする
+    const instances = await page.request.get(`${baseURL}/api/kanban`);
+    const items = await instances.json();
+    const instance = items.find((i: any) => i.title === 'yearly-recur');
+    await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+      data: { status: 'done', assignee: 'test' },
+    });
+
+    await runScheduler('2027-10-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('yearly-recur')).toHaveCount(2);
   });
 });

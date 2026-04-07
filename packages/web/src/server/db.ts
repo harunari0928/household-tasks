@@ -173,6 +173,12 @@ const migrations: Migration[] = [
       db.exec('ALTER TABLE task_definitions ADD COLUMN scheduled_hour INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    version: 10,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN month_of_year INTEGER DEFAULT NULL');
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

@@ -75,5 +75,5 @@
   { "name": "マネーフォワードMe(りょうや)", "category": "lifestyle", "frequency_type": "weekly", "days_of_week": ["fri"] },
   { "name": "2か月前の割り勘精算", "category": "lifestyle", "frequency_type": "monthly", "day_of_month": 1 },
   { "name": "髪切りに行く", "category": "lifestyle", "frequency_type": "n_months", "frequency_interval": 2 },
-  { "name": "インフルエンザ予防接種", "category": "lifestyle", "frequency_type": "yearly" }
+  { "name": "インフルエンザ予防接種", "category": "lifestyle", "frequency_type": "yearly", "month_of_year": 10, "day_of_month": 1 }
 ]

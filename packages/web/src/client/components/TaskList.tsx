@@ -37,8 +37,12 @@ function formatFrequency(task: TaskDefinition): string {
       const suffix = task.day_of_month ? `(${task.day_of_month}日)` : '';
       return `${task.frequency_interval}ヶ月ごと${suffix}`;
     }
-    case 'yearly':
+    case 'yearly': {
+      if (task.month_of_year && task.day_of_month) {
+        return `1年ごと(${task.month_of_year}月${task.day_of_month}日)`;
+      }
       return '1年ごと';
+    }
     default:
       return label;
   }

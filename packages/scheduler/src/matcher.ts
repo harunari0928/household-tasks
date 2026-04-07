@@ -86,6 +86,10 @@ export function calculateNextDueDate(task: TaskDefinitionRow, currentDueDate: st
       break;
 
     case 'yearly':
+      if (task.month_of_year && task.day_of_month) {
+        const nextYear = d.getFullYear() + 1;
+        return formatDate(new Date(nextYear, task.month_of_year - 1, task.day_of_month));
+      }
       d.setFullYear(d.getFullYear() + 1);
       break;
 

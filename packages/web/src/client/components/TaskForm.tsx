@@ -45,6 +45,9 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const [dayOfMonth, setDayOfMonth] = useState<number | undefined>(
     task?.day_of_month ?? undefined,
   );
+  const [monthOfYear, setMonthOfYear] = useState<number | undefined>(
+    task?.month_of_year ?? undefined,
+  );
   const [scheduledHour, setScheduledHour] = useState<number>(task?.scheduled_hour ?? 0);
   const [points, setPoints] = useState<number>(task?.points ?? 1);
   const [notes, setNotes] = useState(task?.notes || '');
@@ -142,6 +145,16 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       return;
     }
 
+    if (frequencyType === 'yearly') {
+      const hasMonth = !!monthOfYear;
+      const hasDay = !!dayOfMonth;
+      if (hasMonth !== hasDay) {
+        setFrequencyError('月日指定は月と日の両方を入力してください');
+        scrollToError(frequencyErrorRef);
+        return;
+      }
+    }
+
     let currentNotes = notes.trim();
 
     const input: any = {
@@ -159,6 +172,10 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       input.days_of_week = daysOfWeek;
     }
     if (['monthly', 'n_months'].includes(frequencyType) && dayOfMonth) {
+      input.day_of_month = dayOfMonth;
+    }
+    if (frequencyType === 'yearly' && monthOfYear && dayOfMonth) {
+      input.month_of_year = monthOfYear;
       input.day_of_month = dayOfMonth;
     }
     if (currentNotes) {
@@ -252,6 +269,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           frequency_interval: frequencyInterval,
           days_of_week: daysOfWeek,
           day_of_month: dayOfMonth,
+          month_of_year: monthOfYear,
           scheduled_hour: scheduledHour,
         }}
         onChange={(val) => {
@@ -259,6 +277,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           setFrequencyInterval(val.frequency_interval);
           setDaysOfWeek(val.days_of_week || []);
           setDayOfMonth(val.day_of_month);
+          setMonthOfYear(val.month_of_year);
           setScheduledHour(val.scheduled_hour);
           setFrequencyError('');
         }}

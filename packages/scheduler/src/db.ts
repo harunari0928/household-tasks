@@ -12,6 +12,7 @@ export interface TaskDefinitionRow {
   frequency_interval: number | null;
   days_of_week: string | null;
   day_of_month: number | null;
+  month_of_year: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -56,6 +57,12 @@ const migrations: Migration[] = [
     version: 9,
     up: (db) => {
       db.exec('ALTER TABLE task_definitions ADD COLUMN scheduled_hour INTEGER NOT NULL DEFAULT 0');
+    },
+  },
+  {
+    version: 10,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN month_of_year INTEGER DEFAULT NULL');
     },
   },
 ];

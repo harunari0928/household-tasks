@@ -53,6 +53,16 @@ test.describe('フォームバリデーション', () => {
       await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
       await expect(page.getByLabel(/日指定/)).not.toBeVisible();
     });
+
+    // yearly
+    await page.getByLabel('頻度').selectOption('yearly');
+
+    await test.step('1年ごと → 月指定と日指定が表示される', async () => {
+      await expect(page.getByLabel(/月指定/)).toBeVisible();
+      await expect(page.getByLabel(/日指定/)).toBeVisible();
+      await expect(page.getByLabel('間隔')).not.toBeVisible();
+      await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
+    });
   });
 
   test('バリデーション: 毎週で曜日未選択だとエラー', async ({ page }) => {
@@ -688,5 +698,83 @@ test.describe('ダークモード', () => {
     await expect(page.getByRole('button', { name: 'ライトモードに切り替え' })).toBeVisible();
     const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
     expect(isDark).toBe(true);
+  });
+});
+
+test.describe('1年ごとタスクの月日指定', () => {
+  test('月日指定ありで作成すると一覧に月日が表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('テスト予防接種');
+    await page.getByLabel('カテゴリ').selectOption('lifestyle');
+    await page.getByLabel('頻度').selectOption('yearly');
+    await page.getByLabel(/月指定/).fill('10');
+    await page.getByLabel(/日指定/).fill('1');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByText('テスト予防接種')).toBeVisible();
+    await expect(page.getByText('1年ごと(10月1日)')).toBeVisible();
+  });
+
+  test('月日指定なしで作成すると一覧に月日なしで表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('テスト年次タスク');
+    await page.getByLabel('カテゴリ').selectOption('lifestyle');
+    await page.getByLabel('頻度').selectOption('yearly');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByText('テスト年次タスク')).toBeVisible();
+    await expect(page.getByText('1年ごと')).toBeVisible();
+  });
+
+  test('編集時に月日の値が保持される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('テスト月日保持');
+    await page.getByLabel('カテゴリ').selectOption('lifestyle');
+    await page.getByLabel('頻度').selectOption('yearly');
+    await page.getByLabel(/月指定/).fill('12');
+    await page.getByLabel(/日指定/).fill('25');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await page.getByText('テスト月日保持').click();
+
+    await test.step('月と日の値が保持されている', async () => {
+      await expect(page.getByLabel(/月指定/)).toHaveValue('12');
+      await expect(page.getByLabel(/日指定/)).toHaveValue('25');
+    });
+  });
+
+  test('バリデーション: 月のみ指定で日が未入力だとエラー', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('バリデーションテスト');
+    await page.getByLabel('頻度').selectOption('yearly');
+    await page.getByLabel(/月指定/).fill('10');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('月と日の両方');
+  });
+
+  test('バリデーション: 日のみ指定で月が未入力だとエラー', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('バリデーションテスト2');
+    await page.getByLabel('頻度').selectOption('yearly');
+    await page.getByLabel(/日指定/).fill('15');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('月と日の両方');
   });
 });

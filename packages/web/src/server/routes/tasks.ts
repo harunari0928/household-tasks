@@ -16,6 +16,7 @@ interface TaskInput {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
+  month_of_year?: number;
   notes?: string;
   points?: number;
   scheduled_hour?: number;
@@ -54,10 +55,23 @@ function validateTaskInput(body: TaskInput): string | null {
     }
   }
 
-  if (ft === 'monthly' || ft === 'n_months') {
+  if (ft === 'monthly' || ft === 'n_months' || ft === 'yearly') {
     if (body.day_of_month !== undefined && body.day_of_month !== null) {
       if (typeof body.day_of_month !== 'number' || body.day_of_month < 1 || body.day_of_month > 28) {
         return '日指定は1〜28の範囲で入力してください';
+      }
+    }
+  }
+
+  if (ft === 'yearly') {
+    const hasMonth = body.month_of_year !== undefined && body.month_of_year !== null;
+    const hasDay = body.day_of_month !== undefined && body.day_of_month !== null;
+    if (hasMonth !== hasDay) {
+      return '年次タスクの月日指定は、月と日の両方を入力してください';
+    }
+    if (hasMonth) {
+      if (typeof body.month_of_year !== 'number' || body.month_of_year < 1 || body.month_of_year > 12) {
+        return '月指定は1〜12の範囲で入力してください';
       }
     }
   }
@@ -71,7 +85,7 @@ function validateTaskInput(body: TaskInput): string | null {
   return null;
 }
 
-function calculateNextDueDate(ft: string, interval: number | null, today: string): string | null {
+function calculateNextDueDate(ft: string, interval: number | null, today: string, monthOfYear?: number | null, dayOfMonth?: number | null): string | null {
   if (['daily', 'weekly', 'monthly'].includes(ft)) {
     return null;
   }
@@ -89,6 +103,16 @@ function calculateNextDueDate(ft: string, interval: number | null, today: string
       d.setMonth(d.getMonth() + (interval || 1));
       break;
     case 'yearly':
+      if (monthOfYear && dayOfMonth) {
+        const year = d.getFullYear();
+        const mm = String(monthOfYear).padStart(2, '0');
+        const dd = String(dayOfMonth).padStart(2, '0');
+        const targetStr = `${year}-${mm}-${dd}`;
+        if (targetStr <= today) {
+          return `${year + 1}-${mm}-${dd}`;
+        }
+        return targetStr;
+      }
       d.setFullYear(d.getFullYear() + 1);
       break;
   }
@@ -134,15 +158,16 @@ router.post('/', (req: Request, res: Response) => {
 
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
+  const monthOfYear = body.month_of_year ?? null;
   const interval = body.frequency_interval ?? null;
-  const nextDueDate = calculateNextDueDate(body.frequency_type, interval, today);
+  const nextDueDate = calculateNextDueDate(body.frequency_type, interval, today, monthOfYear, dayOfMonth);
 
   const points = body.points ?? 1;
   const scheduledHour = body.scheduled_hour ?? 0;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points, scheduled_hour, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, next_due_date, notes, points, scheduled_hour, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -152,6 +177,7 @@ router.post('/', (req: Request, res: Response) => {
     interval,
     daysOfWeek,
     dayOfMonth,
+    monthOfYear,
     nextDueDate,
     body.notes || null,
     points,
@@ -184,14 +210,17 @@ router.put('/:id', (req: Request, res: Response) => {
 
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
+  const monthOfYear = body.month_of_year ?? null;
   const interval = body.frequency_interval ?? null;
 
   const frequencyChanged =
     existing.frequency_type !== body.frequency_type ||
-    existing.frequency_interval !== interval;
+    existing.frequency_interval !== interval ||
+    existing.month_of_year !== monthOfYear ||
+    existing.day_of_month !== dayOfMonth;
 
   const nextDueDate = frequencyChanged
-    ? calculateNextDueDate(body.frequency_type, interval, today)
+    ? calculateNextDueDate(body.frequency_type, interval, today, monthOfYear, dayOfMonth)
     : existing.next_due_date;
 
   const points = body.points ?? 1;
@@ -199,7 +228,7 @@ router.put('/:id', (req: Request, res: Response) => {
   const stmt = db.prepare(`
     UPDATE task_definitions
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
-        days_of_week = ?, day_of_month = ?,
+        days_of_week = ?, day_of_month = ?, month_of_year = ?,
         next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = ?
     WHERE id = ?
   `);
@@ -211,6 +240,7 @@ router.put('/:id', (req: Request, res: Response) => {
     interval,
     daysOfWeek,
     dayOfMonth,
+    monthOfYear,
     nextDueDate,
     body.notes || null,
     points,
@@ -281,8 +311,8 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, next_due_date, notes, points, scheduled_hour)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, next_due_date, notes, points, scheduled_hour)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const findStmt = db.prepare('SELECT id, created_at, updated_at FROM task_definitions WHERE name = ?');
@@ -298,26 +328,28 @@ router.post('/import', (req: Request, res: Response) => {
         // Update existing (not manually edited)
         const daysOfWeek = task.days_of_week ? task.days_of_week.join(',') : null;
         const interval = task.frequency_interval ?? null;
-        const nextDueDate = calculateNextDueDate(task.frequency_type, interval, today);
+        const monthOfYear = task.month_of_year ?? null;
+        const nextDueDate = calculateNextDueDate(task.frequency_type, interval, today, monthOfYear, task.day_of_month);
         db.prepare(`
           UPDATE task_definitions
           SET category = ?, frequency_type = ?, frequency_interval = ?,
-              days_of_week = ?, day_of_month = ?,
+              days_of_week = ?, day_of_month = ?, month_of_year = ?,
               next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = created_at
           WHERE id = ?
         `).run(
           task.category, task.frequency_type, interval,
-          daysOfWeek, task.day_of_month ?? null,
+          daysOfWeek, task.day_of_month ?? null, monthOfYear,
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0, existing.id,
         );
         inserted.push(existing.id);
       } else {
         const daysOfWeek = task.days_of_week ? task.days_of_week.join(',') : null;
         const interval = task.frequency_interval ?? null;
-        const nextDueDate = calculateNextDueDate(task.frequency_type, interval, today);
+        const monthOfYear = task.month_of_year ?? null;
+        const nextDueDate = calculateNextDueDate(task.frequency_type, interval, today, monthOfYear, task.day_of_month);
         const result = insertStmt.run(
           task.name, task.category, task.frequency_type, interval,
-          daysOfWeek, task.day_of_month ?? null,
+          daysOfWeek, task.day_of_month ?? null, monthOfYear,
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
         );
         inserted.push(Number(result.lastInsertRowid));
