@@ -44,6 +44,7 @@ export interface TaskDefinition {
   frequency_interval: number | null;
   days_of_week: string | null;
   day_of_month: number | null;
+  month_of_year: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -111,5 +112,5 @@ export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
   n_weeks: ['frequency_interval', 'days_of_week'],
   monthly: ['day_of_month'],
   n_months: ['frequency_interval', 'day_of_month'],
-  yearly: [],
+  yearly: ['month_of_year', 'day_of_month'],
 };
