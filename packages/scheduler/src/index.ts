@@ -1,4 +1,4 @@
-import { getTodayJST } from '@household-tasks/shared';
+import { getTodayJST, getCurrentHourJST } from '@household-tasks/shared';
 import {
   getDb,
   getActiveTasks,
@@ -9,15 +9,16 @@ import {
   hasUncompletedInstance,
   createTaskInstance,
 } from './db.js';
-import { shouldCreateToday, calculateNextDueDate } from './matcher.js';
+import { shouldCreateToday, shouldCreateThisHour, calculateNextDueDate } from './matcher.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
 async function main() {
   const today = getTodayJST();
+  const currentHour = getCurrentHourJST();
   const db = getDb();
 
-  console.log(`[${new Date().toISOString()}] Scheduler running for date: ${today}${dryRun ? ' (DRY RUN)' : ''}`);
+  console.log(`[${new Date().toISOString()}] Scheduler running for date: ${today}, hour: ${currentHour}${dryRun ? ' (DRY RUN)' : ''}`);
 
   const tasks = getActiveTasks(db);
   let created = 0;
@@ -27,6 +28,7 @@ async function main() {
   // Process scheduled tasks
   for (const task of tasks) {
     if (!shouldCreateToday(task, today)) continue;
+    if (!shouldCreateThisHour(task, currentHour)) continue;
 
     if (isAlreadyCreatedToday(db, task.id, today)) {
       skipped++;

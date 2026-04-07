@@ -5,6 +5,7 @@ interface FrequencyValue {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
+  scheduled_hour: number;
 }
 
 interface Props {
@@ -111,6 +112,22 @@ export default function FrequencySelector({ value, onChange, error }: Props) {
           />
         </div>
       )}
+
+      <div>
+        <label htmlFor="scheduled-hour" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">起票時刻（0〜23時）</label>
+        <div className="flex items-center gap-2">
+          <input
+            id="scheduled-hour"
+            type="number"
+            min="0"
+            max="23"
+            value={value.scheduled_hour}
+            onChange={(e) => onChange({ ...value, scheduled_hour: parseInt(e.target.value) || 0 })}
+            className="w-20 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          />
+          <span className="text-sm text-gray-600 dark:text-gray-400">時</span>
+        </div>
+      </div>
 
       {error && <p className="text-red-500 dark:text-red-400 text-sm" role="alert">{error}</p>}
     </div>

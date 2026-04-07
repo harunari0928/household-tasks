@@ -28,7 +28,7 @@ interface Props {
 
 export default function KanbanBoard({ currentUser }: Props) {
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
-  const { assignees, loaded: assigneesLoaded, fetchAssignees, addAssignee: addRegisteredAssignee, removeAssignee: removeRegisteredAssignee } = useAssignees();
+  const { assignees, loaded: assigneesLoaded, fetchAssignees, addAssignee: addRegisteredAssignee } = useAssignees();
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<CategoryKey | null>(null);
   const [activeTask, setActiveTask] = useState<TaskInstance | null>(null);
@@ -270,11 +270,6 @@ export default function KanbanBoard({ currentUser }: Props) {
     await addRegisteredAssignee(name);
   };
 
-  const handleRemoveAssignee = async (name: string) => {
-    setSelectedAssignees((prev) => prev.filter((a) => a !== name));
-    await removeRegisteredAssignee(name);
-  };
-
   const handleDeleteClick = (task: TaskInstance) => {
     setDeleteConfirm(task);
   };
@@ -407,8 +402,7 @@ export default function KanbanBoard({ currentUser }: Props) {
             </p>
             <div className="flex flex-col gap-1 mb-4">
               {assignees.map((a) => (
-                <div key={a} className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 flex-1 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer min-h-[44px]">
+                <label key={a} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer min-h-[44px]">
                     <input
                       type="checkbox"
                       checked={selectedAssignees.includes(a)}
@@ -417,14 +411,6 @@ export default function KanbanBoard({ currentUser }: Props) {
                     />
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a}</span>
                   </label>
-                  <button
-                    onClick={() => handleRemoveAssignee(a)}
-                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                    aria-label={`${a}を削除`}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
               ))}
             </div>
 

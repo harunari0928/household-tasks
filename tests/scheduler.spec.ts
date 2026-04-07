@@ -5,14 +5,18 @@ import type { Page } from '@playwright/test';
 
 const execAsync = promisify(exec);
 
-async function runScheduler(testToday: string): Promise<string> {
+async function runScheduler(testToday: string, testHour?: number): Promise<string> {
+  const env: Record<string, string> = {
+    ...process.env as Record<string, string>,
+    DB_PATH: 'data/test_task_definitions.db',
+    TEST_TODAY: testToday,
+  };
+  if (testHour !== undefined) {
+    env.TEST_HOUR = String(testHour);
+  }
   const { stdout, stderr } = await execAsync('node packages/scheduler/dist/index.js', {
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      DB_PATH: 'data/test_task_definitions.db',
-      TEST_TODAY: testToday,
-    },
+    env,
     encoding: 'utf-8',
     timeout: 15000,
   });
@@ -40,6 +44,7 @@ async function createTaskViaUI(
     days_of_week?: string[];
     frequency_interval?: number;
     day_of_month?: number;
+    scheduled_hour?: number;
   },
 ) {
   const category = options.category || 'water';
@@ -60,6 +65,9 @@ async function createTaskViaUI(
   }
   if (options.day_of_month != null) {
     await page.getByLabel(/日指定/).fill(String(options.day_of_month));
+  }
+  if (options.scheduled_hour != null) {
+    await page.getByLabel(/起票時刻/).fill(String(options.scheduled_hour));
   }
 
   await page.getByRole('button', { name: '保存' }).click();
@@ -263,5 +271,44 @@ test.describe('活性・非活性', () => {
 
     await goToKanban(page);
     await expect(page.getByText('resume-test')).toBeVisible();
+  });
+});
+
+test.describe('起票時刻', () => {
+  test('指定時刻以降にスケジューラが実行されると起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, { name: 'hour-6-ok', category: 'water', frequency_type: 'daily', scheduled_hour: 6 });
+
+    await runScheduler('2026-03-14', 6);
+
+    await goToKanban(page);
+    await expect(page.getByText('hour-6-ok')).toBeVisible();
+  });
+
+  test('指定時刻より前にスケジューラが実行されると起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, { name: 'hour-18-skip', category: 'water', frequency_type: 'daily', scheduled_hour: 18 });
+
+    await runScheduler('2026-03-14', 6);
+
+    await goToKanban(page);
+    await expect(page.getByText('hour-18-skip')).not.toBeVisible();
+  });
+
+  test('スケジューラが指定時刻を過ぎて実行されても起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, { name: 'hour-6-late', category: 'water', frequency_type: 'daily', scheduled_hour: 6 });
+
+    await runScheduler('2026-03-14', 8);
+
+    await goToKanban(page);
+    await expect(page.getByText('hour-6-late')).toBeVisible();
+  });
+
+  test('起票時刻が設定されたタスクも1日1回しか起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, { name: 'hour-idempotent', category: 'water', frequency_type: 'daily', scheduled_hour: 6 });
+
+    await runScheduler('2026-03-14', 6);
+    await runScheduler('2026-03-14', 7);
+
+    await goToKanban(page);
+    await expect(page.getByText('hour-idempotent')).toHaveCount(1);
   });
 });
