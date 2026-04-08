@@ -443,7 +443,8 @@ export default function KanbanBoard({ currentUser }: Props) {
               </button>
               <button
                 onClick={handleAssigneeConfirm}
-                className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                disabled={assigneeModal.targetStatus === 'done' && selectedAssignees.length === 0}
+                className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 確定
               </button>

@@ -265,6 +265,32 @@ test.describe('担当者の割り当て', () => {
 
     await expect(assigneeDialog(page)).toBeVisible();
   });
+
+  test('完了移動時、担当者を選択しないと確定ボタンが非活性になっている', async ({ page, baseURL }) => {
+    await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
+    await createTaskViaUI(page, { name: 'done-disabled-btn', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+
+    await dragCardToColumn(page, 'done-disabled-btn', '完了');
+    await assigneeDialog(page).waitFor();
+
+    await expect(assigneeDialog(page).getByRole('button', { name: '確定' })).toBeDisabled();
+  });
+
+  test('完了移動時にキャンセルするとタスクが元のステータスに戻る', async ({ page, baseURL }) => {
+    await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
+    await createTaskViaUI(page, { name: 'done-cancel-test', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+
+    await dragCardToColumn(page, 'done-cancel-test', '完了');
+    await assigneeDialog(page).waitFor();
+    await assigneeDialog(page).getByRole('button', { name: 'キャンセル' }).click();
+
+    const todoColumn = page.locator('[data-column-status="todo"]');
+    await expect(todoColumn.getByText('done-cancel-test')).toBeVisible();
+  });
 });
 
 test.describe('担当者管理', () => {

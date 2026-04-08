@@ -143,7 +143,8 @@ program
   .description('Move a task instance to a new status')
   .argument('<id>', 'Task instance ID')
   .argument('<status>', 'New status (todo, in_progress, done)')
-  .action(async (idStr: string, status: string) => {
+  .option('--assignee <names...>', 'Assignee name(s) (required when completing without existing assignee)')
+  .action(async (idStr: string, status: string, opts: { assignee?: string[] }) => {
     const validStatuses = ['todo', 'in_progress', 'done'];
     if (!validStatuses.includes(status)) {
       console.error(`Invalid status: ${status}. Must be one of: ${validStatuses.join(', ')}`);
@@ -158,15 +159,32 @@ program
 
     const db = getDb();
     try {
-      const completedAt = status === 'done' ? new Date().toISOString() : null;
-
-      const result = db.prepare(
-        'UPDATE task_instances SET status = ?, completed_at = ? WHERE id = ?'
-      ).run(status, completedAt, id);
-
-      if (result.changes === 0) {
+      const existing = db.prepare('SELECT * FROM task_instances WHERE id = ?').get(id) as any;
+      if (!existing) {
         console.error(`Task instance ${id} not found.`);
         process.exit(1);
+      }
+
+      const assigneeStr = opts.assignee ? opts.assignee.join(',') : undefined;
+
+      if (status === 'done') {
+        const effectiveAssignee = assigneeStr ?? existing.assignee;
+        if (!effectiveAssignee) {
+          console.error('担当者が未設定です。--assignee オプションで担当者を指定してください');
+          process.exit(1);
+        }
+      }
+
+      const completedAt = status === 'done' ? new Date().toISOString() : null;
+
+      if (assigneeStr !== undefined) {
+        db.prepare(
+          'UPDATE task_instances SET status = ?, assignee = ?, completed_at = ? WHERE id = ?'
+        ).run(status, assigneeStr, completedAt, id);
+      } else {
+        db.prepare(
+          'UPDATE task_instances SET status = ?, completed_at = ? WHERE id = ?'
+        ).run(status, completedAt, id);
       }
 
       console.log(`Task ${id} moved to ${status}.`);

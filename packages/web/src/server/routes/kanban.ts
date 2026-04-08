@@ -90,6 +90,14 @@ router.patch('/:id/status', (req: Request, res: Response) => {
     return;
   }
 
+  if (status === 'done') {
+    const effectiveAssignee = assignee !== undefined ? assignee : existing.assignee;
+    if (!effectiveAssignee) {
+      res.status(400).json({ error: '担当者が未設定です。完了にするには担当者を設定してください' });
+      return;
+    }
+  }
+
   const completedAt = status === 'done' ? getNowISO() : null;
 
   // Append to end of target column
