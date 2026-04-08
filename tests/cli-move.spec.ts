@@ -90,7 +90,7 @@ test.describe('ht move（ステータス変更）', () => {
     const taskId = await getTaskId(page, 'move-to-done');
 
     // Act
-    await runCli(`move ${taskId} done`);
+    await runCli(`move ${taskId} done --assignee MTMR`);
     await goToKanban(page);
 
     // Assert
@@ -114,6 +114,21 @@ test.describe('ht move（ステータス変更）', () => {
 });
 
 test.describe('ht move のエラーハンドリング', () => {
+  test('担当者未設定のタスクを完了にするとエラーが出力される', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'no-assignee-done', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    const taskId = await getTaskId(page, 'no-assignee-done');
+
+    // Act
+    const result = await runCli(`move ${taskId} done`);
+
+    // Assert
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('担当者が未設定です');
+  });
+
   test('無効なステータスを指定するとエラーメッセージが出力される', async () => {
     // Act
     const result = await runCli('move 1 invalid_status');
