@@ -312,3 +312,79 @@ test.describe('起票時刻', () => {
     await expect(page.getByText('hour-idempotent')).toHaveCount(1);
   });
 });
+
+async function insertFailedLog(page: Page, baseURL: string, taskDefId: number, executedAt: string) {
+  await page.request.post(`${baseURL}/api/test/insert-execution-log`, {
+    data: { task_definition_id: taskDefId, status: 'failed', executed_at: executedAt },
+  });
+}
+
+test.describe('リトライ', () => {
+  test('失敗したタスクがリトライで起票される', async ({ page, baseURL }) => {
+    const task = await createTaskViaUI(page, baseURL!, { name: 'retry-ok', category: 'water', frequency_type: 'daily' });
+    await insertFailedLog(page, baseURL!, task.id, '2026-03-13');
+
+    await runScheduler('2026-03-14', 0);
+
+    await goToKanban(page);
+    await expect(page.getByText('retry-ok')).toBeVisible();
+  });
+
+  test('リトライでも起票時刻が尊重される', async ({ page, baseURL }) => {
+    const task = await createTaskViaUI(page, baseURL!, { name: 'retry-hour-skip', category: 'water', frequency_type: 'daily', scheduled_hour: 22 });
+    await insertFailedLog(page, baseURL!, task.id, '2026-03-13');
+
+    await runScheduler('2026-03-14', 6);
+
+    await goToKanban(page);
+    await expect(page.getByText('retry-hour-skip')).not.toBeVisible();
+  });
+
+  test('リトライで起票時刻到達後に起票される', async ({ page, baseURL }) => {
+    const task = await createTaskViaUI(page, baseURL!, { name: 'retry-hour-ok', category: 'water', frequency_type: 'daily', scheduled_hour: 22 });
+    await insertFailedLog(page, baseURL!, task.id, '2026-03-13');
+
+    await runScheduler('2026-03-14', 22);
+
+    await goToKanban(page);
+    await expect(page.getByText('retry-hour-ok')).toBeVisible();
+  });
+
+  test('リトライで未完了インスタンスがある場合は重複起票しない', async ({ page, baseURL }) => {
+    const task = await createTaskViaUI(page, baseURL!, { name: 'retry-dup', category: 'water', frequency_type: 'daily' });
+    await runScheduler('2026-03-14', 0);
+    await insertFailedLog(page, baseURL!, task.id, '2026-03-13');
+
+    await runScheduler('2026-03-14', 0);
+
+    await goToKanban(page);
+    await expect(page.getByText('retry-dup')).toHaveCount(1);
+  });
+
+  test('リトライでN日ごとタスクの次回予定日が更新される', async ({ page, baseURL }) => {
+    const task = await createTaskViaUI(page, baseURL!, { name: 'retry-ndays', category: 'water', frequency_type: 'n_days', frequency_interval: 3 });
+    const dueDate = task.next_due_date;
+    await insertFailedLog(page, baseURL!, task.id, addDays(dueDate, -1));
+
+    await runScheduler(dueDate, 0);
+
+    await goToKanban(page);
+    await test.step('リトライで起票される', async () => {
+      await expect(page.getByText('retry-ndays')).toBeVisible();
+    });
+
+    const instances = await page.request.get(`${baseURL}/api/kanban`);
+    const items = await instances.json();
+    const instance = items.find((i: any) => i.title === 'retry-ndays');
+    await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+      data: { status: 'done', assignee: 'test' },
+    });
+
+    await runScheduler(addDays(dueDate, 3), 0);
+
+    await goToKanban(page);
+    await test.step('次回予定日が更新され次のサイクルで起票される', async () => {
+      await expect(page.getByText('retry-ndays')).toHaveCount(2);
+    });
+  });
+});

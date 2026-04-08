@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import { getTodayJST, getCurrentHourJST } from '@household-tasks/shared';
 import {
   getDb,
@@ -8,10 +9,55 @@ import {
   getFailedTasks,
   hasUncompletedInstance,
   createTaskInstance,
+  type TaskDefinitionRow,
 } from './db.js';
 import { shouldCreateToday, shouldCreateThisHour, calculateNextDueDate } from './matcher.js';
 
 const dryRun = process.argv.includes('--dry-run');
+
+type CreateResult = 'created' | 'skipped_hour' | 'skipped_already_created' | 'skipped_duplicate' | 'failed';
+
+function tryCreateInstance(
+  db: Database.Database,
+  task: TaskDefinitionRow,
+  today: string,
+  currentHour: number,
+  context: 'scheduled' | 'retry',
+): CreateResult {
+  const prefix = context === 'retry' ? 'RETRY ' : '';
+
+  if (!shouldCreateThisHour(task, currentHour)) {
+    return 'skipped_hour';
+  }
+
+  if (isAlreadyCreatedToday(db, task.id, today)) {
+    return 'skipped_already_created';
+  }
+
+  if (hasUncompletedInstance(db, task.id)) {
+    logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
+    console.log(`  ${prefix}SKIP (duplicate): "${task.name}"`);
+    return 'skipped_duplicate';
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const instanceId = createTaskInstance(db, task.id, task.name, task.points, now);
+    logExecution(db, task.id, instanceId, 'created', undefined, today);
+    console.log(`  ${prefix}CREATED: "${task.name}" (instance_id=${instanceId})`);
+
+    if (task.next_due_date) {
+      const nextDate = calculateNextDueDate(task, task.next_due_date);
+      updateNextDueDate(db, task.id, nextDate);
+    }
+
+    return 'created';
+  } catch (err: any) {
+    logExecution(db, task.id, null, 'failed', err.message, today);
+    console.error(`  ${prefix}FAILED: "${task.name}" - ${err.message}`);
+    return 'failed';
+  }
+}
 
 async function main() {
   const today = getTodayJST();
@@ -28,44 +74,19 @@ async function main() {
   // Process scheduled tasks
   for (const task of tasks) {
     if (!shouldCreateToday(task, today)) continue;
-    if (!shouldCreateThisHour(task, currentHour)) continue;
-
-    if (isAlreadyCreatedToday(db, task.id, today)) {
-      skipped++;
-      continue;
-    }
 
     if (dryRun) {
-      console.log(`  [DRY RUN] Would create: "${task.name}"`);
-      created++;
+      if (shouldCreateThisHour(task, currentHour)) {
+        console.log(`  [DRY RUN] Would create: "${task.name}"`);
+        created++;
+      }
       continue;
     }
 
-    try {
-      const hasDuplicate = hasUncompletedInstance(db, task.id);
-      if (hasDuplicate) {
-        logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
-        skipped++;
-        console.log(`  SKIP (duplicate): "${task.name}"`);
-        continue;
-      }
-
-      const now = new Date().toISOString();
-      const instanceId = createTaskInstance(db, task.id, task.name, task.points, now);
-      logExecution(db, task.id, instanceId, 'created', undefined, today);
-      created++;
-      console.log(`  CREATED: "${task.name}" (instance_id=${instanceId})`);
-
-      // Update next_due_date for interval-based tasks
-      if (task.next_due_date) {
-        const nextDate = calculateNextDueDate(task, task.next_due_date);
-        updateNextDueDate(db, task.id, nextDate);
-      }
-    } catch (err: any) {
-      logExecution(db, task.id, null, 'failed', err.message, today);
-      failed++;
-      console.error(`  FAILED: "${task.name}" - ${err.message}`);
-    }
+    const result = tryCreateInstance(db, task, today, currentHour, 'scheduled');
+    if (result === 'created') created++;
+    else if (result === 'failed') failed++;
+    else skipped++;
   }
 
   // Retry previously failed tasks
@@ -76,25 +97,10 @@ async function main() {
       const task = tasks.find((t) => t.id === task_definition_id);
       if (!task) continue;
 
-      try {
-        const hasDuplicate = hasUncompletedInstance(db, task.id);
-        if (hasDuplicate) {
-          logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
-          skipped++;
-          console.log(`  RETRY SKIP (duplicate): "${task.name}"`);
-          continue;
-        }
-
-        const now = new Date().toISOString();
-        const instanceId = createTaskInstance(db, task.id, task.name, task.points, now);
-        logExecution(db, task.id, instanceId, 'created', undefined, today);
-        created++;
-        console.log(`  RETRY OK: "${task.name}" (instance_id=${instanceId})`);
-      } catch (err: any) {
-        logExecution(db, task.id, null, 'failed', err.message, today);
-        failed++;
-        console.error(`  RETRY FAILED: "${task.name}" - ${err.message}`);
-      }
+      const result = tryCreateInstance(db, task, today, currentHour, 'retry');
+      if (result === 'created') created++;
+      else if (result === 'failed') failed++;
+      else skipped++;
     }
   }
 

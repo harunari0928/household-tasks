@@ -58,6 +58,18 @@ app.post('/api/test/set-time', (req, res) => {
   res.json({ success: true });
 });
 
+// Test-only: insert execution_log entry
+app.post('/api/test/insert-execution-log', (req, res) => {
+  const db = getDb();
+  const { task_definition_id, status, executed_at } = req.body;
+  db.prepare('INSERT INTO execution_log (task_definition_id, status, executed_at) VALUES (?, ?, ?)').run(
+    task_definition_id,
+    status,
+    executed_at,
+  );
+  res.json({ success: true });
+});
+
 // Logs routes
 app.get('/api/logs', (req, res) => {
   const db = getDb();
