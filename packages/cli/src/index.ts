@@ -179,28 +179,29 @@ program
 // ht assign
 program
   .command('assign')
-  .description('Assign a task instance to a person')
+  .description('Assign a task instance to one or more people')
   .argument('<id>', 'Task instance ID')
-  .argument('<assignee>', 'Assignee name')
-  .action(async (idStr: string, assignee: string) => {
+  .argument('<assignees...>', 'Assignee name(s)')
+  .action(async (idStr: string, assignees: string[]) => {
     const id = parseInt(idStr, 10);
     if (isNaN(id)) {
       console.error(`Invalid ID: ${idStr}`);
       process.exit(1);
     }
 
+    const assigneeStr = assignees.join(',');
     const db = getDb();
     try {
       const result = db.prepare(
         'UPDATE task_instances SET assignee = ? WHERE id = ?'
-      ).run(assignee, id);
+      ).run(assigneeStr, id);
 
       if (result.changes === 0) {
         console.error(`Task instance ${id} not found.`);
         process.exit(1);
       }
 
-      console.log(`Task ${id} assigned to ${assignee}.`);
+      console.log(`Task ${id} assigned to ${assignees.join(', ')}.`);
       await notifyWeb();
     } finally {
       db.close();
