@@ -6,6 +6,7 @@ services:
       dockerfile: packages/web/Dockerfile
     ports:
       - "127.0.0.1:${WEB_PORT:-3100}:3100"
+      - "100.121.247.20:${WEB_PORT:-3100}:3100"
     volumes:
       - ./data:/data
     environment:
