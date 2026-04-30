@@ -50,7 +50,7 @@ router.get('/', (req: Request, res: Response) => {
 router.patch('/reorder', (req: Request, res: Response) => {
   const db = getDb();
   const { status, sortedIds } = req.body;
-  const validStatuses = ['todo', 'in_progress', 'done'];
+  const validStatuses = ['todo', 'done'];
 
   if (!status || !validStatuses.includes(status)) {
     res.status(400).json({ error: 'Invalid status' });
@@ -77,10 +77,10 @@ router.patch('/reorder', (req: Request, res: Response) => {
 router.patch('/:id/status', (req: Request, res: Response) => {
   const db = getDb();
   const { status, assignee } = req.body;
-  const validStatuses = ['todo', 'in_progress', 'done'];
+  const validStatuses = ['todo', 'done'];
 
   if (!status || !validStatuses.includes(status)) {
-    res.status(400).json({ error: 'status must be one of: todo, in_progress, done' });
+    res.status(400).json({ error: 'status must be one of: todo, done' });
     return;
   }
 
@@ -247,9 +247,9 @@ router.delete('/:id', (req: Request, res: Response) => {
 router.delete('/', (req: Request, res: Response) => {
   const db = getDb();
   const status = req.query.status as string;
-  const validStatuses = ['todo', 'in_progress', 'done'];
+  const validStatuses = ['todo', 'done'];
   if (!status || !validStatuses.includes(status)) {
-    res.status(400).json({ error: 'status query parameter required (todo, in_progress, done)' });
+    res.status(400).json({ error: 'status query parameter required (todo, done)' });
     return;
   }
   const result = db.prepare('DELETE FROM task_instances WHERE status = ?').run(status);

@@ -6,7 +6,6 @@ import KanbanCard from './KanbanCard.js';
 
 const STATUS_COLORS: Record<TaskInstanceStatus, string> = {
   todo: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
-  in_progress: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   done: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
 };
 
@@ -35,7 +34,7 @@ export default function KanbanColumn({ status, title, items, recentlyMovedIds, o
       }`}
     >
       <div className="group/header flex items-center gap-2 px-2 py-2 mb-2 relative">
-        <span className={`w-2 h-2 rounded-full ${status === 'todo' ? 'bg-gray-400' : status === 'in_progress' ? 'bg-blue-500' : 'bg-green-500'}`} />
+        <span className={`w-2 h-2 rounded-full ${status === 'todo' ? 'bg-gray-400' : 'bg-green-500'}`} />
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{title}</h3>
         <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${STATUS_COLORS[status]}`}>
           {items.length}
