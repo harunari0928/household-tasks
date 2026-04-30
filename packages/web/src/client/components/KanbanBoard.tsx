@@ -22,11 +22,7 @@ import KanbanFilters from './KanbanFilters.js';
 import TaskDetailDialog from './TaskDetailDialog.js';
 import { useAssignees } from '../hooks/useAssignees.js';
 
-interface Props {
-  currentUser: string | null;
-}
-
-export default function KanbanBoard({ currentUser }: Props) {
+export default function KanbanBoard() {
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
   const { assignees, loaded: assigneesLoaded, fetchAssignees, addAssignee: addRegisteredAssignee } = useAssignees();
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
@@ -205,9 +201,6 @@ export default function KanbanBoard({ currentUser }: Props) {
       prev.map((t) => {
         if (t.id !== task.id) return t;
         const updated = { ...t, status: targetStatus };
-        if (targetStatus === 'in_progress' && !t.assignee && currentUser) {
-          updated.assignee = currentUser;
-        }
         if (targetStatus === 'done') {
           updated.completed_at = new Date().toISOString();
         } else {
@@ -217,11 +210,7 @@ export default function KanbanBoard({ currentUser }: Props) {
       }),
     );
 
-    if (targetStatus === 'in_progress' && !task.assignee && currentUser) {
-      updateStatus(task.id, targetStatus, currentUser);
-    } else {
-      updateStatus(task.id, targetStatus);
-    }
+    updateStatus(task.id, targetStatus);
   };
 
   const openAssigneeModal = (task: TaskInstance, targetStatus?: TaskInstanceStatus) => {

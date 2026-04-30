@@ -65,6 +65,35 @@ const migrations: Migration[] = [
       db.exec('ALTER TABLE task_definitions ADD COLUMN month_of_year INTEGER DEFAULT NULL');
     },
   },
+  {
+    version: 11,
+    up: (db) => {
+      db.exec(`
+        UPDATE task_instances SET status = 'todo' WHERE status = 'in_progress';
+
+        CREATE TABLE task_instances_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_definition_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'done')),
+          assignee TEXT DEFAULT NULL,
+          points INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          completed_at TEXT DEFAULT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
+        );
+        INSERT INTO task_instances_new
+          SELECT id, task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order
+          FROM task_instances;
+        DROP TABLE task_instances;
+        ALTER TABLE task_instances_new RENAME TO task_instances;
+        CREATE INDEX idx_task_instances_status ON task_instances(status);
+        CREATE INDEX idx_task_instances_task_def ON task_instances(task_definition_id);
+        CREATE INDEX idx_task_instances_completed ON task_instances(completed_at);
+      `);
+    },
+  },
 ];
 
 function runMigrations(db: Database.Database): void {

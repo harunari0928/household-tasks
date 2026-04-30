@@ -72,7 +72,7 @@ program
 program
   .command('list')
   .description('List task instances')
-  .option('--status <status>', 'Filter by status (todo, in_progress, done)')
+  .option('--status <status>', 'Filter by status (todo, done)')
   .option('--assignee <name>', 'Filter by assignee')
   .action((opts: { status?: string; assignee?: string }) => {
     const db = getDb();
@@ -142,10 +142,10 @@ program
   .command('move')
   .description('Move a task instance to a new status')
   .argument('<id>', 'Task instance ID')
-  .argument('<status>', 'New status (todo, in_progress, done)')
+  .argument('<status>', 'New status (todo, done)')
   .option('--assignee <names...>', 'Assignee name(s) (required when completing without existing assignee)')
   .action(async (idStr: string, status: string, opts: { assignee?: string[] }) => {
-    const validStatuses = ['todo', 'in_progress', 'done'];
+    const validStatuses = ['todo', 'done'];
     if (!validStatuses.includes(status)) {
       console.error(`Invalid status: ${status}. Must be one of: ${validStatuses.join(', ')}`);
       process.exit(1);

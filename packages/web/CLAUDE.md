@@ -44,5 +44,5 @@ pnpm --filter web build      # Runs: vite build && tsc -p tsconfig.server.json
 - Production mode serves static files only if `dist/client/index.html` exists (prevents crash in dev).
 - Frequency validation: `days_of_week` required for weekly/n_weeks; `day_of_month` required for monthly/n_months; `frequency_interval` required for n_days/n_weeks/n_months.
 - `calculateNextDueDate()` returns null for fixed-schedule types (daily/weekly/monthly), computes from today for interval types.
-- Kanban board uses @dnd-kit for drag-and-drop. Auto-assigns current user on todo→in_progress. Requires assignee selection for done when unassigned.
+- Kanban board uses @dnd-kit for drag-and-drop. Requires assignee selection for done when unassigned.
 - SSE broadcasts task updates to all connected clients for real-time sync.

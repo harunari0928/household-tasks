@@ -84,11 +84,10 @@ export interface Attachment {
   created_at: string;
 }
 
-export type TaskInstanceStatus = 'todo' | 'in_progress' | 'done';
+export type TaskInstanceStatus = 'todo' | 'done';
 
 export const KANBAN_COLUMNS = {
   todo: '未着手',
-  in_progress: '進行中',
   done: '完了',
 } as const;
 

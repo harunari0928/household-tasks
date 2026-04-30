@@ -145,16 +145,13 @@ test.describe('ユーザー未登録時のブロッキングダイアログ', ()
 });
 
 test.describe('カンバンボードの表示', () => {
-  test('3列が正しく表示される', async ({ page }) => {
+  test('2列が正しく表示される', async ({ page }) => {
     await createTaskViaUI(page, { name: 'column-test', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await goToKanban(page);
 
     await test.step('未着手列が表示される', async () => {
       await expect(page.getByRole('heading', { name: '未着手' })).toBeVisible();
-    });
-    await test.step('進行中列が表示される', async () => {
-      await expect(page.getByRole('heading', { name: '進行中' })).toBeVisible();
     });
     await test.step('完了列が表示される', async () => {
       await expect(page.getByRole('heading', { name: '完了' })).toBeVisible();
@@ -179,41 +176,18 @@ test.describe('カンバンボードの表示', () => {
 });
 
 test.describe('ドラッグ&ドロップ', () => {
-  test('未着手から進行中に移動できる', async ({ page, baseURL }) => {
-    await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
-    await createTaskViaUI(page, { name: 'drag-to-progress', frequency_type: 'daily' });
-    await runScheduler('2026-03-29');
-    await goToKanban(page);
-
-    await dragCardToColumn(page, 'drag-to-progress', '進行中');
-
-    await expect(page.getByText('drag-to-progress').first()).toBeVisible();
-  });
-
-  test('進行中から完了に移動できる', async ({ page, baseURL }) => {
+  test('未着手から完了に移動できる（担当者割り当てあり）', async ({ page, baseURL }) => {
     await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
     await createTaskViaUI(page, { name: 'drag-to-done', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
-    await changeStatus(page, baseURL!, 'drag-to-done', 'in_progress', 'MTMR');
+    await changeStatus(page, baseURL!, 'drag-to-done', 'todo', 'MTMR');
     await goToKanban(page);
 
     await dragCardToColumn(page, 'drag-to-done', '完了');
 
     await expect(page.getByText('drag-to-done').first()).toBeVisible();
-  });
-
-  test('進行中に移動するとアサインされた担当者が表示される', async ({ page, baseURL }) => {
-    await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
-    await createTaskViaUI(page, { name: 'auto-assign-test', frequency_type: 'daily' });
-    await runScheduler('2026-03-29');
-
-    // APIで進行中に移動＋担当者割り当て
-    await changeStatus(page, baseURL!, 'auto-assign-test', 'in_progress', 'こばゆか');
-
-    await goToKanban(page);
-
-    await expect(page.getByText('auto-assign-test').first()).toBeVisible();
-    await expect(page.getByText('こばゆか, auto-assign-test').or(page.locator('.group').filter({ hasText: 'auto-assign-test' }).getByText('こばゆか'))).toBeVisible();
+    const doneColumn = page.locator('[data-column-status="done"]');
+    await expect(doneColumn.getByText('drag-to-done')).toBeVisible();
   });
 });
 
@@ -351,7 +325,7 @@ test.describe('タスクの削除', () => {
     await createTaskViaUI(page, { name: 'clear-task-b', frequency_type: 'daily' });
     await createTaskViaUI(page, { name: 'keep-task', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
-    await changeStatus(page, baseURL!, 'keep-task', 'in_progress', 'MTMR');
+    await changeStatus(page, baseURL!, 'keep-task', 'done', 'MTMR');
     await goToKanban(page);
 
     await page.getByLabel('未着手メニュー').click();
@@ -362,7 +336,7 @@ test.describe('タスクの削除', () => {
       await expect(page.getByText('clear-task-a')).not.toBeVisible();
       await expect(page.getByText('clear-task-b')).not.toBeVisible();
     });
-    await test.step('進行中のタスクは残る', async () => {
+    await test.step('完了のタスクは残る', async () => {
       await expect(page.getByText('keep-task')).toBeVisible();
     });
   });

@@ -66,22 +66,6 @@ async function getTaskId(page: Page, taskName: string): Promise<number> {
 }
 
 test.describe('ht move（ステータス変更）', () => {
-  test('進行中に変更するとカンバンの進行中列に表示される', async ({ page, baseURL }) => {
-    // Arrange
-    await setupAssignees(page, baseURL!, ['MTMR']);
-    await createTaskViaUI(page, { name: 'move-to-progress', frequency_type: 'daily' });
-    await runScheduler('2026-03-29');
-    const taskId = await getTaskId(page, 'move-to-progress');
-
-    // Act
-    await runCli(`move ${taskId} in_progress`);
-    await goToKanban(page);
-
-    // Assert
-    const progressColumn = page.locator('[data-column-status="in_progress"]');
-    await expect(progressColumn.getByText('move-to-progress')).toBeVisible();
-  });
-
   test('完了に変更するとカンバンの完了列に表示される', async ({ page, baseURL }) => {
     // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
@@ -106,10 +90,10 @@ test.describe('ht move（ステータス変更）', () => {
     const taskId = await getTaskId(page, 'move-output');
 
     // Act
-    const result = await runCli(`move ${taskId} in_progress`);
+    const result = await runCli(`move ${taskId} done --assignee MTMR`);
 
     // Assert
-    expect(result.stdout).toContain(`Task ${taskId} moved to in_progress.`);
+    expect(result.stdout).toContain(`Task ${taskId} moved to done.`);
   });
 });
 
