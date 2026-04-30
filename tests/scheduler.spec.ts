@@ -200,6 +200,50 @@ test.describe('N日ごと', () => {
     await expect(page.getByText('n-days-before')).not.toBeVisible();
   });
 
+  test('未完了のまま次の予定日に到達したタスクを削除しても、その次の予定日まで再起票されない', async ({ page, baseURL }) => {
+    await page.goto('/#/settings');
+    await page.getByLabel('新しいユーザー名').fill('test-user');
+    await page.getByRole('button', { name: '追加' }).click();
+    await page.getByText('test-user').waitFor();
+
+    const task = await createTaskViaUI(page, baseURL!, {
+      name: 'skip-advance-test',
+      category: 'water',
+      frequency_type: 'n_days',
+      frequency_interval: 3,
+    });
+    const cycle1 = task.next_due_date;
+    const cycle2 = addDays(cycle1, 3);
+    const cycle3 = addDays(cycle1, 6);
+
+    await runScheduler(cycle1);
+    await runScheduler(cycle2);
+
+    await goToKanban(page);
+    const card = page.getByText('skip-advance-test');
+    await card.hover();
+    await page.getByRole('button', { name: 'タスクを削除', exact: true }).click();
+    const deleteResponse = page.waitForResponse(
+      (r) => r.request().method() === 'DELETE' && /\/api\/kanban\/\d+$/.test(r.url()),
+    );
+    await page.getByRole('button', { name: '削除する' }).click();
+    await deleteResponse;
+
+    await runScheduler(cycle2);
+
+    await goToKanban(page);
+    await test.step('次の予定日が来るまで再起票されない', async () => {
+      await expect(page.getByText('skip-advance-test')).toHaveCount(0);
+    });
+
+    await runScheduler(cycle3);
+
+    await goToKanban(page);
+    await test.step('次の予定日に再び起票される', async () => {
+      await expect(page.getByText('skip-advance-test')).toHaveCount(1);
+    });
+  });
+
   test('実行が遅延しても元のリズムで起票される', async ({ page, baseURL }) => {
     const task = await createTaskViaUI(page, baseURL!, { name: 'rhythm-test', category: 'water', frequency_type: 'n_days', frequency_interval: 3 });
     const dueDate = task.next_due_date;
