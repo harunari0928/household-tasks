@@ -47,6 +47,12 @@ async function main() {
         logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
         skipped++;
         console.log(`  SKIP (duplicate): "${task.name}"`);
+        // Consume this cycle so deleting the lingering instance doesn't trigger
+        // immediate re-creation on the next cron run.
+        if (task.next_due_date) {
+          const nextDate = calculateNextDueDate(task, task.next_due_date);
+          updateNextDueDate(db, task.id, nextDate);
+        }
         continue;
       }
 
@@ -82,6 +88,10 @@ async function main() {
           logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
           skipped++;
           console.log(`  RETRY SKIP (duplicate): "${task.name}"`);
+          if (task.next_due_date) {
+            const nextDate = calculateNextDueDate(task, task.next_due_date);
+            updateNextDueDate(db, task.id, nextDate);
+          }
           continue;
         }
 
@@ -90,6 +100,11 @@ async function main() {
         logExecution(db, task.id, instanceId, 'created', undefined, today);
         created++;
         console.log(`  RETRY OK: "${task.name}" (instance_id=${instanceId})`);
+
+        if (task.next_due_date) {
+          const nextDate = calculateNextDueDate(task, task.next_due_date);
+          updateNextDueDate(db, task.id, nextDate);
+        }
       } catch (err: any) {
         logExecution(db, task.id, null, 'failed', err.message, today);
         failed++;
