@@ -6,7 +6,7 @@ import {
   logExecution,
   updateNextDueDate,
   getFailedTasks,
-  hasUncompletedInstance,
+  hasRecentInstance,
   createTaskInstance,
 } from './db.js';
 import { shouldCreateToday, shouldCreateThisHour, calculateNextDueDate } from './matcher.js';
@@ -42,7 +42,7 @@ async function main() {
     }
 
     try {
-      const hasDuplicate = hasUncompletedInstance(db, task.id);
+      const hasDuplicate = hasRecentInstance(db, task.id, today);
       if (hasDuplicate) {
         logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
         skipped++;
@@ -83,7 +83,7 @@ async function main() {
       if (!task) continue;
 
       try {
-        const hasDuplicate = hasUncompletedInstance(db, task.id);
+        const hasDuplicate = hasRecentInstance(db, task.id, today);
         if (hasDuplicate) {
           logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
           skipped++;

@@ -3,6 +3,10 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { Page } from '@playwright/test';
 
+function getTodayJST(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
 const execAsync = promisify(exec);
 
 async function runScheduler(testToday: string, testHour?: number): Promise<string> {
@@ -303,6 +307,57 @@ test.describe('重複起票の防止', () => {
 
     await goToKanban(page);
     await expect(page.getByText('cross-day-dup')).toHaveCount(1);
+  });
+
+  test('数日前に起票された未完了タスクを今日完了しても、同日中に再起票されない', async ({ page, baseURL }) => {
+    const today = getTodayJST();
+
+    await page.goto('/#/settings');
+    await page.getByLabel('新しいユーザー名').fill('test-user');
+    await page.getByRole('button', { name: '追加' }).click();
+    await page.getByText('test-user').waitFor();
+
+    await createTaskViaUI(page, baseURL!, { name: 'revive-after-skip', category: 'water', frequency_type: 'daily' });
+    await runScheduler(addDays(today, -3));
+    await runScheduler(addDays(today, -2));
+    await runScheduler(addDays(today, -1));
+    await runScheduler(today);
+
+    const instances = await page.request.get(`${baseURL}/api/kanban`);
+    const items = await instances.json();
+    const instance = items.find((i: any) => i.title === 'revive-after-skip');
+    await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+      data: { status: 'done', assignee: 'test-user' },
+    });
+
+    await runScheduler(today);
+
+    await goToKanban(page);
+    await expect(page.getByText('revive-after-skip')).toHaveCount(1);
+  });
+
+  test('今朝起票され夕方に完了したタスクは、同日中の後続実行で再起票されない', async ({ page, baseURL }) => {
+    const today = getTodayJST();
+
+    await page.goto('/#/settings');
+    await page.getByLabel('新しいユーザー名').fill('test-user');
+    await page.getByRole('button', { name: '追加' }).click();
+    await page.getByText('test-user').waitFor();
+
+    await createTaskViaUI(page, baseURL!, { name: 'same-day-complete', category: 'water', frequency_type: 'daily' });
+    await runScheduler(today);
+
+    const instances = await page.request.get(`${baseURL}/api/kanban`);
+    const items = await instances.json();
+    const instance = items.find((i: any) => i.title === 'same-day-complete');
+    await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+      data: { status: 'done', assignee: 'test-user' },
+    });
+
+    await runScheduler(today);
+
+    await goToKanban(page);
+    await expect(page.getByText('same-day-complete')).toHaveCount(1);
   });
 });
 
