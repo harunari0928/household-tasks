@@ -6,14 +6,14 @@ Node.js cron job that runs hourly (at :00). Reads task definitions from SQLite a
 
 - `src/index.ts` — Main entry: iterates active tasks, checks matching, handles idempotency/duplicates/retries.
 - `src/matcher.ts` — `shouldCreateToday()` frequency matching, `calculateNextDueDate()` for interval tasks.
-- `src/db.ts` — SQLite queries: getActiveTasks, isAlreadyCreatedToday, logExecution, updateNextDueDate, getFailedTasks, hasUncompletedInstance, createTaskInstance.
+- `src/db.ts` — SQLite queries: getActiveTasks, isAlreadyCreatedToday, logExecution, updateNextDueDate, getFailedTasks, hasRecentInstance, createTaskInstance.
 
 ## Execution flow
 
 1. Get all active task definitions
 2. For each task, check `shouldCreateToday(task, today)`
 3. Check `isAlreadyCreatedToday` (execution_log idempotency)
-4. Check `hasUncompletedInstance` in task_instances (duplicate prevention)
+4. Check `hasRecentInstance` in task_instances (duplicate prevention: includes JST-today completed instances to avoid re-creation after same-day completion)
 5. Create task instance in SQLite (`INSERT INTO task_instances`)
 6. Update `next_due_date` for interval-based tasks
 7. Retry any previously failed tasks

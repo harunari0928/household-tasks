@@ -30,6 +30,8 @@ export default function KanbanColumn({ status, title, items, recentlyMovedIds, o
     <div
       ref={setNodeRef}
       data-column-status={status}
+      role="region"
+      aria-label={`${title}列`}
       className={`flex-1 min-w-[200px] sm:min-w-[280px] max-w-[400px] rounded-lg p-2 flex flex-col h-full transition-colors snap-start ${
         isOver ? 'bg-blue-50 dark:bg-blue-800/40' : 'bg-gray-50 dark:bg-gray-900/50'
       }`}
