@@ -3,6 +3,10 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { Page } from '@playwright/test';
 
+function getTodayJST(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
 const execAsync = promisify(exec);
 
 async function runScheduler(testToday: string, testHour?: number): Promise<string> {
@@ -93,6 +97,47 @@ async function goToKanban(page: Page) {
   await page.goto('about:blank');
   await page.goto('/#/');
   await page.getByText('未着手').waitFor();
+}
+
+async function dragCardToColumn(page: Page, cardName: string, columnTitle: string) {
+  const card = page.getByText(cardName).first();
+  const columnHeading = page.getByRole('heading', { name: columnTitle });
+
+  const cardBox = await card.boundingBox();
+  const headingBox = await columnHeading.boundingBox();
+  if (!cardBox || !headingBox) throw new Error('Could not get bounding boxes');
+
+  const startX = cardBox.x + 10;
+  const startY = cardBox.y + cardBox.height / 2;
+  const endX = headingBox.x + headingBox.width / 2;
+  const endY = headingBox.y + headingBox.height + 40;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 10, startY, { steps: 2 });
+  await page.mouse.move(endX, endY, { steps: 10 });
+  await page.mouse.up();
+}
+
+async function registerUser(page: Page, name: string) {
+  await page.goto('/#/settings');
+  await page.getByLabel('新しいユーザー名').fill(name);
+  await page.getByRole('button', { name: '追加' }).click();
+  await page.getByText(name).waitFor();
+}
+
+async function completeTaskViaUI(page: Page, cardName: string, assignee: string) {
+  await dragCardToColumn(page, cardName, '完了');
+  const dialog = page.getByRole('dialog', { name: '担当者を選択' });
+  await dialog.waitFor();
+  const confirmBtn = dialog.getByRole('button', { name: '確定' });
+  await expect.poll(async () => {
+    if (await confirmBtn.isEnabled()) return true;
+    await dialog.getByRole('checkbox', { name: assignee }).click();
+    return confirmBtn.isEnabled();
+  }, { timeout: 5000 }).toBe(true);
+  await confirmBtn.click();
+  await dialog.waitFor({ state: 'hidden' });
 }
 
 async function arrangeSkippedAndDeletedNDaysTask(
@@ -303,6 +348,36 @@ test.describe('重複起票の防止', () => {
 
     await goToKanban(page);
     await expect(page.getByText('cross-day-dup')).toHaveCount(1);
+  });
+
+  test('数日前に起票された未完了タスクを今日完了しても、同日中に再起票されない', async ({ page, baseURL }) => {
+    // Arrange
+    const today = getTodayJST();
+    await registerUser(page, 'test-user');
+    await createTaskViaUI(page, baseURL!, { name: 'revive-after-skip', category: 'water', frequency_type: 'daily' });
+    await runScheduler(addDays(today, -3));
+    await runScheduler(addDays(today, -2));
+    await runScheduler(addDays(today, -1));
+    await runScheduler(today);
+    await goToKanban(page);
+    await completeTaskViaUI(page, 'revive-after-skip', 'test-user');
+
+    // Act
+    await runScheduler(today);
+
+    // Assert
+    await goToKanban(page);
+    await test.step('完了列に1件残っている', async () => {
+      await expect(
+        page.getByRole('region', { name: '完了列' }).getByText('revive-after-skip'),
+      ).toHaveCount(1);
+    });
+
+    await test.step('未着手列に再起票されていない', async () => {
+      await expect(
+        page.getByRole('region', { name: '未着手列' }).getByText('revive-after-skip'),
+      ).toHaveCount(0);
+    });
   });
 });
 

@@ -160,10 +160,20 @@ export function logExecution(
   }
 }
 
-export function hasUncompletedInstance(db: Database.Database, taskDefId: number): boolean {
+export function hasRecentInstance(
+  db: Database.Database,
+  taskDefId: number,
+  todayJST: string,
+): boolean {
   const row = db.prepare(`
-    SELECT 1 FROM task_instances WHERE task_definition_id = ? AND status != 'done' LIMIT 1
-  `).get(taskDefId);
+    SELECT 1 FROM task_instances
+    WHERE task_definition_id = ?
+      AND (
+        status != 'done'
+        OR date(completed_at, '+9 hours') = ?
+      )
+    LIMIT 1
+  `).get(taskDefId, todayJST);
   return !!row;
 }
 

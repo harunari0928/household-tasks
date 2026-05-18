@@ -51,24 +51,38 @@ async function getTaskId(page: Page, taskName: string): Promise<number> {
   return task.id;
 }
 
+function todayJST(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
+function firstDayOfMonthJST(): string {
+  return `${todayJST().slice(0, 7)}-01`;
+}
+
+function lastDayOfMonthJST(): string {
+  const [y, m] = todayJST().split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${todayJST().slice(0, 7)}-${String(last).padStart(2, '0')}`;
+}
+
 test.describe('ht stats（ポイント集計）', () => {
   test('完了タスクの担当者別ポイントが表示される', async ({ page }) => {
     // Arrange
     await createTaskViaUI(page, { name: 'stats-task', frequency_type: 'daily', points: 3 });
-    await runScheduler('2026-04-07');
+    await runScheduler(todayJST());
     const taskId = await getTaskId(page, 'stats-task');
     await runCli(`assign ${taskId} MTMR`);
     await runCli(`move ${taskId} done`);
 
     // Act
-    const result = await runCli('stats --start 2026-04-01 --end 2026-04-30');
+    const result = await runCli(`stats --start ${firstDayOfMonthJST()} --end ${lastDayOfMonthJST()}`);
 
     // Assert
-    await test.step('担当者名が出力に含まれる', async () => {
-      expect(result.stdout).toContain('MTMR');
+    await test.step('完了タスクの集計見出しが出力される', async () => {
+      expect(result.stdout).toContain('Completed tasks:');
     });
-    await test.step('ポイント数が出力に含まれる', async () => {
-      expect(result.stdout).toContain('3');
+    await test.step('担当者ごとのポイント行が出力される', async () => {
+      expect(result.stdout).toMatch(/MTMR\s+3\s+1/);
     });
   });
 
