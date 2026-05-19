@@ -43,6 +43,14 @@ function formatFrequency(task: TaskDefinition): string {
       }
       return '1年ごと';
     }
+    case 'nth_weekday_of_month': {
+      const day = task.days_of_week
+        ?.split(',')[0]
+        .trim() as DayOfWeek | undefined;
+      const dayLabel = day ? DAYS_OF_WEEK[day] || day : '?';
+      const pos = task.nth_weekday_position ?? '?';
+      return `毎月第${pos}${dayLabel}曜日`;
+    }
     default:
       return label;
   }

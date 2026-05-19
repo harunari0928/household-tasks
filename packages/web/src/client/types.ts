@@ -20,6 +20,7 @@ export const FREQUENCY_TYPES = {
   monthly: '毎月',
   n_months: 'Nヶ月ごと',
   yearly: '1年ごと',
+  nth_weekday_of_month: '第N曜日(毎月)',
 } as const;
 
 export type FrequencyTypeKey = keyof typeof FREQUENCY_TYPES;
@@ -45,6 +46,7 @@ export interface TaskDefinition {
   days_of_week: string | null;
   day_of_month: number | null;
   month_of_year: number | null;
+  nth_weekday_position: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -61,6 +63,8 @@ export interface TaskDefinitionInput {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
+  month_of_year?: number;
+  nth_weekday_position?: number;
   notes?: string;
   points?: number;
   scheduled_hour: number;
@@ -112,4 +116,5 @@ export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
   monthly: ['day_of_month'],
   n_months: ['frequency_interval', 'day_of_month'],
   yearly: ['month_of_year', 'day_of_month'],
+  nth_weekday_of_month: ['nth_weekday_position', 'days_of_week'],
 };

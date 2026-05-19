@@ -48,6 +48,9 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const [monthOfYear, setMonthOfYear] = useState<number | undefined>(
     task?.month_of_year ?? undefined,
   );
+  const [nthWeekdayPosition, setNthWeekdayPosition] = useState<number | undefined>(
+    task?.nth_weekday_position ?? undefined,
+  );
   const [scheduledHour, setScheduledHour] = useState<number>(task?.scheduled_hour ?? 0);
   const [points, setPoints] = useState<number>(task?.points ?? 1);
   const [notes, setNotes] = useState(task?.notes || '');
@@ -155,6 +158,19 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       }
     }
 
+    if (frequencyType === 'nth_weekday_of_month') {
+      if (!nthWeekdayPosition || nthWeekdayPosition < 1 || nthWeekdayPosition > 5) {
+        setFrequencyError('何週目（1〜5）を選択してください');
+        scrollToError(frequencyErrorRef);
+        return;
+      }
+      if (daysOfWeek.length !== 1) {
+        setFrequencyError('曜日を1つだけ選択してください');
+        scrollToError(frequencyErrorRef);
+        return;
+      }
+    }
+
     let currentNotes = notes.trim();
 
     const input: any = {
@@ -177,6 +193,10 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     if (frequencyType === 'yearly' && monthOfYear && dayOfMonth) {
       input.month_of_year = monthOfYear;
       input.day_of_month = dayOfMonth;
+    }
+    if (frequencyType === 'nth_weekday_of_month') {
+      input.days_of_week = daysOfWeek;
+      input.nth_weekday_position = nthWeekdayPosition;
     }
     if (currentNotes) {
       input.notes = currentNotes;
@@ -270,6 +290,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           days_of_week: daysOfWeek,
           day_of_month: dayOfMonth,
           month_of_year: monthOfYear,
+          nth_weekday_position: nthWeekdayPosition,
           scheduled_hour: scheduledHour,
         }}
         onChange={(val) => {
@@ -278,6 +299,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           setDaysOfWeek(val.days_of_week || []);
           setDayOfMonth(val.day_of_month);
           setMonthOfYear(val.month_of_year);
+          setNthWeekdayPosition(val.nth_weekday_position);
           setScheduledHour(val.scheduled_hour);
           setFrequencyError('');
         }}

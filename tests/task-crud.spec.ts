@@ -63,6 +63,44 @@ test.describe('フォームバリデーション', () => {
       await expect(page.getByLabel('間隔')).not.toBeVisible();
       await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
     });
+
+    await page.getByLabel('頻度').selectOption('nth_weekday_of_month');
+
+    await test.step('第N曜日(毎月) → 何週目と曜日が表示される', async () => {
+      await expect(page.getByLabel('何週目')).toBeVisible();
+      await expect(page.getByRole('group', { name: '曜日' })).toBeVisible();
+      await expect(page.getByLabel('間隔')).not.toBeVisible();
+      await expect(page.getByLabel(/日指定/)).not.toBeVisible();
+      await expect(page.getByLabel(/月指定/)).not.toBeVisible();
+    });
+  });
+
+  test('バリデーション: 第N曜日(毎月)で何週目未選択だとエラー', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('第N曜日テスト');
+    await page.getByLabel('頻度').selectOption('nth_weekday_of_month');
+    await page.getByRole('group', { name: '曜日' }).getByText('月').click();
+
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('何週目');
+  });
+
+  test('バリデーション: 第N曜日(毎月)で曜日未選択だとエラー', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('第N曜日テスト2');
+    await page.getByLabel('頻度').selectOption('nth_weekday_of_month');
+    await page.getByLabel('何週目').selectOption('2');
+
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('曜日');
   });
 
   test('バリデーション: 毎週で曜日未選択だとエラー', async ({ page }) => {
@@ -276,7 +314,9 @@ test.describe('マークダウン備考', () => {
     });
 
     // リンク
-    await notes.fill('');
+    await notes.selectText();
+    await notes.press('Delete');
+    await expect(notes).toHaveValue('');
     await page.getByTitle('リンク').click();
 
     await test.step('リンク', async () => {
@@ -284,7 +324,9 @@ test.describe('マークダウン備考', () => {
     });
 
     // リスト
-    await notes.fill('');
+    await notes.selectText();
+    await notes.press('Delete');
+    await expect(notes).toHaveValue('');
     await page.getByTitle('リスト').click();
 
     await test.step('リスト', async () => {

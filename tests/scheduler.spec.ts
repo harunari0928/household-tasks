@@ -49,6 +49,7 @@ async function createTaskViaUI(
     frequency_interval?: number;
     day_of_month?: number;
     month_of_year?: number;
+    nth_weekday_position?: number;
     scheduled_hour?: number;
   },
 ) {
@@ -73,6 +74,9 @@ async function createTaskViaUI(
   }
   if (options.day_of_month != null) {
     await page.getByLabel(/日指定/).fill(String(options.day_of_month));
+  }
+  if (options.nth_weekday_position != null) {
+    await page.getByLabel('何週目').selectOption(String(options.nth_weekday_position));
   }
   if (options.scheduled_hour != null) {
     await page.getByLabel(/起票時刻/).fill(String(options.scheduled_hour));
@@ -497,5 +501,67 @@ test.describe('1年ごと（月日指定あり）', () => {
 
     await goToKanban(page);
     await expect(page.getByText('yearly-recur')).toHaveCount(2);
+  });
+});
+
+test.describe('第N曜日(毎月)', () => {
+  test('第1月曜日のタスクは該当日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-1st-mon',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 1,
+    });
+
+    await runScheduler('2026-03-02');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-1st-mon')).toBeVisible();
+  });
+
+  test('第1月曜日のタスクは該当月の他の日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-1st-mon-skip',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 1,
+    });
+
+    await runScheduler('2026-03-09');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-1st-mon-skip')).not.toBeVisible();
+  });
+
+  test('第5月曜日のタスクは月内に第5週目がなければ起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-5th-mon',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 5,
+    });
+
+    await runScheduler('2026-09-28');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-5th-mon')).not.toBeVisible();
+  });
+
+  test('第5月曜日のタスクは該当日が存在する月の該当日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-5th-mon-create',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 5,
+    });
+
+    await runScheduler('2026-08-31');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-5th-mon-create')).toBeVisible();
   });
 });
