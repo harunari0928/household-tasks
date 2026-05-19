@@ -229,41 +229,50 @@ test.describe('担当者の割り当て', () => {
     });
   });
 
-  test('完了に移動時、未アサインなら担当者選択モーダルが表示される', async ({ page, baseURL }) => {
+  test('未割当のタスクを完了に移動すると、ヘッダーで選択中のユーザが担当者として自動設定される', async ({ page, baseURL }) => {
     await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
-    await createTaskViaUI(page, { name: 'done-modal-test', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'done-auto-assign-test', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await goToKanban(page);
+    await page.getByLabel('ユーザー切替').click();
+    await page.getByRole('button', { name: 'こばゆか', exact: true }).click();
 
-    await dragCardToColumn(page, 'done-modal-test', '完了');
+    await dragCardToColumn(page, 'done-auto-assign-test', '完了');
 
-    await expect(assigneeDialog(page)).toBeVisible();
+    await test.step('担当者選択モーダルが表示されない', async () => {
+      await expect(assigneeDialog(page)).not.toBeVisible();
+    });
+    await test.step('カードが完了列に入っている', async () => {
+      const doneColumn = page.locator('[data-column-status="done"]');
+      await expect(doneColumn.getByText('done-auto-assign-test')).toBeVisible();
+    });
+    await test.step('カードの担当者がヘッダーで選択していたユーザになっている', async () => {
+      await expect(
+        page.getByText('done-auto-assign-test').locator('..').locator('..').getByText('こばゆか'),
+      ).toBeVisible();
+    });
   });
 
-  test('完了移動時、担当者を選択しないと確定ボタンが非活性になっている', async ({ page, baseURL }) => {
+  test('既に担当者が設定されたタスクを完了に移動すると、担当者は変わらない', async ({ page, baseURL }) => {
     await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
-    await createTaskViaUI(page, { name: 'done-disabled-btn', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'done-keep-assignee-test', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
+    await changeStatus(page, baseURL!, 'done-keep-assignee-test', 'todo', 'MTMR');
     await goToKanban(page);
+    await page.getByLabel('ユーザー切替').click();
+    await page.getByRole('button', { name: 'こばゆか', exact: true }).click();
 
-    await dragCardToColumn(page, 'done-disabled-btn', '完了');
-    await assigneeDialog(page).waitFor();
+    await dragCardToColumn(page, 'done-keep-assignee-test', '完了');
 
-    await expect(assigneeDialog(page).getByRole('button', { name: '確定' })).toBeDisabled();
-  });
-
-  test('完了移動時にキャンセルするとタスクが元のステータスに戻る', async ({ page, baseURL }) => {
-    await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
-    await createTaskViaUI(page, { name: 'done-cancel-test', frequency_type: 'daily' });
-    await runScheduler('2026-03-29');
-    await goToKanban(page);
-
-    await dragCardToColumn(page, 'done-cancel-test', '完了');
-    await assigneeDialog(page).waitFor();
-    await assigneeDialog(page).getByRole('button', { name: 'キャンセル' }).click();
-
-    const todoColumn = page.locator('[data-column-status="todo"]');
-    await expect(todoColumn.getByText('done-cancel-test')).toBeVisible();
+    await test.step('担当者選択モーダルが表示されない', async () => {
+      await expect(assigneeDialog(page)).not.toBeVisible();
+    });
+    await test.step('完了列のカードの担当者が元のままになっている', async () => {
+      const doneColumn = page.getByRole('region', { name: '完了列' });
+      await expect(doneColumn.getByText('done-keep-assignee-test')).toBeVisible();
+      await expect(doneColumn.getByText('MTMR')).toBeVisible();
+      await expect(doneColumn.getByText('こばゆか')).toHaveCount(0);
+    });
   });
 });
 

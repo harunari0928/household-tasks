@@ -254,7 +254,7 @@ export default function App() {
 
       <main className={`mx-auto px-3 sm:px-4 py-3 sm:py-4 ${currentPage === 'kanban' ? 'max-w-full' : 'max-w-5xl'}`}>
         {currentPage === 'kanban' ? (
-          <KanbanBoard />
+          <KanbanBoard currentUser={currentUser} />
         ) : currentPage === 'stats' ? (
           <StatsPage />
         ) : currentPage === 'settings' ? (
