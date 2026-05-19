@@ -208,6 +208,12 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 12,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN nth_weekday_position INTEGER DEFAULT NULL');
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

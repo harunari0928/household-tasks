@@ -58,9 +58,34 @@ export function shouldCreateToday(task: TaskDefinitionRow, today: string): boole
       return days.includes(getTodayDayOfWeek(today));
     }
 
+    case 'nth_weekday_of_month': {
+      if (!task.days_of_week || !task.nth_weekday_position) return false;
+      const targetDay = DAY_MAP[task.days_of_week.split(',')[0].trim()];
+      if (targetDay === undefined) return false;
+      const todayDate = parseDate(today);
+      const targetDate = nthWeekdayOfMonth(
+        todayDate.getFullYear(),
+        todayDate.getMonth(),
+        task.nth_weekday_position,
+        targetDay,
+      );
+      if (!targetDate) return false; // Nth weekday doesn't exist this month
+      return targetDate.getDate() === todayDate.getDate();
+    }
+
     default:
       return false;
   }
+}
+
+function nthWeekdayOfMonth(year: number, month: number, position: number, dayOfWeek: number): Date | null {
+  const firstOfMonth = new Date(year, month, 1);
+  const firstDow = firstOfMonth.getDay();
+  const offset = (dayOfWeek - firstDow + 7) % 7;
+  const day = 1 + offset + (position - 1) * 7;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  if (day > lastDay) return null;
+  return new Date(year, month, day);
 }
 
 export function shouldCreateThisHour(task: TaskDefinitionRow, currentHour: number): boolean {

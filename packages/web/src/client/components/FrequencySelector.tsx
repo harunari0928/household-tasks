@@ -6,6 +6,7 @@ interface FrequencyValue {
   days_of_week?: string[];
   day_of_month?: number;
   month_of_year?: number;
+  nth_weekday_position?: number;
   scheduled_hour: number;
 }
 
@@ -33,6 +34,7 @@ export default function FrequencySelector({ value, onChange, error }: Props) {
               days_of_week: undefined,
               day_of_month: undefined,
               month_of_year: undefined,
+              nth_weekday_position: undefined,
             })
           }
           className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -66,11 +68,29 @@ export default function FrequencySelector({ value, onChange, error }: Props) {
         </div>
       )}
 
+      {visibleFields.includes('nth_weekday_position') && (
+        <div>
+          <label htmlFor="nth-weekday-position" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">何週目</label>
+          <select
+            id="nth-weekday-position"
+            value={value.nth_weekday_position || ''}
+            onChange={(e) => onChange({ ...value, nth_weekday_position: parseInt(e.target.value) || undefined })}
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          >
+            <option value="">選択してください</option>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>第{n}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {visibleFields.includes('days_of_week') && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">曜日</label>
           <div className="flex flex-wrap gap-2" role="group" aria-label="曜日">
             {(Object.entries(DAYS_OF_WEEK) as [DayOfWeek, string][]).map(([key, label]) => {
+              const isSingle = value.frequency_type === 'nth_weekday_of_month';
               const checked = value.days_of_week?.includes(key) || false;
               return (
                 <label
@@ -80,9 +100,14 @@ export default function FrequencySelector({ value, onChange, error }: Props) {
                   }`}
                 >
                   <input
-                    type="checkbox"
+                    type={isSingle ? 'radio' : 'checkbox'}
+                    name={isSingle ? 'nth-weekday-day' : undefined}
                     checked={checked}
                     onChange={() => {
+                      if (isSingle) {
+                        onChange({ ...value, days_of_week: [key] });
+                        return;
+                      }
                       const current = value.days_of_week || [];
                       const next = checked ? current.filter((d) => d !== key) : [...current, key];
                       onChange({ ...value, days_of_week: next });

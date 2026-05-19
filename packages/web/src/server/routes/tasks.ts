@@ -7,7 +7,7 @@ import { getTodayJST } from '@household-tasks/shared';
 const router: ReturnType<typeof Router> = Router();
 
 const VALID_CATEGORIES = ['water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash', 'childcare', 'cooking', 'lifestyle'];
-const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly'];
+const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month'];
 const VALID_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 interface TaskInput {
   name: string;
@@ -17,6 +17,7 @@ interface TaskInput {
   days_of_week?: string[];
   day_of_month?: number;
   month_of_year?: number;
+  nth_weekday_position?: number;
   notes?: string;
   points?: number;
   scheduled_hour?: number;
@@ -76,6 +77,23 @@ function validateTaskInput(body: TaskInput): string | null {
     }
   }
 
+  if (ft === 'nth_weekday_of_month') {
+    if (!body.days_of_week || !Array.isArray(body.days_of_week) || body.days_of_week.length !== 1) {
+      return '第N曜日タスクは曜日を1つだけ選択してください';
+    }
+    if (!VALID_DAYS.includes(body.days_of_week[0])) {
+      return '無効な曜日が含まれています';
+    }
+    if (
+      typeof body.nth_weekday_position !== 'number' ||
+      !Number.isInteger(body.nth_weekday_position) ||
+      body.nth_weekday_position < 1 ||
+      body.nth_weekday_position > 5
+    ) {
+      return '第N曜日の番号は1〜5で指定してください';
+    }
+  }
+
   if (body.scheduled_hour !== undefined && body.scheduled_hour !== null) {
     if (typeof body.scheduled_hour !== 'number' || !Number.isInteger(body.scheduled_hour) || body.scheduled_hour < 0 || body.scheduled_hour > 23) {
       return '起票時刻は0〜23の整数で入力してください';
@@ -86,7 +104,7 @@ function validateTaskInput(body: TaskInput): string | null {
 }
 
 function calculateNextDueDate(ft: string, interval: number | null, today: string, monthOfYear?: number | null, dayOfMonth?: number | null): string | null {
-  if (['daily', 'weekly', 'monthly'].includes(ft)) {
+  if (['daily', 'weekly', 'monthly', 'nth_weekday_of_month'].includes(ft)) {
     return null;
   }
 
@@ -159,6 +177,7 @@ router.post('/', (req: Request, res: Response) => {
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
   const monthOfYear = body.month_of_year ?? null;
+  const nthWeekdayPosition = body.nth_weekday_position ?? null;
   const interval = body.frequency_interval ?? null;
   const nextDueDate = calculateNextDueDate(body.frequency_type, interval, today, monthOfYear, dayOfMonth);
 
@@ -166,8 +185,8 @@ router.post('/', (req: Request, res: Response) => {
   const scheduledHour = body.scheduled_hour ?? 0;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, next_due_date, notes, points, scheduled_hour, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, next_due_date, notes, points, scheduled_hour, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -178,6 +197,7 @@ router.post('/', (req: Request, res: Response) => {
     daysOfWeek,
     dayOfMonth,
     monthOfYear,
+    nthWeekdayPosition,
     nextDueDate,
     body.notes || null,
     points,
@@ -211,13 +231,15 @@ router.put('/:id', (req: Request, res: Response) => {
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
   const monthOfYear = body.month_of_year ?? null;
+  const nthWeekdayPosition = body.nth_weekday_position ?? null;
   const interval = body.frequency_interval ?? null;
 
   const frequencyChanged =
     existing.frequency_type !== body.frequency_type ||
     existing.frequency_interval !== interval ||
     existing.month_of_year !== monthOfYear ||
-    existing.day_of_month !== dayOfMonth;
+    existing.day_of_month !== dayOfMonth ||
+    existing.nth_weekday_position !== nthWeekdayPosition;
 
   const nextDueDate = frequencyChanged
     ? calculateNextDueDate(body.frequency_type, interval, today, monthOfYear, dayOfMonth)
@@ -228,7 +250,7 @@ router.put('/:id', (req: Request, res: Response) => {
   const stmt = db.prepare(`
     UPDATE task_definitions
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
-        days_of_week = ?, day_of_month = ?, month_of_year = ?,
+        days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
         next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = ?
     WHERE id = ?
   `);
@@ -241,6 +263,7 @@ router.put('/:id', (req: Request, res: Response) => {
     daysOfWeek,
     dayOfMonth,
     monthOfYear,
+    nthWeekdayPosition,
     nextDueDate,
     body.notes || null,
     points,
@@ -311,8 +334,8 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, next_due_date, notes, points, scheduled_hour)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, next_due_date, notes, points, scheduled_hour)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const findStmt = db.prepare('SELECT id, created_at, updated_at FROM task_definitions WHERE name = ?');
@@ -333,12 +356,12 @@ router.post('/import', (req: Request, res: Response) => {
         db.prepare(`
           UPDATE task_definitions
           SET category = ?, frequency_type = ?, frequency_interval = ?,
-              days_of_week = ?, day_of_month = ?, month_of_year = ?,
+              days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
               next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = created_at
           WHERE id = ?
         `).run(
           task.category, task.frequency_type, interval,
-          daysOfWeek, task.day_of_month ?? null, monthOfYear,
+          daysOfWeek, task.day_of_month ?? null, monthOfYear, task.nth_weekday_position ?? null,
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0, existing.id,
         );
         inserted.push(existing.id);
@@ -349,7 +372,7 @@ router.post('/import', (req: Request, res: Response) => {
         const nextDueDate = calculateNextDueDate(task.frequency_type, interval, today, monthOfYear, task.day_of_month);
         const result = insertStmt.run(
           task.name, task.category, task.frequency_type, interval,
-          daysOfWeek, task.day_of_month ?? null, monthOfYear,
+          daysOfWeek, task.day_of_month ?? null, monthOfYear, task.nth_weekday_position ?? null,
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
         );
         inserted.push(Number(result.lastInsertRowid));

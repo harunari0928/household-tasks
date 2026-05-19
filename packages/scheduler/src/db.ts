@@ -13,6 +13,7 @@ export interface TaskDefinitionRow {
   days_of_week: string | null;
   day_of_month: number | null;
   month_of_year: number | null;
+  nth_weekday_position: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -92,6 +93,12 @@ const migrations: Migration[] = [
         CREATE INDEX idx_task_instances_task_def ON task_instances(task_definition_id);
         CREATE INDEX idx_task_instances_completed ON task_instances(completed_at);
       `);
+    },
+  },
+  {
+    version: 12,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN nth_weekday_position INTEGER DEFAULT NULL');
     },
   },
 ];
