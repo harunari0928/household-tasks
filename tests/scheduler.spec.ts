@@ -131,17 +131,15 @@ async function registerUser(page: Page, name: string) {
 }
 
 async function completeTaskViaUI(page: Page, cardName: string, assignee: string) {
+  const userSwitcher = page.getByLabel('ユーザー切替');
+  if ((await userSwitcher.textContent())?.includes(assignee) === false) {
+    await userSwitcher.click();
+    await page.getByRole('button', { name: assignee, exact: true }).click();
+  }
   await dragCardToColumn(page, cardName, '完了');
-  const dialog = page.getByRole('dialog', { name: '担当者を選択' });
-  await dialog.waitFor();
-  const confirmBtn = dialog.getByRole('button', { name: '確定' });
-  await expect.poll(async () => {
-    if (await confirmBtn.isEnabled()) return true;
-    await dialog.getByRole('checkbox', { name: assignee }).click();
-    return confirmBtn.isEnabled();
-  }, { timeout: 5000 }).toBe(true);
-  await confirmBtn.click();
-  await dialog.waitFor({ state: 'hidden' });
+  await expect(
+    page.getByRole('region', { name: '完了列' }).getByText(cardName),
+  ).toBeVisible();
 }
 
 async function arrangeSkippedAndDeletedNDaysTask(

@@ -22,7 +22,11 @@ import KanbanFilters from './KanbanFilters.js';
 import TaskDetailDialog from './TaskDetailDialog.js';
 import { useAssignees } from '../hooks/useAssignees.js';
 
-export default function KanbanBoard() {
+type KanbanBoardProps = {
+  currentUser: string | null;
+};
+
+export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
   const { assignees, loaded: assigneesLoaded, fetchAssignees, addAssignee: addRegisteredAssignee } = useAssignees();
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
@@ -190,17 +194,17 @@ export default function KanbanBoard() {
     localMovedRef.current.add(task.id);
     setTimeout(() => localMovedRef.current.delete(task.id), 3000);
 
-    if (targetStatus === 'done' && !task.assignee) {
-      setAssigneeModal({ task, targetStatus });
-      setSelectedAssignees([]);
-      return;
-    }
+    const autoAssign =
+      targetStatus === 'done' && !task.assignee && currentUser ? currentUser : null;
 
     // Optimistic update
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id !== task.id) return t;
         const updated = { ...t, status: targetStatus };
+        if (autoAssign) {
+          updated.assignee = autoAssign;
+        }
         if (targetStatus === 'done') {
           updated.completed_at = new Date().toISOString();
         } else {
@@ -210,7 +214,11 @@ export default function KanbanBoard() {
       }),
     );
 
-    updateStatus(task.id, targetStatus);
+    if (autoAssign) {
+      updateStatus(task.id, targetStatus, autoAssign);
+    } else {
+      updateStatus(task.id, targetStatus);
+    }
   };
 
   const openAssigneeModal = (task: TaskInstance, targetStatus?: TaskInstanceStatus) => {
