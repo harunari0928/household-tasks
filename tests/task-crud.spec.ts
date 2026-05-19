@@ -314,7 +314,9 @@ test.describe('マークダウン備考', () => {
     });
 
     // リンク
-    await notes.fill('');
+    await notes.selectText();
+    await notes.press('Delete');
+    await expect(notes).toHaveValue('');
     await page.getByTitle('リンク').click();
 
     await test.step('リンク', async () => {
@@ -322,7 +324,9 @@ test.describe('マークダウン備考', () => {
     });
 
     // リスト
-    await notes.fill('');
+    await notes.selectText();
+    await notes.press('Delete');
+    await expect(notes).toHaveValue('');
     await page.getByTitle('リスト').click();
 
     await test.step('リスト', async () => {
