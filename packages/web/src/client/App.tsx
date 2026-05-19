@@ -38,7 +38,13 @@ export default function App() {
   const [showHamburger, setShowHamburger] = useState(false);
 
   useEffect(() => {
-    const onHash = () => setCurrentPage(getPage());
+    const onHash = () => {
+      setCurrentPage(getPage());
+      setShowForm(false);
+      setEditingTask(null);
+      setShowUserMenu(false);
+      setShowHamburger(false);
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
