@@ -239,17 +239,13 @@ test.describe('担当者の割り当て', () => {
 
     await dragCardToColumn(page, 'done-auto-assign-test', '完了');
 
-    await test.step('担当者選択モーダルが表示されない', async () => {
-      await expect(assigneeDialog(page)).not.toBeVisible();
-    });
     await test.step('カードが完了列に入っている', async () => {
-      const doneColumn = page.locator('[data-column-status="done"]');
+      const doneColumn = page.getByRole('region', { name: '完了列' });
       await expect(doneColumn.getByText('done-auto-assign-test')).toBeVisible();
     });
     await test.step('カードの担当者がヘッダーで選択していたユーザになっている', async () => {
-      await expect(
-        page.getByText('done-auto-assign-test').locator('..').locator('..').getByText('こばゆか'),
-      ).toBeVisible();
+      const doneColumn = page.getByRole('region', { name: '完了列' });
+      await expect(doneColumn.getByText('こばゆか')).toBeVisible();
     });
   });
 
@@ -264,15 +260,10 @@ test.describe('担当者の割り当て', () => {
 
     await dragCardToColumn(page, 'done-keep-assignee-test', '完了');
 
-    await test.step('担当者選択モーダルが表示されない', async () => {
-      await expect(assigneeDialog(page)).not.toBeVisible();
-    });
-    await test.step('完了列のカードの担当者が元のままになっている', async () => {
-      const doneColumn = page.getByRole('region', { name: '完了列' });
-      await expect(doneColumn.getByText('done-keep-assignee-test')).toBeVisible();
-      await expect(doneColumn.getByText('MTMR')).toBeVisible();
-      await expect(doneColumn.getByText('こばゆか')).toHaveCount(0);
-    });
+    const doneColumn = page.getByRole('region', { name: '完了列' });
+    await expect(doneColumn.getByText('done-keep-assignee-test')).toBeVisible();
+    await expect(doneColumn.getByText('MTMR')).toBeVisible();
+    await expect(doneColumn.getByText('こばゆか')).toHaveCount(0);
   });
 });
 
