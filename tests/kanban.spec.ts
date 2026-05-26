@@ -496,6 +496,44 @@ test.describe('リアルタイム更新', () => {
   });
 });
 
+test.describe('画面を再表示したときの最新化', () => {
+  test('他ユーザがドラッグで動かしたカードが、再表示時に最新の列で表示される', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
+    await createTaskViaUI(page, { name: 'visibility-refresh-test', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await changeStatus(page, baseURL!, 'visibility-refresh-test', 'todo', 'MTMR');
+
+    // SSE接続を遮断: 画面を閉じている間に他ユーザの操作が届かない状況を再現
+    await page.route('**/api/kanban/events', (route) => route.abort());
+    await goToKanban(page);
+    await page.locator('[data-column-status="todo"]').getByText('visibility-refresh-test').waitFor();
+
+    const otherUserPage = await page.context().newPage();
+    await otherUserPage.goto('/#/');
+    await otherUserPage.getByText('未着手').waitFor();
+
+    // Act
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await dragCardToColumn(otherUserPage, 'visibility-refresh-test', '完了');
+    await otherUserPage.locator('[data-column-status="done"]').getByText('visibility-refresh-test').waitFor();
+
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Assert
+    await expect(
+      page.locator('[data-column-status="done"]').getByText('visibility-refresh-test'),
+    ).toBeVisible();
+  });
+});
+
 test.describe('同一列内の並べ替え', () => {
   async function dragCardWithinColumn(page: Page, cardName: string, targetCardName: string) {
     const card = page.getByText(cardName).first();

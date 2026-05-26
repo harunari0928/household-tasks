@@ -86,6 +86,16 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     return () => eventSource.close();
   }, [fetchTasks]);
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchTasks();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchTasks]);
+
   const updateStatus = async (
     taskId: number,
     status: TaskInstanceStatus,
