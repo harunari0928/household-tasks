@@ -115,13 +115,44 @@ test.describe('ポイントフィールド', () => {
     const pointsInput = page.getByLabel('ポイント');
 
     await pointsInput.fill('11');
-    await test.step('11を入力すると10に制限される', async () => {
+    await pointsInput.blur();
+    await test.step('11を入力してフォーカスを外すと10に制限される', async () => {
       await expect(pointsInput).toHaveValue('10');
     });
 
     await pointsInput.fill('0');
-    await test.step('0を入力すると1に制限される', async () => {
+    await pointsInput.blur();
+    await test.step('0を入力してフォーカスを外すと1に制限される', async () => {
       await expect(pointsInput).toHaveValue('1');
+    });
+  });
+
+  test('既存タスクのポイントを末尾から打ち直して保存できる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('ポイント変更テスト');
+    await page.getByLabel('ポイント').fill('5');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('ポイント変更テスト').waitFor();
+
+    await page.getByText('ポイント変更テスト').click();
+    const pointsInput = page.getByLabel('ポイント');
+    await pointsInput.focus();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('8');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
+
+    await test.step('一覧に入力したポイントがそのまま表示される', async () => {
+      await expect(page.getByText('8pt')).toBeVisible();
+    });
+
+    await page.reload();
+
+    await test.step('リロード後も入力したポイントが永続化される', async () => {
+      await expect(page.getByText('8pt')).toBeVisible();
     });
   });
 
