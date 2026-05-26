@@ -52,7 +52,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     task?.nth_weekday_position ?? undefined,
   );
   const [scheduledHour, setScheduledHour] = useState<number>(task?.scheduled_hour ?? 0);
-  const [points, setPoints] = useState<number>(task?.points ?? 1);
+  const [points, setPoints] = useState<string>(String(task?.points ?? 1));
   const [notes, setNotes] = useState(task?.notes || '');
   const [error, setError] = useState('');
   const [frequencyError, setFrequencyError] = useState('');
@@ -173,11 +173,13 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
 
     let currentNotes = notes.trim();
 
+    const pointsValue = Math.max(1, Math.min(10, parseInt(points, 10) || 1));
+
     const input: any = {
       name: name.trim(),
       category,
       frequency_type: frequencyType,
-      points,
+      points: pointsValue,
       scheduled_hour: scheduledHour,
     };
 
@@ -316,7 +318,8 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           max={10}
           step={1}
           value={points}
-          onChange={(e) => setPoints(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+          onChange={(e) => setPoints(e.target.value)}
+          onBlur={() => setPoints(String(Math.max(1, Math.min(10, parseInt(points, 10) || 1))))}
           className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
         />
       </div>
