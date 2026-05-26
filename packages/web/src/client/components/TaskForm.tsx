@@ -53,6 +53,26 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   );
   const [scheduledHour, setScheduledHour] = useState<number>(task?.scheduled_hour ?? 0);
   const [points, setPoints] = useState<string>(String(task?.points ?? 1));
+  const initialPeriodEnabled =
+    task?.period_start_mm != null &&
+    task?.period_start_dd != null &&
+    task?.period_end_mm != null &&
+    task?.period_end_dd != null;
+  const [periodEnabled, setPeriodEnabled] = useState<boolean>(initialPeriodEnabled);
+  const [periodStartMm, setPeriodStartMm] = useState<number>(task?.period_start_mm ?? 1);
+  const [periodStartDd, setPeriodStartDd] = useState<number>(task?.period_start_dd ?? 1);
+  const [periodEndMm, setPeriodEndMm] = useState<number>(task?.period_end_mm ?? 12);
+  const [periodEndDd, setPeriodEndDd] = useState<number>(task?.period_end_dd ?? 31);
+  const [periodError, setPeriodError] = useState('');
+  const periodErrorRef = useRef<HTMLDivElement>(null);
+
+  function daysInMonth(mm: number): number {
+    return new Date(2000, mm, 0).getDate();
+  }
+  function clampDay(mm: number, dd: number): number {
+    const max = daysInMonth(mm);
+    return Math.min(dd, max);
+  }
   const [notes, setNotes] = useState(task?.notes || '');
   const [error, setError] = useState('');
   const [frequencyError, setFrequencyError] = useState('');
@@ -158,6 +178,17 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       }
     }
 
+    setPeriodError('');
+    if (periodEnabled) {
+      const startDays = daysInMonth(periodStartMm);
+      const endDays = daysInMonth(periodEndMm);
+      if (periodStartDd < 1 || periodStartDd > startDays || periodEndDd < 1 || periodEndDd > endDays) {
+        setPeriodError('実行期間の日付が不正です');
+        scrollToError(periodErrorRef);
+        return;
+      }
+    }
+
     if (frequencyType === 'nth_weekday_of_month') {
       if (!nthWeekdayPosition || nthWeekdayPosition < 1 || nthWeekdayPosition > 5) {
         setFrequencyError('何週目（1〜5）を選択してください');
@@ -199,6 +230,17 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     if (frequencyType === 'nth_weekday_of_month') {
       input.days_of_week = daysOfWeek;
       input.nth_weekday_position = nthWeekdayPosition;
+    }
+    if (periodEnabled) {
+      input.period_start_mm = periodStartMm;
+      input.period_start_dd = periodStartDd;
+      input.period_end_mm = periodEndMm;
+      input.period_end_dd = periodEndDd;
+    } else {
+      input.period_start_mm = null;
+      input.period_start_dd = null;
+      input.period_end_mm = null;
+      input.period_end_dd = null;
     }
     if (currentNotes) {
       input.notes = currentNotes;
@@ -308,6 +350,103 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
         error={frequencyError}
       />
       </div>
+
+      <fieldset ref={periodErrorRef} className="space-y-2">
+        <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">実行期間</legend>
+        <div className="flex flex-wrap gap-4" role="radiogroup" aria-label="実行期間">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="radio"
+              name="period-enabled"
+              checked={!periodEnabled}
+              onChange={() => { setPeriodEnabled(false); setPeriodError(''); }}
+              className="w-4 h-4"
+            />
+            期間指定しない
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="radio"
+              name="period-enabled"
+              checked={periodEnabled}
+              onChange={() => setPeriodEnabled(true)}
+              className="w-4 h-4"
+            />
+            期間指定する
+          </label>
+        </div>
+
+        {periodEnabled && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">開始</div>
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label="開始月"
+                  value={periodStartMm}
+                  onChange={(e) => {
+                    const mm = parseInt(e.target.value, 10);
+                    setPeriodStartMm(mm);
+                    setPeriodStartDd((dd) => clampDay(mm, dd));
+                  }}
+                  className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-600 dark:text-gray-400">月</span>
+                <select
+                  aria-label="開始日"
+                  value={periodStartDd}
+                  onChange={(e) => setPeriodStartDd(parseInt(e.target.value, 10))}
+                  className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  {Array.from({ length: daysInMonth(periodStartMm) }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-600 dark:text-gray-400">日</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">終了</div>
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label="終了月"
+                  value={periodEndMm}
+                  onChange={(e) => {
+                    const mm = parseInt(e.target.value, 10);
+                    setPeriodEndMm(mm);
+                    setPeriodEndDd((dd) => clampDay(mm, dd));
+                  }}
+                  className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-600 dark:text-gray-400">月</span>
+                <select
+                  aria-label="終了日"
+                  value={periodEndDd}
+                  onChange={(e) => setPeriodEndDd(parseInt(e.target.value, 10))}
+                  className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  {Array.from({ length: daysInMonth(periodEndMm) }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-600 dark:text-gray-400">日</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              終了が開始より前のときは年をまたぐ期間として扱います（例: 12/1〜2/28）
+            </p>
+          </div>
+        )}
+        {periodError && <p className="text-red-500 dark:text-red-400 text-sm" role="alert">{periodError}</p>}
+      </fieldset>
 
       <div>
         <label htmlFor="points" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ポイント</label>

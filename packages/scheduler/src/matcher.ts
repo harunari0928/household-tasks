@@ -92,6 +92,21 @@ export function shouldCreateThisHour(task: TaskDefinitionRow, currentHour: numbe
   return currentHour >= task.scheduled_hour;
 }
 
+export function isWithinActivePeriod(task: TaskDefinitionRow, today: string): boolean {
+  const { period_start_mm, period_start_dd, period_end_mm, period_end_dd } = task;
+  if (period_start_mm == null || period_start_dd == null || period_end_mm == null || period_end_dd == null) {
+    return true;
+  }
+  const d = parseDate(today);
+  const cur = (d.getMonth() + 1) * 100 + d.getDate();
+  const start = period_start_mm * 100 + period_start_dd;
+  const end = period_end_mm * 100 + period_end_dd;
+  if (start <= end) {
+    return cur >= start && cur <= end;
+  }
+  return cur >= start || cur <= end;
+}
+
 export function calculateNextDueDate(task: TaskDefinitionRow, currentDueDate: string): string {
   const ft = task.frequency_type;
   const d = parseDate(currentDueDate);

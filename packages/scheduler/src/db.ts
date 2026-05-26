@@ -14,6 +14,10 @@ export interface TaskDefinitionRow {
   day_of_month: number | null;
   month_of_year: number | null;
   nth_weekday_position: number | null;
+  period_start_mm: number | null;
+  period_start_dd: number | null;
+  period_end_mm: number | null;
+  period_end_dd: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -99,6 +103,17 @@ const migrations: Migration[] = [
     version: 12,
     up: (db) => {
       db.exec('ALTER TABLE task_definitions ADD COLUMN nth_weekday_position INTEGER DEFAULT NULL');
+    },
+  },
+  {
+    version: 13,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN period_start_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_start_dd INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_dd INTEGER DEFAULT NULL;
+      `);
     },
   },
 ];

@@ -51,6 +51,7 @@ async function createTaskViaUI(
     month_of_year?: number;
     nth_weekday_position?: number;
     scheduled_hour?: number;
+    period?: { start_mm: number; start_dd: number; end_mm: number; end_dd: number };
   },
 ) {
   const category = options.category || 'water';
@@ -80,6 +81,13 @@ async function createTaskViaUI(
   }
   if (options.scheduled_hour != null) {
     await page.getByLabel(/起票時刻/).fill(String(options.scheduled_hour));
+  }
+  if (options.period) {
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption(String(options.period.start_mm));
+    await page.getByLabel('開始日').selectOption(String(options.period.start_dd));
+    await page.getByLabel('終了月').selectOption(String(options.period.end_mm));
+    await page.getByLabel('終了日').selectOption(String(options.period.end_dd));
   }
 
   await page.getByRole('button', { name: '保存' }).click();
@@ -561,5 +569,133 @@ test.describe('第N曜日(毎月)', () => {
 
     await goToKanban(page);
     await expect(page.getByText('nth-5th-mon-create')).toBeVisible();
+  });
+});
+
+test.describe('実行期間', () => {
+  test('実行期間の開始日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-start-boundary',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-06-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-start-boundary')).toBeVisible();
+  });
+
+  test('実行期間の終了日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-end-boundary',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-08-31');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-end-boundary')).toBeVisible();
+  });
+
+  test('実行期間の開始日の前日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-before-start',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-05-31');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-before-start')).not.toBeVisible();
+  });
+
+  test('実行期間の終了日の翌日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-after-end',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-09-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-after-end')).not.toBeVisible();
+  });
+
+  test('年跨ぎ期間は開始日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-start',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-12-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-start')).toBeVisible();
+  });
+
+  test('年跨ぎ期間は年明け後の期間内日にも起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-after-newyear',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-01-15');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-after-newyear')).toBeVisible();
+  });
+
+  test('年跨ぎ期間は終了日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-end',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-02-28');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-end')).toBeVisible();
+  });
+
+  test('年跨ぎ期間外（終了の翌日）には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-outside-after',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-03-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-outside-after')).not.toBeVisible();
+  });
+
+  test('年跨ぎ期間外（開始の前日）には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-outside-before',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-11-30');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-outside-before')).not.toBeVisible();
   });
 });

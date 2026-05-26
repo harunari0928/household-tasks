@@ -214,6 +214,17 @@ const migrations: Migration[] = [
       db.exec('ALTER TABLE task_definitions ADD COLUMN nth_weekday_position INTEGER DEFAULT NULL');
     },
   },
+  {
+    version: 13,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN period_start_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_start_dd INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_dd INTEGER DEFAULT NULL;
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
