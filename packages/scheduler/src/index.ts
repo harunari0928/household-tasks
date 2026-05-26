@@ -9,7 +9,7 @@ import {
   hasRecentInstance,
   createTaskInstance,
 } from './db.js';
-import { shouldCreateToday, shouldCreateThisHour, calculateNextDueDate } from './matcher.js';
+import { shouldCreateToday, shouldCreateThisHour, isWithinActivePeriod, calculateNextDueDate } from './matcher.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -28,6 +28,7 @@ async function main() {
   // Process scheduled tasks
   for (const task of tasks) {
     if (!shouldCreateToday(task, today)) continue;
+    if (!isWithinActivePeriod(task, today)) continue;
     if (!shouldCreateThisHour(task, currentHour)) continue;
 
     if (isAlreadyCreatedToday(db, task.id, today)) {

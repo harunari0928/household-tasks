@@ -1,5 +1,127 @@
 import { test, expect } from './fixtures/setup.js';
 
+test.describe('実行期間設定', () => {
+  test('初期状態は期間指定しないが選択されている', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeChecked();
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+
+  test('期間指定するを選ぶと開始・終了の月日セレクトが表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+
+    await expect(page.getByLabel('開始月')).toBeVisible();
+    await expect(page.getByLabel('開始日')).toBeVisible();
+    await expect(page.getByLabel('終了月')).toBeVisible();
+    await expect(page.getByLabel('終了日')).toBeVisible();
+  });
+
+  test('指定した期間は保存後に再オープンしても復元される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('期間タスク');
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption('6');
+    await page.getByLabel('開始日').selectOption('1');
+    await page.getByLabel('終了月').selectOption('8');
+    await page.getByLabel('終了日').selectOption('31');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間タスク').waitFor();
+
+    await page.getByText('期間タスク').click();
+
+    await expect(page.getByRole('radio', { name: '期間指定する' })).toBeChecked();
+    await expect(page.getByLabel('開始月')).toHaveValue('6');
+    await expect(page.getByLabel('開始日')).toHaveValue('1');
+    await expect(page.getByLabel('終了月')).toHaveValue('8');
+    await expect(page.getByLabel('終了日')).toHaveValue('31');
+  });
+
+  test('開始と終了が同じ月日でも保存できる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('期間1日タスク');
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption('6');
+    await page.getByLabel('開始日').selectOption('1');
+    await page.getByLabel('終了月').selectOption('6');
+    await page.getByLabel('終了日').selectOption('1');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間1日タスク').waitFor();
+
+    await page.getByText('期間1日タスク').click();
+
+    await expect(page.getByLabel('開始月')).toHaveValue('6');
+    await expect(page.getByLabel('開始日')).toHaveValue('1');
+    await expect(page.getByLabel('終了月')).toHaveValue('6');
+    await expect(page.getByLabel('終了日')).toHaveValue('1');
+  });
+
+  test('終了月を2月に切り替えると終了日は2月の最大日数までしか選べない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('終了月').selectOption('3');
+    await page.getByLabel('終了日').selectOption('31');
+
+    await page.getByLabel('終了月').selectOption('2');
+
+    await expect(page.getByLabel('終了日')).toHaveValue('28');
+    await expect(page.getByLabel('終了日').getByRole('option')).toHaveCount(28);
+  });
+
+  test('1年毎の頻度では実行期間のラジオが無効化される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('頻度').selectOption('yearly');
+
+    await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: '期間指定する' })).toBeDisabled();
+    await expect(page.getByText('1年毎の頻度では実行期間を指定できません')).toBeVisible();
+  });
+
+  test('1年毎に切り替えると以前設定していた期間入力が非表示になる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await expect(page.getByLabel('開始月')).toBeVisible();
+
+    await page.getByLabel('頻度').selectOption('yearly');
+
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+
+  test('期間指定しないに戻して保存すると次回オープン時も未設定になる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('期間解除タスク');
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption('3');
+    await page.getByLabel('開始日').selectOption('15');
+    await page.getByLabel('終了月').selectOption('5');
+    await page.getByLabel('終了日').selectOption('20');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間解除タスク').waitFor();
+    await page.getByText('期間解除タスク').click();
+    await page.getByRole('radio', { name: '期間指定しない' }).check();
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間解除タスク').waitFor();
+
+    await page.getByText('期間解除タスク').click();
+
+    await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeChecked();
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+});
+
 test.describe('タスクCRUD', () => {
   test('タスクを新規作成できる', async ({ page }) => {
     await page.goto('/#/tasks');

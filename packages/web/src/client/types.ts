@@ -47,6 +47,10 @@ export interface TaskDefinition {
   day_of_month: number | null;
   month_of_year: number | null;
   nth_weekday_position: number | null;
+  period_start_mm: number | null;
+  period_start_dd: number | null;
+  period_end_mm: number | null;
+  period_end_dd: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
@@ -65,6 +69,10 @@ export interface TaskDefinitionInput {
   day_of_month?: number;
   month_of_year?: number;
   nth_weekday_position?: number;
+  period_start_mm?: number | null;
+  period_start_dd?: number | null;
+  period_end_mm?: number | null;
+  period_end_dd?: number | null;
   notes?: string;
   points?: number;
   scheduled_hour: number;
