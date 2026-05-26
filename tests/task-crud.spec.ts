@@ -43,6 +43,61 @@ test.describe('実行期間設定', () => {
     await expect(page.getByLabel('終了日')).toHaveValue('31');
   });
 
+  test('開始と終了が同じ月日でも保存できる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('期間1日タスク');
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption('6');
+    await page.getByLabel('開始日').selectOption('1');
+    await page.getByLabel('終了月').selectOption('6');
+    await page.getByLabel('終了日').selectOption('1');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間1日タスク').waitFor();
+
+    await page.getByText('期間1日タスク').click();
+
+    await expect(page.getByLabel('開始月')).toHaveValue('6');
+    await expect(page.getByLabel('開始日')).toHaveValue('1');
+    await expect(page.getByLabel('終了月')).toHaveValue('6');
+    await expect(page.getByLabel('終了日')).toHaveValue('1');
+  });
+
+  test('終了月を2月に切り替えると終了日は2月の最大日数までしか選べない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('終了月').selectOption('3');
+    await page.getByLabel('終了日').selectOption('31');
+
+    await page.getByLabel('終了月').selectOption('2');
+
+    await expect(page.getByLabel('終了日')).toHaveValue('28');
+    await expect(page.getByLabel('終了日').getByRole('option')).toHaveCount(28);
+  });
+
+  test('1年毎の頻度では実行期間のラジオが無効化される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('頻度').selectOption('yearly');
+
+    await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: '期間指定する' })).toBeDisabled();
+    await expect(page.getByText('1年毎の頻度では実行期間を指定できません')).toBeVisible();
+  });
+
+  test('1年毎に切り替えると以前設定していた期間入力が非表示になる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await expect(page.getByLabel('開始月')).toBeVisible();
+
+    await page.getByLabel('頻度').selectOption('yearly');
+
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+
   test('期間指定しないに戻して保存すると次回オープン時も未設定になる', async ({ page }) => {
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /水回り/ }).click();

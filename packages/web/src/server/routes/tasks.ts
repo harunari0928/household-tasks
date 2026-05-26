@@ -30,7 +30,7 @@ interface TaskInput {
 function isValidMonthDay(mm: number, dd: number): boolean {
   if (!Number.isInteger(mm) || mm < 1 || mm > 12) return false;
   if (!Number.isInteger(dd) || dd < 1 || dd > 31) return false;
-  const d = new Date(2000, mm - 1, dd);
+  const d = new Date(2001, mm - 1, dd);
   return d.getMonth() === mm - 1 && d.getDate() === dd;
 }
 
@@ -111,6 +111,9 @@ function validateTaskInput(body: TaskInput): string | null {
     return '実行期間は開始・終了の月日4つすべてを指定してください';
   }
   if (periodSet.length === 4) {
+    if (ft === 'yearly') {
+      return '1年毎の頻度では実行期間を指定できません';
+    }
     if (!isValidMonthDay(body.period_start_mm as number, body.period_start_dd as number)) {
       return '実行期間の開始月日が不正です';
     }

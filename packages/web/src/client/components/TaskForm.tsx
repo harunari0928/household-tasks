@@ -67,7 +67,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const periodErrorRef = useRef<HTMLDivElement>(null);
 
   function daysInMonth(mm: number): number {
-    return new Date(2000, mm, 0).getDate();
+    return new Date(2001, mm, 0).getDate();
   }
   function clampDay(mm: number, dd: number): number {
     const max = daysInMonth(mm);
@@ -179,7 +179,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     }
 
     setPeriodError('');
-    if (periodEnabled) {
+    if (periodEnabled && frequencyType !== 'yearly') {
       const startDays = daysInMonth(periodStartMm);
       const endDays = daysInMonth(periodEndMm);
       if (periodStartDd < 1 || periodStartDd > startDays || periodEndDd < 1 || periodEndDd > endDays) {
@@ -231,7 +231,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       input.days_of_week = daysOfWeek;
       input.nth_weekday_position = nthWeekdayPosition;
     }
-    if (periodEnabled) {
+    if (periodEnabled && frequencyType !== 'yearly') {
       input.period_start_mm = periodStartMm;
       input.period_start_dd = periodStartDd;
       input.period_end_mm = periodEndMm;
@@ -351,32 +351,35 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       />
       </div>
 
-      <fieldset ref={periodErrorRef} className="space-y-2">
+      <fieldset ref={periodErrorRef} className="space-y-2" disabled={frequencyType === 'yearly'}>
         <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">実行期間</legend>
         <div className="flex flex-wrap gap-4" role="radiogroup" aria-label="実行期間">
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <label className={`inline-flex items-center gap-2 text-sm ${frequencyType === 'yearly' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
             <input
               type="radio"
               name="period-enabled"
-              checked={!periodEnabled}
+              checked={!periodEnabled || frequencyType === 'yearly'}
               onChange={() => { setPeriodEnabled(false); setPeriodError(''); }}
               className="w-4 h-4"
             />
             期間指定しない
           </label>
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <label className={`inline-flex items-center gap-2 text-sm ${frequencyType === 'yearly' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
             <input
               type="radio"
               name="period-enabled"
-              checked={periodEnabled}
+              checked={periodEnabled && frequencyType !== 'yearly'}
               onChange={() => setPeriodEnabled(true)}
               className="w-4 h-4"
             />
             期間指定する
           </label>
         </div>
+        {frequencyType === 'yearly' && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">1年毎の頻度では実行期間を指定できません</p>
+        )}
 
-        {periodEnabled && (
+        {periodEnabled && frequencyType !== 'yearly' && (
           <div className="space-y-2 pl-1">
             <div>
               <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">開始</div>
