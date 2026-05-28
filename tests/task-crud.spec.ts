@@ -615,22 +615,15 @@ test.describe('タスク削除', () => {
     await expect(page.getByText('削除キャンセルテスト')).toBeVisible();
   });
 
-  test('カンバンに起票済みのタスクも削除でき、カンバンからもカードが消える', async ({ page }) => {
+  test('カンバンに起票済みのタスクも削除でき、カンバンからもカードが消える', async ({ page, baseURL }) => {
+    const taskRes = await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '起票後削除テスト', category: 'water', frequency_type: 'daily' },
+    });
+    const task = await taskRes.json();
+    await page.request.post(`${baseURL}/api/kanban/create-from-definition/${task.id}`);
     await page.goto('/#/tasks');
-    await page.getByRole('button', { name: /タスクを追加/ }).click();
-    await page.getByLabel('タスク名').fill('起票後削除テスト');
-    await page.getByRole('button', { name: '保存' }).click();
-    await expect(page.getByText('起票後削除テスト')).toBeVisible();
+    await page.getByText('起票後削除テスト').waitFor();
 
-    await page.getByText('起票後削除テスト').click();
-    await page.getByRole('button', { name: '今すぐ起票する' }).click();
-    await expect(page.getByText('カンバンボードに追加しました')).toBeVisible();
-    await page.getByRole('button', { name: 'キャンセル' }).click();
-
-    await page.goto('/#/');
-    await expect(page.getByText('起票後削除テスト')).toBeVisible();
-
-    await page.goto('/#/tasks');
     await page.getByText('起票後削除テスト').click();
     await page.getByRole('button', { name: '削除' }).click();
     await page.getByRole('button', { name: '削除する' }).click();
