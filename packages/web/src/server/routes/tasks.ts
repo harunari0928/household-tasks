@@ -202,6 +202,12 @@ router.post('/', (req: Request, res: Response) => {
   const body = req.body as TaskInput;
   const today = getTodayJST();
 
+  const dup = db.prepare('SELECT id FROM task_definitions WHERE name = ?').get(body.name);
+  if (dup) {
+    res.status(409).json({ error: '同じ名前のタスクが既に存在します' });
+    return;
+  }
+
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
   const monthOfYear = body.month_of_year ?? null;
@@ -263,6 +269,12 @@ router.put('/:id', (req: Request, res: Response) => {
 
   const body = req.body as TaskInput;
   const today = getTodayJST();
+
+  const dup = db.prepare('SELECT id FROM task_definitions WHERE name = ? AND id != ?').get(body.name, req.params.id);
+  if (dup) {
+    res.status(409).json({ error: '同じ名前のタスクが既に存在します' });
+    return;
+  }
 
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
@@ -341,6 +353,7 @@ router.delete('/:id', (req: Request, res: Response) => {
   const deleteAll = db.transaction(() => {
     db.prepare('DELETE FROM attachments WHERE task_id = ?').run(req.params.id);
     db.prepare('DELETE FROM execution_log WHERE task_definition_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM task_instances WHERE task_definition_id = ?').run(req.params.id);
     db.prepare('DELETE FROM task_definitions WHERE id = ?').run(req.params.id);
   });
   deleteAll();

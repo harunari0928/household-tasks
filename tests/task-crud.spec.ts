@@ -737,6 +737,29 @@ test.describe('タスク削除', () => {
     await expect(page.getByText('削除キャンセルテスト')).toBeVisible();
   });
 
+  test('カンバンに起票済みのタスクも削除でき、カンバンからもカードが消える', async ({ page, baseURL }) => {
+    const taskRes = await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '起票後削除テスト', category: 'water', frequency_type: 'daily' },
+    });
+    const task = await taskRes.json();
+    await page.request.post(`${baseURL}/api/kanban/create-from-definition/${task.id}`);
+    await page.goto('/#/tasks');
+    await page.getByText('起票後削除テスト').waitFor();
+
+    await page.getByText('起票後削除テスト').click();
+    await page.getByRole('button', { name: '削除' }).click();
+    await page.getByRole('button', { name: '削除する' }).click();
+
+    await test.step('タスク管理画面から消える', async () => {
+      await expect(page.getByText('起票後削除テスト')).not.toBeVisible();
+    });
+
+    await test.step('カンバンボードからもカードが消える', async () => {
+      await page.goto('/#/');
+      await expect(page.getByText('起票後削除テスト')).not.toBeVisible();
+    });
+  });
+
   test('新規作成フォームに削除ボタンが表示されない', async ({ page }) => {
     await page.goto('/#/tasks');
 
@@ -781,6 +804,53 @@ test.describe('タスク削除', () => {
       const res = await page.request.get(attachmentUrl);
       expect(res.status()).toBe(404);
     });
+  });
+});
+
+test.describe('重複名チェック', () => {
+  test('既存タスクと同じ名前で新規作成するとエラーが表示される', async ({ page, baseURL }) => {
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '重複チェック用', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('重複チェック用');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('同じ名前のタスクが既に存在します');
+  });
+
+  test('編集時に他タスクと同じ名前に変更するとエラーが表示される', async ({ page, baseURL }) => {
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: 'タスクA', category: 'water', frequency_type: 'daily' },
+    });
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: 'タスクB', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+
+    await page.getByText('タスクB').click();
+    await page.getByLabel('タスク名').fill('タスクA');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('同じ名前のタスクが既に存在します');
+  });
+
+  test('編集時に自分と同じ名前のまま保存できる', async ({ page, baseURL }) => {
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '自分の名前のまま', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+
+    await page.getByText('自分の名前のまま').click();
+    await page.getByLabel('備考').fill('編集メモ');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await expect(page.getByText('自分の名前のまま')).toBeVisible();
   });
 });
 
