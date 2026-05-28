@@ -294,14 +294,14 @@ export default function App() {
 
         {showForm && (
           <div
-            className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4"
             onClick={handleCancel}
           >
             <div
               role="dialog"
               aria-modal="true"
               aria-label={editingTask ? 'タスクを編集' : 'タスクを追加'}
-              className="bg-white dark:bg-gray-800 w-full sm:max-w-lg sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto"
+              className="bg-gray-50 dark:bg-gray-900 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <TaskForm
