@@ -537,7 +537,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
             <button
               type="button"
               onClick={handleCreateInstance}
-              disabled={createInstanceStatus === 'loading' || createInstanceStatus === 'success'}
+              disabled={createInstanceStatus === 'loading'}
               className="w-full flex items-center justify-center gap-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 py-2.5 rounded-lg font-medium transition-colors min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

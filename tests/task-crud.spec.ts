@@ -283,7 +283,10 @@ test.describe('フォームバリデーション', () => {
     await page.waitForTimeout(500);
 
     // 下にスクロールするとエラーが見えなくなる
-    await dialog.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await dialog.evaluate((el) => {
+      const scroller = el.querySelector<HTMLElement>('.overflow-y-auto') ?? (el as HTMLElement);
+      scroller.scrollTop = scroller.scrollHeight;
+    });
     await page.waitForTimeout(100);
 
     await test.step('下にスクロールするとエラーが見えなくなる', async () => {
@@ -709,7 +712,7 @@ test.describe('タスク削除', () => {
     await page.getByText('削除テスト用タスク').click();
     await page.getByRole('button', { name: '削除' }).click();
 
-    await expect(page.getByText('本当に削除しますか？')).toBeVisible();
+    await expect(page.getByText('タスクを削除しますか？')).toBeVisible();
 
     await page.getByRole('button', { name: '削除する' }).click();
 
@@ -726,13 +729,14 @@ test.describe('タスク削除', () => {
 
     await page.getByText('削除キャンセルテスト').click();
     await page.getByRole('button', { name: '削除' }).click();
-    await expect(page.getByText('本当に削除しますか？')).toBeVisible();
+    const confirmDialog = page.getByRole('alertdialog', { name: '削除の確認' });
+    await expect(confirmDialog).toBeVisible();
 
-    await page.getByRole('button', { name: 'やめる' }).click();
+    await confirmDialog.getByRole('button', { name: 'キャンセル' }).click();
 
-    await expect(page.getByText('本当に削除しますか？')).not.toBeVisible();
+    await expect(confirmDialog).not.toBeVisible();
 
-    await page.getByRole('button', { name: 'キャンセル' }).click();
+    await page.getByRole('button', { name: '閉じる' }).click();
 
     await expect(page.getByText('削除キャンセルテスト')).toBeVisible();
   });
@@ -859,7 +863,7 @@ test.describe('今すぐ起票', () => {
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
-    await expect(page.getByRole('button', { name: '今すぐ起票する' })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: '今すぐカンバンに起票' })).not.toBeVisible();
   });
 
   test('編集フォームで起票するとカンバンに未着手タスクが追加される', async ({ page }) => {
@@ -870,7 +874,7 @@ test.describe('今すぐ起票', () => {
     await expect(page.getByText('起票テスト')).toBeVisible();
 
     await page.getByText('起票テスト').click();
-    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
 
     await expect(page.getByText('カンバンボードに追加しました')).toBeVisible();
 
@@ -888,10 +892,10 @@ test.describe('今すぐ起票', () => {
     await expect(page.getByText('重複テスト')).toBeVisible();
 
     await page.getByText('重複テスト').click();
-    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
     await expect(page.getByText('カンバンボードに追加しました')).toBeVisible();
 
-    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
 
     await expect(page.getByText('すでにボード上に未完了のタスクがあります')).toBeVisible();
   });
