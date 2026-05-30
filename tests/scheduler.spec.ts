@@ -104,6 +104,10 @@ function addDays(dateStr: string, n: number): string {
   return dt.toISOString().split('T')[0];
 }
 
+async function setServerTime(page: Page, baseURL: string, iso: string | null) {
+  await page.request.post(`${baseURL}/api/test/set-time`, { data: { time: iso } });
+}
+
 async function goToKanban(page: Page) {
   // Force full page reload to get fresh data from the database
   await page.goto('about:blank');
@@ -360,33 +364,61 @@ test.describe('重複起票の防止', () => {
     await expect(page.getByText('cross-day-dup')).toHaveCount(1);
   });
 
-  test('数日前に起票された未完了タスクを今日完了しても、同日中に再起票されない', async ({ page, baseURL }) => {
-    // Arrange
+  test('前日分を起票時刻より後に完了すると、当日分は再起票されない', async ({ page, baseURL }) => {
+    // Arrange: 起票時刻8時のタスク。前日分を未完了のまま持ち越し、当日9時（起票時刻より後）に完了する。
     const today = getTodayJST();
     await registerUser(page, 'test-user');
-    await createTaskViaUI(page, baseURL!, { name: 'revive-after-skip', category: 'water', frequency_type: 'daily' });
-    await runScheduler(addDays(today, -3));
-    await runScheduler(addDays(today, -2));
-    await runScheduler(addDays(today, -1));
-    await runScheduler(today);
+    await createTaskViaUI(page, baseURL!, { name: 'morning-task', category: 'water', frequency_type: 'daily', scheduled_hour: 8 });
+    await runScheduler(addDays(today, -1), 8);
+    await setServerTime(page, baseURL!, `${today}T00:00:00.000Z`); // JST 09:00 当日
     await goToKanban(page);
-    await completeTaskViaUI(page, 'revive-after-skip', 'test-user');
+    await completeTaskViaUI(page, 'morning-task', 'test-user');
+    await setServerTime(page, baseURL!, null);
 
     // Act
-    await runScheduler(today);
+    await runScheduler(today, 10);
 
     // Assert
     await goToKanban(page);
     await test.step('完了列に1件残っている', async () => {
       await expect(
-        page.getByRole('region', { name: '完了列' }).getByText('revive-after-skip'),
+        page.getByRole('region', { name: '完了列' }).getByText('morning-task'),
       ).toHaveCount(1);
     });
 
     await test.step('未着手列に再起票されていない', async () => {
       await expect(
-        page.getByRole('region', { name: '未着手列' }).getByText('revive-after-skip'),
+        page.getByRole('region', { name: '未着手列' }).getByText('morning-task'),
       ).toHaveCount(0);
+    });
+  });
+
+  test('前日分を起票時刻より前に完了すると、当日分が起票される', async ({ page, baseURL }) => {
+    // Arrange: 起票時刻19時のタスク。前日分を未完了のまま持ち越し、当日8時（起票時刻より前）に完了する。
+    const today = getTodayJST();
+    await registerUser(page, 'test-user');
+    await createTaskViaUI(page, baseURL!, { name: 'evening-task', category: 'water', frequency_type: 'daily', scheduled_hour: 19 });
+    await runScheduler(addDays(today, -1), 19);
+    await setServerTime(page, baseURL!, `${addDays(today, -1)}T23:00:00.000Z`); // JST 08:00 当日
+    await goToKanban(page);
+    await completeTaskViaUI(page, 'evening-task', 'test-user');
+    await setServerTime(page, baseURL!, null);
+
+    // Act
+    await runScheduler(today, 19);
+
+    // Assert
+    await goToKanban(page);
+    await test.step('完了列に前日分が1件残っている', async () => {
+      await expect(
+        page.getByRole('region', { name: '完了列' }).getByText('evening-task'),
+      ).toHaveCount(1);
+    });
+
+    await test.step('未着手列に当日分が起票されている', async () => {
+      await expect(
+        page.getByRole('region', { name: '未着手列' }).getByText('evening-task'),
+      ).toHaveCount(1);
     });
   });
 });

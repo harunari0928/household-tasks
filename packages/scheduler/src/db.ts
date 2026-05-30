@@ -186,16 +186,25 @@ export function hasRecentInstance(
   db: Database.Database,
   taskDefId: number,
   todayJST: string,
+  scheduledHour: number,
 ): boolean {
+  // 再起票を抑止する条件:
+  //   - 未完了インスタンスが残っている（バックログ）
+  //   - 当日(JST)の起票時刻以降に完了済み = 今日の分は消化済み
+  // 当日の起票時刻より前に完了した場合（前日以前のバックログを朝に片付けた等）は、
+  // 今日の分が未消化なので再起票を許可する。
   const row = db.prepare(`
     SELECT 1 FROM task_instances
     WHERE task_definition_id = ?
       AND (
         status != 'done'
-        OR date(completed_at, '+9 hours') = ?
+        OR (
+          date(completed_at, '+9 hours') = ?
+          AND CAST(strftime('%H', completed_at, '+9 hours') AS INTEGER) >= ?
+        )
       )
     LIMIT 1
-  `).get(taskDefId, todayJST);
+  `).get(taskDefId, todayJST, scheduledHour);
   return !!row;
 }
 

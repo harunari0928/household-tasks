@@ -43,7 +43,7 @@ async function main() {
     }
 
     try {
-      const hasDuplicate = hasRecentInstance(db, task.id, today);
+      const hasDuplicate = hasRecentInstance(db, task.id, today, task.scheduled_hour);
       if (hasDuplicate) {
         logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
         skipped++;
@@ -84,7 +84,7 @@ async function main() {
       if (!task) continue;
 
       try {
-        const hasDuplicate = hasRecentInstance(db, task.id, today);
+        const hasDuplicate = hasRecentInstance(db, task.id, today, task.scheduled_hour);
         if (hasDuplicate) {
           logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
           skipped++;
