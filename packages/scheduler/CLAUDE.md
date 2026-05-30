@@ -13,7 +13,7 @@ Node.js cron job that runs hourly (at :00). Reads task definitions from SQLite a
 1. Get all active task definitions
 2. For each task, check `shouldCreateToday(task, today)`
 3. Check `isAlreadyCreatedToday` (execution_log idempotency)
-4. Check `hasRecentInstance` in task_instances (duplicate prevention: includes JST-today completed instances to avoid re-creation after same-day completion)
+4. Check `hasRecentInstance` in task_instances (duplicate prevention: skips re-creation if an open instance exists, or if an instance was completed today (JST) at/after the task's `scheduled_hour` — i.e. today's occurrence is already satisfied. A backlog completed earlier than `scheduled_hour` does NOT block today's occurrence.)
 5. Create task instance in SQLite (`INSERT INTO task_instances`)
 6. Update `next_due_date` for interval-based tasks
 7. Retry any previously failed tasks
