@@ -31,7 +31,7 @@ export default function KanbanColumn({ status, title, items, recentlyMovedIds, o
       data-column-status={status}
       role="region"
       aria-label={`${title}列`}
-      className={`flex-1 min-w-[200px] sm:min-w-[280px] max-w-[400px] rounded-lg p-2 flex flex-col h-full transition-colors snap-start ${
+      className={`flex-1 min-w-0 sm:min-w-[280px] max-w-[400px] rounded-lg p-1.5 sm:p-2 flex flex-col h-full transition-colors snap-start ${
         isOver ? 'bg-blue-50 dark:bg-blue-800/40' : 'bg-gray-50 dark:bg-gray-900/50'
       }`}
     >
@@ -44,7 +44,7 @@ export default function KanbanColumn({ status, title, items, recentlyMovedIds, o
         <div className="ml-auto">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="opacity-0 group-hover/header:opacity-100 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+            className="opacity-100 sm:opacity-0 sm:group-hover/header:opacity-100 p-1.5 -m-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
             aria-label={`${title}メニュー`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
