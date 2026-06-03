@@ -175,13 +175,16 @@ test.describe('カンバンボードの表示', () => {
   });
 
   test('ボードの読み込みが通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     await page.route('**/api/kanban', (route) =>
       route.request().method() === 'GET' ? route.abort() : route.continue(),
     );
 
+    // Act
     await goToKanban(page);
 
+    // Assert
     await expect(page.getByRole('alert').filter({ hasText: 'タスクの取得に失敗しました' }).first()).toBeVisible();
   });
 });
@@ -197,27 +200,32 @@ test.describe('ドラッグ&ドロップ', () => {
     await dragCardToColumn(page, 'drag-to-done', '完了');
 
     await expect(page.getByText('drag-to-done').first()).toBeVisible();
-    const doneColumn = page.locator('[data-column-status="done"]');
+    const doneColumn = page.getByRole('region', { name: '完了列' });
     await expect(doneColumn.getByText('drag-to-done')).toBeVisible();
   });
 
   test('ステータス変更が通信エラーになると、カードが元の未着手列に戻りエラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     await createTaskViaUI(page, { name: 'status-error-card', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await changeStatus(page, baseURL!, 'status-error-card', 'todo', 'MTMR');
     await goToKanban(page);
-
     await page.route('**/api/kanban/*/status', (route) => route.abort());
+
+    // Act
     await dragCardToColumn(page, 'status-error-card', '完了');
 
+    // Assert
     await test.step('エラーが目立つ形で通知される', async () => {
       await expect(page.getByRole('alert').filter({ hasText: 'タスクのステータス変更に失敗しました' }).first()).toBeVisible();
     });
+
     await test.step('カードが元の未着手列に戻る', async () => {
-      await expect(page.locator('[data-column-status="todo"]').getByText('status-error-card')).toBeVisible();
-      await expect(page.locator('[data-column-status="done"]').getByText('status-error-card')).toBeHidden();
+      await expect(page.getByRole('region', { name: '未着手列' }).getByText('status-error-card')).toBeVisible();
+      await expect(page.getByRole('region', { name: '完了列' }).getByText('status-error-card')).toBeHidden();
     });
+
     await test.step('通知は操作を妨げず、ボードは引き続き表示される', async () => {
       await expect(page.getByRole('heading', { name: '未着手' })).toBeVisible();
       await expect(page.getByRole('heading', { name: '完了' })).toBeVisible();
@@ -225,12 +233,12 @@ test.describe('ドラッグ&ドロップ', () => {
   });
 
   test('ステータス変更失敗の通知から再試行すると、移動が反映される', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     await createTaskViaUI(page, { name: 'status-retry-card', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await changeStatus(page, baseURL!, 'status-retry-card', 'todo', 'MTMR');
     await goToKanban(page);
-
     // 最初の1回だけ失敗させ、再試行（2回目）は成功させる
     let failNext = true;
     await page.route('**/api/kanban/*/status', (route) => {
@@ -240,10 +248,11 @@ test.describe('ドラッグ&ドロップ', () => {
       }
       return route.continue();
     });
-    await dragCardToColumn(page, 'status-retry-card', '完了');
-    await expect(page.getByRole('alert').filter({ hasText: 'タスクのステータス変更に失敗しました' }).first()).toBeVisible();
 
-    // 再試行のステータス変更が成功裏に完了するのを待ってから検証する
+    // Act
+    await dragCardToColumn(page, 'status-retry-card', '完了');
+    await page.getByRole('alert').filter({ hasText: 'タスクのステータス変更に失敗しました' }).first().waitFor();
+    // 再試行のステータス変更が成功裏に完了するのを待つ
     await Promise.all([
       page.waitForResponse(
         (res) =>
@@ -254,23 +263,26 @@ test.describe('ドラッグ&ドロップ', () => {
       page.getByRole('alert').getByRole('button', { name: '再試行' }).click(),
     ]);
 
-    await expect(page.locator('[data-column-status="done"]').getByText('status-retry-card')).toBeVisible();
+    // Assert
+    await expect(page.getByRole('region', { name: '完了列' }).getByText('status-retry-card')).toBeVisible();
   });
 
   test('ステータス変更失敗のエラー通知は✕ボタンで手動で閉じられる', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     await createTaskViaUI(page, { name: 'status-dismiss-card', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await changeStatus(page, baseURL!, 'status-dismiss-card', 'todo', 'MTMR');
     await goToKanban(page);
-
     await page.route('**/api/kanban/*/status', (route) => route.abort());
+
+    // Act
     await dragCardToColumn(page, 'status-dismiss-card', '完了');
     const alert = page.getByRole('alert').filter({ hasText: 'タスクのステータス変更に失敗しました' }).first();
-    await expect(alert).toBeVisible();
-
+    await alert.waitFor();
     await alert.getByRole('button', { name: '閉じる' }).click();
 
+    // Assert
     await expect(alert).toBeHidden();
   });
 });
@@ -351,19 +363,23 @@ test.describe('担当者の割り当て', () => {
   });
 
   test('担当者変更が通信エラーになると、担当者が未割当のまま戻りエラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
     await createTaskViaUI(page, { name: 'assignee-error-card', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await goToKanban(page);
-
     await page.route('**/api/kanban/*/assignee', (route) => route.abort());
+
+    // Act
     await page.getByRole('button', { name: '未割当', exact: true }).click();
     await assigneeDialog(page).getByRole('checkbox', { name: 'こばゆか' }).check();
     await assigneeDialog(page).getByRole('button', { name: '確定' }).click();
 
+    // Assert
     await test.step('エラーが通知される', async () => {
       await expect(page.getByRole('alert').filter({ hasText: '担当者の変更に失敗しました' }).first()).toBeVisible();
     });
+
     await test.step('カードは未割当のまま', async () => {
       await expect(page.getByRole('button', { name: '未割当', exact: true })).toBeVisible();
     });
@@ -445,44 +461,52 @@ test.describe('タスクの削除', () => {
   });
 
   test('カードの削除が通信エラーになると、カードが復活しエラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     await createTaskViaUI(page, { name: 'delete-error-card', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await goToKanban(page);
-
     await page.route('**/api/kanban/*', (route) =>
       route.request().method() === 'DELETE' ? route.abort() : route.continue(),
     );
+
+    // Act
     await page.getByText('delete-error-card').hover();
     await page.getByLabel('タスクを削除').click();
     await page.getByRole('button', { name: '削除する' }).click();
 
+    // Assert
     await test.step('エラーが通知される', async () => {
       await expect(page.getByRole('alert').filter({ hasText: 'タスクの削除に失敗しました' }).first()).toBeVisible();
     });
+
     await test.step('削除されたカードが復活する', async () => {
-      await expect(page.locator('[data-column-status="todo"]').getByText('delete-error-card')).toBeVisible();
+      await expect(page.getByRole('region', { name: '未着手列' }).getByText('delete-error-card')).toBeVisible();
     });
   });
 
   test('列の一括削除が通信エラーになると、カードが復活しエラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     await createTaskViaUI(page, { name: 'clear-error-card', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await goToKanban(page);
-
     await page.route(/\/api\/kanban\?status=/, (route) =>
       route.request().method() === 'DELETE' ? route.abort() : route.continue(),
     );
+
+    // Act
     await page.getByLabel('未着手メニュー').click();
     await page.getByText('すべて削除').click();
     await page.getByRole('button', { name: '削除する' }).click();
 
+    // Assert
     await test.step('エラーが通知される', async () => {
       await expect(page.getByRole('alert').filter({ hasText: 'タスクの一括削除に失敗しました' }).first()).toBeVisible();
     });
+
     await test.step('削除されたカードが復活する', async () => {
-      await expect(page.locator('[data-column-status="todo"]').getByText('clear-error-card')).toBeVisible();
+      await expect(page.getByRole('region', { name: '未着手列' }).getByText('clear-error-card')).toBeVisible();
     });
   });
 });
@@ -506,16 +530,19 @@ test.describe('タスク詳細ダイアログ', () => {
   });
 
   test('タスク詳細の取得が通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     await createTaskViaUI(page, { name: 'detail-error-card', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await goToKanban(page);
-
     await page.route('**/api/tasks/*', (route) =>
       route.request().method() === 'GET' ? route.abort() : route.continue(),
     );
+
+    // Act
     await page.getByText('detail-error-card').click();
 
+    // Assert
     await expect(page.getByRole('alert').filter({ hasText: 'タスク詳細の取得に失敗しました' }).first()).toBeVisible();
   });
 });
@@ -666,7 +693,7 @@ test.describe('画面を再表示したときの最新化', () => {
     // SSE接続を遮断: 画面を閉じている間に他ユーザの操作が届かない状況を再現
     await page.route('**/api/kanban/events', (route) => route.abort());
     await goToKanban(page);
-    await page.locator('[data-column-status="todo"]').getByText('visibility-refresh-test').waitFor();
+    await page.getByRole('region', { name: '未着手列' }).getByText('visibility-refresh-test').waitFor();
 
     const otherUserPage = await page.context().newPage();
     await otherUserPage.goto('/#/');
@@ -679,7 +706,7 @@ test.describe('画面を再表示したときの最新化', () => {
     });
 
     await dragCardToColumn(otherUserPage, 'visibility-refresh-test', '完了');
-    await otherUserPage.locator('[data-column-status="done"]').getByText('visibility-refresh-test').waitFor();
+    await otherUserPage.getByRole('region', { name: '完了列' }).getByText('visibility-refresh-test').waitFor();
 
     await page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
@@ -688,7 +715,7 @@ test.describe('画面を再表示したときの最新化', () => {
 
     // Assert
     await expect(
-      page.locator('[data-column-status="done"]').getByText('visibility-refresh-test'),
+      page.getByRole('region', { name: '完了列' }).getByText('visibility-refresh-test'),
     ).toBeVisible();
   });
 });
@@ -716,7 +743,8 @@ test.describe('同一列内の並べ替え', () => {
   }
 
   async function getColumnText(page: Page, status: string): Promise<string> {
-    return page.locator(`[data-column-status="${status}"]`).innerText();
+    const columnName = status === 'done' ? '完了列' : '未着手列';
+    return page.getByRole('region', { name: columnName }).innerText();
   }
 
   test('カードを上にドラッグして並び順が変わる', async ({ page }) => {
@@ -752,17 +780,21 @@ test.describe('同一列内の並べ替え', () => {
   });
 
   test('並び順の変更が通信エラーになると、元の並び順に戻りエラーが通知される', async ({ page }) => {
+    // Arrange
     await createTaskViaUI(page, { name: 'order-a', frequency_type: 'daily' });
     await createTaskViaUI(page, { name: 'order-b', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     await goToKanban(page);
-
     await page.route('**/api/kanban/reorder', (route) => route.abort());
+
+    // Act
     await dragCardWithinColumn(page, 'order-b', 'order-a');
 
+    // Assert
     await test.step('エラーが通知される', async () => {
       await expect(page.getByRole('alert').filter({ hasText: '並び順の変更に失敗しました' }).first()).toBeVisible();
     });
+
     await test.step('元の並び順（order-a が order-b より上）に戻る', async () => {
       const text = await getColumnText(page, 'todo');
       expect(text.indexOf('order-a')).toBeLessThan(text.indexOf('order-b'));

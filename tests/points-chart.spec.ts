@@ -273,12 +273,15 @@ test.describe('ポイント集計の表示', () => {
   });
 
   test('集計データの取得が通信エラーになると、画面内にエラーが表示される', async ({ page }) => {
+    // Arrange
     await page.route('**/api/stats/points**', (route) =>
       route.request().method() === 'GET' ? route.abort() : route.continue(),
     );
 
+    // Act
     await page.goto('/#/stats');
 
+    // Assert
     await expect(page.getByText('データの取得に失敗しました')).toBeVisible();
   });
 });
