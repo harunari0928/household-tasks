@@ -8,6 +8,7 @@ import KanbanBoard from './components/KanbanBoard.js';
 import SettingsPage from './components/SettingsPage.js';
 import useTheme from './hooks/useTheme.js';
 import { useAssignees } from './hooks/useAssignees.js';
+import { useApi } from './hooks/useApi.js';
 
 type Page = 'kanban' | 'tasks' | 'stats' | 'settings';
 
@@ -20,6 +21,7 @@ function getPage(): Page {
 }
 
 export default function App() {
+  const { request } = useApi();
   const { theme, toggleTheme } = useTheme();
   const [currentPage, setCurrentPage] = useState<Page>(getPage);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('water');
@@ -66,10 +68,12 @@ export default function App() {
   };
 
   const fetchTasks = useCallback(async () => {
-    const res = await fetch('/api/tasks');
-    const data = await res.json();
-    setAllTasks(data);
-  }, []);
+    const result = await request<TaskDefinition[]>('/api/tasks', undefined, {
+      errorMessage: 'タスク一覧の取得に失敗しました',
+      onRetry: () => fetchTasks(),
+    });
+    if (result.ok) setAllTasks(result.data);
+  }, [request]);
 
   useEffect(() => {
     fetchTasks();
@@ -104,8 +108,11 @@ export default function App() {
   };
 
   const handleToggle = async (task: TaskDefinition) => {
-    const res = await fetch(`/api/tasks/${task.id}/toggle`, { method: 'POST' });
-    if (res.ok) {
+    const result = await request(`/api/tasks/${task.id}/toggle`, { method: 'POST' }, {
+      errorMessage: 'タスクの有効/無効の切り替えに失敗しました',
+      onRetry: () => handleToggle(task),
+    });
+    if (result.ok) {
       await fetchTasks();
     }
   };

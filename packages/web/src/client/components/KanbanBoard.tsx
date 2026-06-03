@@ -21,6 +21,8 @@ import KanbanCard from './KanbanCard.js';
 import KanbanFilters from './KanbanFilters.js';
 import TaskDetailDialog from './TaskDetailDialog.js';
 import { useAssignees } from '../hooks/useAssignees.js';
+import { useApi } from '../hooks/useApi.js';
+import { useToast } from '../contexts/ToastContext.js';
 
 type KanbanBoardProps = {
   currentUser: string | null;
@@ -28,6 +30,8 @@ type KanbanBoardProps = {
 
 export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
+  const { request } = useApi();
+  const { showInfo } = useToast();
   const { assignees, loaded: assigneesLoaded, fetchAssignees, addAssignee: addRegisteredAssignee } = useAssignees();
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<CategoryKey | null>(null);
@@ -39,6 +43,7 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<TaskInstance | null>(null);
   const prevTasksRef = useRef<TaskInstance[]>([]);
   const localMovedRef = useRef<Set<number>>(new Set());
+  const sseDisconnectedRef = useRef(false);
   const [recentlyMovedIds, setRecentlyMovedIds] = useState<Set<number>>(new Set());
 
   const sensors = useSensors(
@@ -47,29 +52,31 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   );
 
   const fetchTasks = useCallback(async () => {
-    const res = await fetch('/api/kanban');
-    if (res.ok) {
-      const data: TaskInstance[] = await res.json();
+    const result = await request<TaskInstance[]>('/api/kanban', undefined, {
+      errorMessage: 'タスクの取得に失敗しました',
+      onRetry: () => fetchTasks(),
+    });
+    if (!result.ok) return;
+    const data = result.data;
 
-      // Detect tasks moved by other users (SSE) — exclude self-initiated moves
-      if (prevTasksRef.current.length > 0) {
-        const prevMap = new Map(prevTasksRef.current.map((t) => [t.id, t.status]));
-        const movedIds = data
-          .filter((t: TaskInstance) => {
-            const prev = prevMap.get(t.id);
-            return prev && prev !== t.status && !localMovedRef.current.has(t.id);
-          })
-          .map((t: TaskInstance) => t.id);
-        if (movedIds.length > 0) {
-          setRecentlyMovedIds(new Set(movedIds));
-          setTimeout(() => setRecentlyMovedIds(new Set()), 1500);
-        }
+    // Detect tasks moved by other users (SSE) — exclude self-initiated moves
+    if (prevTasksRef.current.length > 0) {
+      const prevMap = new Map(prevTasksRef.current.map((t) => [t.id, t.status]));
+      const movedIds = data
+        .filter((t: TaskInstance) => {
+          const prev = prevMap.get(t.id);
+          return prev && prev !== t.status && !localMovedRef.current.has(t.id);
+        })
+        .map((t: TaskInstance) => t.id);
+      if (movedIds.length > 0) {
+        setRecentlyMovedIds(new Set(movedIds));
+        setTimeout(() => setRecentlyMovedIds(new Set()), 1500);
       }
-
-      setTasks(data);
-      prevTasksRef.current = data;
     }
-  }, []);
+
+    setTasks(data);
+    prevTasksRef.current = data;
+  }, [request]);
 
 
   useEffect(() => {
@@ -80,11 +87,21 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   // SSE for real-time updates
   useEffect(() => {
     const eventSource = new EventSource('/api/kanban/events');
+    eventSource.onopen = () => {
+      sseDisconnectedRef.current = false;
+    };
     eventSource.onmessage = () => {
       fetchTasks();
     };
+    eventSource.onerror = () => {
+      // EventSource auto-reconnects; notify once per disconnection to avoid spam.
+      if (!sseDisconnectedRef.current) {
+        sseDisconnectedRef.current = true;
+        showInfo('リアルタイム更新が一時的に切断されました。自動的に再接続します。');
+      }
+    };
     return () => eventSource.close();
-  }, [fetchTasks]);
+  }, [fetchTasks, showInfo]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -96,43 +113,96 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [fetchTasks]);
 
-  const updateStatus = async (
-    taskId: number,
-    status: TaskInstanceStatus,
-    assignee?: string | null,
+  // Apply a status change with optimistic UI + rollback on failure.
+  // `snapshot` is the full task list before the move; on a communication
+  // error the card is restored to its original column/position/assignee.
+  const performStatusChange = async (
+    task: TaskInstance,
+    targetStatus: TaskInstanceStatus,
+    assignee: string | null | undefined,
+    snapshot: TaskInstance[],
   ) => {
-    const body: Record<string, unknown> = { status };
+    // Mark as local so the SSE echo won't highlight our own move.
+    localMovedRef.current.add(task.id);
+    setTimeout(() => localMovedRef.current.delete(task.id), 3000);
+
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== task.id) return t;
+        const updated = { ...t, status: targetStatus };
+        if (assignee !== undefined) updated.assignee = assignee;
+        updated.completed_at = targetStatus === 'done' ? new Date().toISOString() : null;
+        return updated;
+      }),
+    );
+
+    const body: Record<string, unknown> = { status: targetStatus };
     if (assignee !== undefined) body.assignee = assignee;
 
-    const res = await fetch(`/api/kanban/${taskId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const result = await request(
+      `/api/kanban/${task.id}/status`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      {
+        errorMessage: 'タスクのステータス変更に失敗しました',
+        onRetry: () => performStatusChange(task, targetStatus, assignee, snapshot),
+      },
+    );
 
-    if (!res.ok) {
-      setTasks(prevTasksRef.current);
-    } else {
-      prevTasksRef.current = tasks;
-    }
+    if (!result.ok) setTasks(snapshot);
   };
 
-  const updateAssignee = async (taskId: number, assignee: string | null) => {
-    await fetch(`/api/kanban/${taskId}/assignee`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignee }),
-    });
+  const performAssigneeChange = async (
+    task: TaskInstance,
+    assignee: string | null,
+    snapshot: TaskInstance[],
+  ) => {
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, assignee } : t)));
+    const result = await request(
+      `/api/kanban/${task.id}/assignee`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignee }),
+      },
+      {
+        errorMessage: '担当者の変更に失敗しました',
+        onRetry: () => performAssigneeChange(task, assignee, snapshot),
+      },
+    );
+    if (!result.ok) setTasks(snapshot);
   };
 
   const deleteTask = async (task: TaskInstance) => {
+    const snapshot = tasks;
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
-    await fetch(`/api/kanban/${task.id}`, { method: 'DELETE' });
+    const result = await request(
+      `/api/kanban/${task.id}`,
+      { method: 'DELETE' },
+      {
+        errorMessage: 'タスクの削除に失敗しました',
+        onRetry: () => deleteTask(task),
+      },
+    );
+    if (!result.ok) setTasks(snapshot);
   };
 
   const clearColumn = async (status: TaskInstanceStatus) => {
+    const snapshot = tasks;
     setTasks((prev) => prev.filter((t) => t.status !== status));
-    await fetch(`/api/kanban?status=${status}`, { method: 'DELETE' });
+    const result = await request(
+      `/api/kanban?status=${status}`,
+      { method: 'DELETE' },
+      {
+        errorMessage: 'タスクの一括削除に失敗しました',
+        onRetry: () => clearColumn(status),
+      },
+    );
+    if (!result.ok) setTasks(snapshot);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -140,17 +210,32 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     setActiveTask(task ?? null);
   };
 
-  const reorderTasks = async (status: TaskInstanceStatus, sortedIds: number[]) => {
-    const res = await fetch('/api/kanban/reorder', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, sortedIds }),
+  const performReorder = async (
+    status: TaskInstanceStatus,
+    reordered: TaskInstance[],
+    snapshot: TaskInstance[],
+  ) => {
+    // Optimistic update
+    setTasks((prev) => {
+      const others = prev.filter((t) => t.status !== status);
+      const updated = reordered.map((t, i) => ({ ...t, sort_order: i }));
+      return [...others, ...updated];
     });
-    if (!res.ok) {
-      setTasks(prevTasksRef.current);
-    } else {
-      prevTasksRef.current = tasks;
-    }
+
+    const sortedIds = reordered.map((t) => t.id);
+    const result = await request(
+      '/api/kanban/reorder',
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, sortedIds }),
+      },
+      {
+        errorMessage: '並び順の変更に失敗しました',
+        onRetry: () => performReorder(status, reordered, snapshot),
+      },
+    );
+    if (!result.ok) setTasks(snapshot);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -174,6 +259,9 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
       overTaskId = overTask.id;
     }
 
+    // Capture the pre-move state so we can roll back on a communication error.
+    const snapshot = tasks;
+
     if (task.status === targetStatus) {
       // Same-column reorder
       if (overTaskId === null || task.id === overTaskId) return;
@@ -187,48 +275,15 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
       if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
 
       const reordered = arrayMove(columnItems, oldIndex, newIndex);
-      const sortedIds = reordered.map((t) => t.id);
-
-      // Optimistic update
-      setTasks((prev) => {
-        const others = prev.filter((t) => t.status !== targetStatus);
-        const updated = reordered.map((t, i) => ({ ...t, sort_order: i }));
-        return [...others, ...updated];
-      });
-
-      reorderTasks(targetStatus, sortedIds);
+      performReorder(targetStatus, reordered, snapshot);
       return;
     }
 
-    // Cross-column move — mark as local so SSE echo won't highlight
-    localMovedRef.current.add(task.id);
-    setTimeout(() => localMovedRef.current.delete(task.id), 3000);
-
+    // Cross-column move
     const autoAssign =
       targetStatus === 'done' && !task.assignee && currentUser ? currentUser : null;
 
-    // Optimistic update
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== task.id) return t;
-        const updated = { ...t, status: targetStatus };
-        if (autoAssign) {
-          updated.assignee = autoAssign;
-        }
-        if (targetStatus === 'done') {
-          updated.completed_at = new Date().toISOString();
-        } else {
-          updated.completed_at = null;
-        }
-        return updated;
-      }),
-    );
-
-    if (autoAssign) {
-      updateStatus(task.id, targetStatus, autoAssign);
-    } else {
-      updateStatus(task.id, targetStatus);
-    }
+    performStatusChange(task, targetStatus, autoAssign ?? undefined, snapshot);
   };
 
   const openAssigneeModal = (task: TaskInstance, targetStatus?: TaskInstanceStatus) => {
@@ -241,25 +296,14 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     if (!assigneeModal) return;
     const { task, targetStatus } = assigneeModal;
     const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.join(',') : null;
+    const snapshot = tasks;
 
     if (targetStatus !== task.status) {
-      // Status change (e.g., moving to done) — mark as local so SSE echo won't highlight
-      localMovedRef.current.add(task.id);
-      setTimeout(() => localMovedRef.current.delete(task.id), 3000);
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === task.id
-            ? { ...t, status: targetStatus, assignee: assigneeStr, completed_at: targetStatus === 'done' ? new Date().toISOString() : null }
-            : t,
-        ),
-      );
-      updateStatus(task.id, targetStatus, assigneeStr);
+      // Status change (e.g., moving to done) with assignee set in one request.
+      performStatusChange(task, targetStatus, assigneeStr, snapshot);
     } else {
       // Just changing assignee
-      setTasks((prev) =>
-        prev.map((t) => (t.id === task.id ? { ...t, assignee: assigneeStr } : t)),
-      );
-      updateAssignee(task.id, assigneeStr);
+      performAssigneeChange(task, assigneeStr, snapshot);
     }
     setAssigneeModal(null);
   };

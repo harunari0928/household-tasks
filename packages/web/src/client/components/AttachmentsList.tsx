@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Attachment } from '../types.js';
+import { useApi } from '../hooks/useApi.js';
 
 interface PendingFileDisplay {
   name: string;
@@ -25,15 +26,16 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function AttachmentsList({ taskId, refreshKey, pendingFiles, pendingDeleteIds, onMarkForDelete, onRemovePending }: Props) {
+  const { request } = useApi();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const fetchAttachments = useCallback(async () => {
     if (!taskId) return;
-    const res = await fetch(`/api/tasks/${taskId}/attachments`);
-    if (res.ok) {
-      setAttachments(await res.json());
-    }
-  }, [taskId]);
+    const result = await request<Attachment[]>(`/api/tasks/${taskId}/attachments`, undefined, {
+      errorMessage: '添付ファイルの取得に失敗しました',
+    });
+    if (result.ok) setAttachments(result.data);
+  }, [taskId, request]);
 
   useEffect(() => {
     fetchAttachments();

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useApi } from '../hooks/useApi.js';
 
 export interface PendingFile {
   file: File;
@@ -17,20 +18,10 @@ interface Props {
   onFileUploaded?: () => void;
 }
 
-async function uploadFile(taskId: number, file: File): Promise<{ id: string; original_name: string } | null> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await fetch(`/api/tasks/${taskId}/attachments`, {
-    method: 'POST',
-    body: formData,
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
-
 let placeholderCounter = 0;
 
 export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, onFileQueued, onFileUploaded }: Props) {
+  const { request } = useApi();
   const [preview, setPreview] = useState(false);
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -61,8 +52,18 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
         // Existing task: upload immediately
         setUploading(true);
         try {
-          const attachment = await uploadFile(taskId, file);
-          if (!attachment) return;
+          const formData = new FormData();
+          formData.append('file', file);
+          const result = await request<{ id: string; original_name: string }>(
+            `/api/tasks/${taskId}/attachments`,
+            { method: 'POST', body: formData },
+            {
+              errorMessage: '添付ファイルのアップロードに失敗しました',
+              onRetry: () => handleFileUpload(file),
+            },
+          );
+          if (!result.ok) return;
+          const attachment = result.data;
           if (file.type.startsWith('image/')) {
             insertAtCursor(`![${attachment.original_name}](/api/attachments/${attachment.id})\n`);
           } else {
@@ -85,7 +86,7 @@ export default function MarkdownEditor({ value, onChange, taskId, pendingFiles, 
         onFileQueued?.(pending);
       }
     },
-    [taskId, insertAtCursor, onFileQueued, onFileUploaded],
+    [taskId, insertAtCursor, onFileQueued, onFileUploaded, request],
   );
 
   const handlePaste = useCallback(
