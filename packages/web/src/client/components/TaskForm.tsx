@@ -218,7 +218,8 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
 
     let currentNotes = notes.trim();
 
-    const pointsValue = Math.max(1, Math.min(10, parseInt(points, 10) || 1));
+    const parsedPoints = parseInt(points, 10);
+    const pointsValue = Number.isNaN(parsedPoints) ? 1 : Math.max(0, Math.min(10, parsedPoints));
 
     const input: any = {
       name: name.trim(),
@@ -367,18 +368,21 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
 
           <div>
             <label htmlFor="points" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              ポイント <span className="text-gray-400 font-normal">(1〜10)</span>
+              ポイント <span className="text-gray-400 font-normal">(0〜10)</span>
             </label>
             <div className="flex items-center gap-2">
               <input
                 id="points"
                 type="number"
-                min={1}
+                min={0}
                 max={10}
                 step={1}
                 value={points}
                 onChange={(e) => setPoints(e.target.value)}
-                onBlur={() => setPoints(String(Math.max(1, Math.min(10, parseInt(points, 10) || 1))))}
+                onBlur={() => {
+                  const parsed = parseInt(points, 10);
+                  setPoints(String(Number.isNaN(parsed) ? 1 : Math.max(0, Math.min(10, parsed))));
+                }}
                 className={`${inputBase} w-24`}
               />
               <span className="text-sm text-gray-600 dark:text-gray-400">pt</span>
