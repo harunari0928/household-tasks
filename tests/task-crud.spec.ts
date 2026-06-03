@@ -137,6 +137,56 @@ test.describe('タスクCRUD', () => {
     await expect(page.getByText('毎週(月)')).toBeVisible();
   });
 
+  test('タスク一覧の取得が通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.route('**/api/tasks', (route) =>
+      route.request().method() === 'GET' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.goto('/#/tasks');
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: 'タスク一覧の取得に失敗しました' }).first()).toBeVisible();
+  });
+
+  test('タスクの保存が通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('保存失敗タスク');
+    await page.getByLabel('頻度').selectOption('daily');
+    await page.route('**/api/tasks', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '保存' }).click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: /保存に失敗しました/ }).first()).toBeVisible();
+  });
+
+  test('有効/無効の切り替えが通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('トグル失敗タスク');
+    await page.getByLabel('頻度').selectOption('daily');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('トグル失敗タスク').waitFor();
+    await page.route('**/api/tasks/*/toggle', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '無効にする' }).first().click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: 'タスクの有効/無効の切り替えに失敗しました' }).first()).toBeVisible();
+  });
 });
 
 test.describe('フォームバリデーション', () => {
@@ -698,6 +748,45 @@ test.describe('ファイル添付（既存タスク）', () => {
 
     await expect(page.getByRole('region', { name: 'プレビュー' }).locator('img')).toBeVisible();
   });
+
+  test('添付ファイルのアップロードが通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: 'アップロード失敗テスト', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+    await page.getByText('アップロード失敗テスト').click();
+    await page.route('**/api/tasks/*/attachments', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByLabel('ファイル添付').setInputFiles({
+      name: 'fail.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('fail'),
+    });
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: '添付ファイルのアップロードに失敗しました' }).first()).toBeVisible();
+  });
+
+  test('編集画面で添付一覧の取得が通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '添付一覧失敗テスト', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+    await page.route('**/api/tasks/*/attachments', (route) =>
+      route.request().method() === 'GET' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByText('添付一覧失敗テスト').click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: '添付ファイルの取得に失敗しました' }).first()).toBeVisible();
+  });
 });
 
 test.describe('タスク削除', () => {
@@ -809,6 +898,25 @@ test.describe('タスク削除', () => {
       expect(res.status()).toBe(404);
     });
   });
+
+  test('タスクの削除が通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '削除失敗タスク', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+    await page.getByText('削除失敗タスク').click();
+    await page.route('**/api/tasks/*', (route) =>
+      route.request().method() === 'DELETE' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '削除' }).click();
+    await page.getByRole('button', { name: '削除する' }).click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: /削除に失敗しました/ }).first()).toBeVisible();
+  });
 });
 
 test.describe('重複名チェック', () => {
@@ -898,6 +1006,25 @@ test.describe('今すぐ起票', () => {
     await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
 
     await expect(page.getByText('すでにボード上に未完了のタスクがあります')).toBeVisible();
+  });
+
+  test('起票が通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('起票失敗テスト');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('起票失敗テスト').waitFor();
+    await page.getByText('起票失敗テスト').click();
+    await page.route('**/api/kanban/create-from-definition/*', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: /起票に失敗しました/ }).first()).toBeVisible();
   });
 });
 

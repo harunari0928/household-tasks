@@ -11,6 +11,9 @@ import {
   type FrequencyTypeKey,
   type DayOfWeek,
 } from '../types.js';
+import { useApi } from '../hooks/useApi.js';
+
+type Attachment = { id: string; original_name: string; mime_type: string };
 
 interface Props {
   taskInstance: TaskInstance | null;
@@ -36,8 +39,9 @@ function formatFrequency(task: TaskDefinition): string {
 }
 
 export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
+  const { request } = useApi();
   const [taskDef, setTaskDef] = useState<TaskDefinition | null>(null);
-  const [attachments, setAttachments] = useState<{ id: string; original_name: string; mime_type: string }[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
     if (!taskInstance) {
@@ -45,16 +49,16 @@ export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
       setAttachments([]);
       return;
     }
-    fetch(`/api/tasks/${taskInstance.task_definition_id}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => setTaskDef(data))
-      .catch(() => setTaskDef(null));
+    const defId = taskInstance.task_definition_id;
+    request<TaskDefinition>(`/api/tasks/${defId}`, undefined, {
+      errorMessage: 'タスク詳細の取得に失敗しました',
+    }).then((r) => setTaskDef(r.ok ? r.data : null));
 
-    fetch(`/api/tasks/${taskInstance.task_definition_id}/attachments`)
-      .then((r) => r.ok ? r.json() : [])
-      .then((data) => setAttachments(data))
-      .catch(() => setAttachments([]));
-  }, [taskInstance]);
+    // Attachments are secondary — fail silently to avoid a second toast.
+    request<Attachment[]>(`/api/tasks/${defId}/attachments`, undefined, { silent: true }).then(
+      (r) => setAttachments(r.ok ? r.data : []),
+    );
+  }, [taskInstance, request]);
 
   if (!taskInstance) return null;
 

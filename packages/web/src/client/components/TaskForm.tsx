@@ -3,6 +3,8 @@ import { CATEGORIES, type CategoryKey, type TaskDefinition, type FrequencyTypeKe
 import FrequencySelector from './FrequencySelector.js';
 import MarkdownEditor, { type PendingFile } from './MarkdownEditor.js';
 import AttachmentsList from './AttachmentsList.js';
+import { apiFetch, type ApiResult } from '../lib/api.js';
+import { useToast } from '../contexts/ToastContext.js';
 
 interface Props {
   task?: TaskDefinition | null;
@@ -12,18 +14,19 @@ interface Props {
   onDeleted?: () => void;
 }
 
-async function uploadFile(taskId: number, file: File): Promise<{ id: string; original_name: string } | null> {
+async function uploadFile(
+  taskId: number,
+  file: File,
+): Promise<ApiResult<{ id: string; original_name: string }>> {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(`/api/tasks/${taskId}/attachments`, { method: 'POST', body: formData });
-  if (!res.ok) return null;
-  return res.json();
+  return apiFetch(`/api/tasks/${taskId}/attachments`, { method: 'POST', body: formData });
 }
 
-async function saveTaskToApi(input: any, id?: number): Promise<Response> {
+async function saveTaskToApi(input: any, id?: number): Promise<ApiResult<{ id: number }>> {
   const url = id ? `/api/tasks/${id}` : '/api/tasks';
   const method = id ? 'PUT' : 'POST';
-  return fetch(url, {
+  return apiFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -45,6 +48,7 @@ const inputBase =
   'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
 
 export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onDeleted }: Props) {
+  const { showError } = useToast();
   const [name, setName] = useState(task?.name || '');
   const [category, setCategory] = useState<CategoryKey>(task?.category || defaultCategory);
   const [frequencyType, setFrequencyType] = useState<FrequencyTypeKey>(
@@ -128,34 +132,35 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const handleCreateInstance = async () => {
     if (!task?.id) return;
     setCreateInstanceStatus('loading');
-    try {
-      const res = await fetch(`/api/kanban/create-from-definition/${task.id}`, { method: 'POST' });
-      if (res.status === 201) {
-        setCreateInstanceStatus('success');
-      } else if (res.status === 409) {
-        setCreateInstanceStatus('conflict');
-      } else {
-        setError('起票に失敗しました');
-        scrollToError(errorRef);
-        setCreateInstanceStatus('idle');
-      }
-    } catch {
+    const result = await apiFetch(`/api/kanban/create-from-definition/${task.id}`, { method: 'POST' });
+    if (result.ok) {
+      setCreateInstanceStatus('success');
+    } else if (result.status === 409) {
+      setCreateInstanceStatus('conflict');
+    } else if (result.status) {
+      // Server responded with an error — show it inline.
       setError('起票に失敗しました');
       scrollToError(errorRef);
+      setCreateInstanceStatus('idle');
+    } else {
+      // Network failure — notify with a toast.
+      showError('起票に失敗しました。通信状況をご確認ください。', handleCreateInstance);
       setCreateInstanceStatus('idle');
     }
   };
 
   const handleDelete = async () => {
     if (!task || !onDeleted) return;
-    const res = await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
-    if (res.ok) {
+    const result = await apiFetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
+    if (result.ok) {
       onDeleted();
-    } else {
-      const data = await res.json();
-      setError(data.error || '削除に失敗しました');
+    } else if (result.status) {
+      setError(result.error || '削除に失敗しました');
       setShowDeleteConfirm(false);
       scrollToError(errorRef);
+    } else {
+      showError('削除に失敗しました。通信状況をご確認ください。', handleDelete);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -262,28 +267,38 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     }
 
     setSubmitting(true);
-    const res = await saveTaskToApi(input, task?.id);
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || '保存に失敗しました');
-      scrollToError(errorRef);
+    const saveResult = await saveTaskToApi(input, task?.id);
+    if (!saveResult.ok) {
+      if (saveResult.status) {
+        // Server validation/conflict error — show inline next to the form.
+        setError(saveResult.error || '保存に失敗しました');
+        scrollToError(errorRef);
+      } else {
+        // Network failure — surface a prominent toast.
+        showError('保存に失敗しました。通信状況をご確認ください。');
+      }
       setSubmitting(false);
       return;
     }
 
-    const saved = await res.json();
-    const taskId = saved.id;
+    const taskId = saveResult.data.id;
 
     if (pendingFiles.length > 0) {
       let updatedNotes = currentNotes;
+      let uploadFailed = false;
       for (const pf of pendingFiles) {
-        const attachment = await uploadFile(taskId, pf.file);
-        if (attachment) {
+        const uploadResult = await uploadFile(taskId, pf.file);
+        if (uploadResult.ok) {
           updatedNotes = updatedNotes.replace(
             `pending:${pf.placeholderIndex}`,
-            `/api/attachments/${attachment.id}`,
+            `/api/attachments/${uploadResult.data.id}`,
           );
+        } else {
+          uploadFailed = true;
         }
+      }
+      if (uploadFailed) {
+        showError('一部の添付ファイルのアップロードに失敗しました。');
       }
       if (updatedNotes !== currentNotes) {
         await saveTaskToApi({ ...input, notes: updatedNotes }, taskId);
@@ -291,7 +306,10 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     }
 
     for (const id of pendingDeleteIds) {
-      await fetch(`/api/attachments/${id}`, { method: 'DELETE' });
+      const deleteResult = await apiFetch(`/api/attachments/${id}`, { method: 'DELETE' });
+      if (!deleteResult.ok) {
+        showError('一部の添付ファイルの削除に失敗しました。');
+      }
     }
 
     setSubmitting(false);
