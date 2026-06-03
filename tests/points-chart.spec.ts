@@ -271,6 +271,16 @@ test.describe('ポイント集計の表示', () => {
     await expect(skeleton).toBeVisible();
     await expect(skeleton.locator('.rounded-full')).toBeVisible();
   });
+
+  test('集計データの取得が通信エラーになると、画面内にエラーが表示される', async ({ page }) => {
+    await page.route('**/api/stats/points**', (route) =>
+      route.request().method() === 'GET' ? route.abort() : route.continue(),
+    );
+
+    await page.goto('/#/stats');
+
+    await expect(page.getByText('データの取得に失敗しました')).toBeVisible();
+  });
 });
 
 test.describe('担当フィルタ', () => {

@@ -97,4 +97,49 @@ test.describe('設定画面のユーザー管理', () => {
       await expect(page.getByText('削除対象')).not.toBeVisible();
     });
   });
+
+  test('ユーザーの追加が通信エラーになると、追加が取り消されエラーが通知される', async ({ page }) => {
+    await goToSettings(page);
+
+    await page.route('**/api/kanban/assignees', (route) =>
+      route.request().method() === 'PUT' ? route.abort() : route.continue(),
+    );
+    await page.getByLabel('新しいユーザー名').fill('追加失敗ユーザー');
+    await page.getByRole('button', { name: '追加' }).click();
+
+    await test.step('エラーが通知される', async () => {
+      await expect(page.getByRole('alert').filter({ hasText: '担当者の保存に失敗しました' }).first()).toBeVisible();
+    });
+    await test.step('追加したユーザーは残らない', async () => {
+      await expect(page.getByText('追加失敗ユーザー')).toBeHidden();
+    });
+  });
+
+  test('ユーザーの削除が通信エラーになると、削除が取り消されエラーが通知される', async ({ page, baseURL }) => {
+    await page.request.put(`${baseURL}/api/kanban/assignees`, { data: { assignees: ['MTMR'] } });
+    await goToSettings(page);
+    await expect(page.getByRole('button', { name: 'MTMRを削除' })).toBeVisible();
+
+    await page.route('**/api/kanban/assignees', (route) =>
+      route.request().method() === 'PUT' ? route.abort() : route.continue(),
+    );
+    await page.getByRole('button', { name: 'MTMRを削除' }).click();
+
+    await test.step('エラーが通知される', async () => {
+      await expect(page.getByRole('alert').filter({ hasText: '担当者の保存に失敗しました' }).first()).toBeVisible();
+    });
+    await test.step('削除したユーザーが残る', async () => {
+      await expect(page.getByRole('button', { name: 'MTMRを削除' })).toBeVisible();
+    });
+  });
+
+  test('ユーザー一覧の取得が通信エラーになると、エラーが通知される', async ({ page }) => {
+    await page.route('**/api/kanban/assignees', (route) =>
+      route.request().method() === 'GET' ? route.abort() : route.continue(),
+    );
+
+    await goToSettings(page);
+
+    await expect(page.getByRole('alert').filter({ hasText: '担当者の取得に失敗しました' }).first()).toBeVisible();
+  });
 });
