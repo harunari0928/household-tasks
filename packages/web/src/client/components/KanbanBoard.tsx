@@ -263,6 +263,10 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     const snapshot = tasks;
 
     if (task.status === targetStatus) {
+      // The done column is locked to completion-time order: allow the drag gesture but
+      // ignore the drop so the card snaps back to its original position.
+      if (targetStatus === 'done') return;
+
       // Same-column reorder
       if (overTaskId === null || task.id === overTaskId) return;
 
@@ -346,7 +350,15 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   const columns = (Object.keys(KANBAN_COLUMNS) as TaskInstanceStatus[]).map((status) => ({
     status,
     title: KANBAN_COLUMNS[status],
-    items: filtered.filter((t) => t.status === status).sort((a, b) => a.sort_order - b.sort_order),
+    // The done column is always sorted by completion time (newest first) and cannot be
+    // manually reordered; other columns honor the user-defined sort_order.
+    items: filtered
+      .filter((t) => t.status === status)
+      .sort((a, b) =>
+        status === 'done'
+          ? new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime()
+          : a.sort_order - b.sort_order,
+      ),
   }));
 
   const noUsersRegistered = assigneesLoaded && assignees.length === 0;

@@ -800,6 +800,53 @@ test.describe('同一列内の並べ替え', () => {
       expect(text.indexOf('order-a')).toBeLessThan(text.indexOf('order-b'));
     });
   });
+
+  test('完了列のタスクは作成順や手動の並びではなく完了日時の新しい順に並ぶ', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'done-order-1', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'done-order-2', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'done-order-3', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+
+    // Act — 作成順とは異なる順序で完了させる（最後に完了したのが done-order-3）
+    await changeStatus(page, baseURL!, 'done-order-2', 'done', 'MTMR');
+    await changeStatus(page, baseURL!, 'done-order-1', 'done', 'MTMR');
+    await changeStatus(page, baseURL!, 'done-order-3', 'done', 'MTMR');
+    await goToKanban(page);
+
+    // Assert — 完了が新しい順（3 → 1 → 2）に上から並ぶ
+    await test.step('完了日時が新しいタスクほど上に表示される', async () => {
+      const text = await getColumnText(page, 'done');
+      expect(text.indexOf('done-order-3')).toBeLessThan(text.indexOf('done-order-1'));
+      expect(text.indexOf('done-order-1')).toBeLessThan(text.indexOf('done-order-2'));
+    });
+  });
+
+  test('完了列のカードはドラッグしても並び順が変わらない', async ({ page, baseURL }) => {
+    // Arrange — lock-2 を後に完了させるので lock-2 が上、lock-1 が下に並ぶ
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'lock-1', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'lock-2', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await changeStatus(page, baseURL!, 'lock-1', 'done', 'MTMR');
+    await changeStatus(page, baseURL!, 'lock-2', 'done', 'MTMR');
+    await goToKanban(page);
+
+    await test.step('初期状態では lock-2 が lock-1 より上に表示される', async () => {
+      const text = await getColumnText(page, 'done');
+      expect(text.indexOf('lock-2')).toBeLessThan(text.indexOf('lock-1'));
+    });
+
+    // Act — 下の lock-1 を上の lock-2 より上にドラッグしようとする
+    await dragCardWithinColumn(page, 'lock-1', 'lock-2');
+
+    // Assert — ドロップしても並び順は元のまま（lock-2 が上）
+    await test.step('ドロップ後も lock-2 が lock-1 より上のまま', async () => {
+      const text = await getColumnText(page, 'done');
+      expect(text.indexOf('lock-2')).toBeLessThan(text.indexOf('lock-1'));
+    });
+  });
 });
 
 test.describe('完了列の表示期間', () => {
