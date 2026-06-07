@@ -627,6 +627,52 @@ test.describe('完了列の表示期間', () => {
   });
 });
 
+test.describe('未着手カードの起票日バッジ', () => {
+  test('今日起票したタスクには起票日バッジが表示されない', async ({ page }) => {
+    // Arrange
+    await createTaskViaUI(page, { name: 'badge-today-task', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+
+    // Act
+    await goToKanban(page);
+
+    // Assert
+    const card = page.getByText('badge-today-task').locator('..');
+    await expect(card).toBeVisible();
+    await expect(card.getByText(/昨日|日前/)).toHaveCount(0);
+  });
+
+  test('昨日から繰り越されたタスクに「昨日」バッジが表示される', async ({ page }) => {
+    // Arrange
+    await createTaskViaUI(page, { name: 'badge-yesterday-task', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+
+    // Act: 起票翌日に閲覧している状況を再現
+    const now = Date.now();
+    await page.clock.install({ time: new Date(now + 24 * 60 * 60 * 1000) });
+    await goToKanban(page);
+
+    // Assert
+    const card = page.getByText('badge-yesterday-task').locator('..');
+    await expect(card.getByText('昨日')).toBeVisible();
+  });
+
+  test('数日前から繰り越されたタスクに「N日前」バッジが表示される', async ({ page }) => {
+    // Arrange
+    await createTaskViaUI(page, { name: 'badge-stale-task', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+
+    // Act: 起票から3日後に閲覧している状況を再現
+    const now = Date.now();
+    await page.clock.install({ time: new Date(now + 3 * 24 * 60 * 60 * 1000) });
+    await goToKanban(page);
+
+    // Assert
+    const card = page.getByText('badge-stale-task').locator('..');
+    await expect(card.getByText('3日前')).toBeVisible();
+  });
+});
+
 test.describe('ドラッグ中の列ハイライト', () => {
   // @dnd-kitのisOver中間状態はPlaywrightのマウスシミュレーションでは再現不可のため、
   // isOverが切り替わった際の背景色を、独立したテスト要素で検証する
