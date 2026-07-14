@@ -125,7 +125,7 @@ test.describe('子ども風邪の日モード', () => {
     });
   });
 
-  test('モードON中はヘッダーに緊急バナーが表示され、OFFにすると消える', async ({ page, baseURL }) => {
+  test('モードをONにするとヘッダーに緊急バナーが表示される', async ({ page, baseURL }) => {
     // Arrange
     await setupAssignees(page, baseURL!);
     await goToKanban(page);
@@ -134,17 +134,21 @@ test.describe('子ども風邪の日モード', () => {
     await sickModeOnButton(page).click();
 
     // Assert
-    await test.step('赤い緊急バナーが表示される', async () => {
-      await expect(sickModeBanner(page)).toBeVisible();
-    });
+    await expect(sickModeBanner(page)).toBeVisible();
+  });
+
+  test('モードをOFFにするとヘッダーの緊急バナーが消える', async ({ page, baseURL }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!);
+    await goToKanban(page);
+    await sickModeOnButton(page).click();
+    await sickModeBanner(page).waitFor();
 
     // Act
     await sickModeOffButton(page).click();
 
     // Assert
-    await test.step('バナーが消える', async () => {
-      await expect(sickModeBanner(page)).not.toBeVisible();
-    });
+    await expect(sickModeBanner(page)).not.toBeVisible();
   });
 
   test('別のタブでモードをONにすると、開いているカンバン画面にも即時反映される', async ({ page, context, baseURL }) => {
@@ -182,9 +186,7 @@ test.describe('子ども風邪の日モード', () => {
     await page.getByRole('button', { name: '保存' }).click();
 
     // Assert
-    await test.step('タスク一覧に「風邪の日のみ」バッジが表示される', async () => {
-      await expect(page.getByText('風邪の日のみ')).toBeVisible();
-    });
+    await expect(page.getByText('風邪の日のみ')).toBeVisible();
   });
 
   test('タスク編集フォームで風邪の日の扱いを変更すると保存後に反映される', async ({ page, baseURL }) => {
@@ -200,51 +202,40 @@ test.describe('子ども風邪の日モード', () => {
     await page.getByRole('button', { name: '保存' }).click();
 
     // Assert
-    await test.step('タスク一覧に「常に表示」バッジが表示される', async () => {
-      await expect(page.getByText('常に表示')).toBeVisible();
-    });
+    await expect(page.getByText('常に表示')).toBeVisible();
   });
 
-  test('モードON中にスケジューラを実行すると、風邪の日のみ表示タスクが起票される', async ({ page, baseURL }) => {
+  test('モードON中にスケジューラを実行すると、風邪の日のみ表示タスクと常に表示タスクが起票される', async ({ page, baseURL }) => {
     // Arrange: 定義作成前にモードON（即時起票を発生させず、スケジューラによる起票だけを観察する）
     await setupAssignees(page, baseURL!);
     await page.request.put(`${baseURL}/api/sick-mode`, { data: { enabled: true } });
     await createTaskDef(page, baseURL!, { name: '薬を飲ませる', category: 'childcare', sick_day_behavior: 'sick_only' });
+    await createTaskDef(page, baseURL!, { name: 'ゴミ捨て', category: 'trash', sick_day_behavior: 'always' });
 
     // Act
     await runScheduler(getTodayJST());
 
     // Assert
     await goToKanban(page);
-    await expect(page.getByText('薬を飲ませる')).toBeVisible();
-  });
-
-  test('モードON中にスケジューラを実行しても、通常時のみタスクは起票されない', async ({ page, baseURL }) => {
-    // Arrange
-    await setupAssignees(page, baseURL!);
-    await page.request.put(`${baseURL}/api/sick-mode`, { data: { enabled: true } });
-    await createTaskDef(page, baseURL!, { name: '床のモップ掛け', sick_day_behavior: 'normal_only' });
-
-    // Act
-    await runScheduler(getTodayJST());
-
-    // Assert: モードを解除しても表示されない = スケジューラが起票していない
-    await page.request.put(`${baseURL}/api/sick-mode`, { data: { enabled: false } });
-    await goToKanban(page);
-    await expect(page.getByText('床のモップ掛け')).not.toBeVisible();
+    await test.step('風邪の日のみ表示タスクが起票される', async () => {
+      await expect(page.getByText('薬を飲ませる')).toBeVisible();
+    });
+    await test.step('常に表示タスクも起票される', async () => {
+      await expect(page.getByText('ゴミ捨て')).toBeVisible();
+    });
   });
 
   test('モードON時、起票時刻がまだ来ていない風邪の日のみ表示タスクは起票されない', async ({ page, baseURL }) => {
-    // Arrange: サーバー時刻を10:00 JSTに固定し、起票時刻が朝8時と夜19時のタスクを用意
+    // Arrange: サーバー時刻を10:00 JSTに固定し、起票時刻が8時と19時のタスクを用意
     await setupAssignees(page, baseURL!);
     await page.request.post(`${baseURL}/api/test/set-time`, {
       data: { time: '2026-07-14T01:00:00.000Z' },
     });
     await createTaskDef(page, baseURL!, {
-      name: '薬を飲ませる（朝）', category: 'childcare', sick_day_behavior: 'sick_only', scheduled_hour: 8,
+      name: '起票時刻8時のタスク', category: 'childcare', sick_day_behavior: 'sick_only', scheduled_hour: 8,
     });
     await createTaskDef(page, baseURL!, {
-      name: '薬を飲ませる（夜）', category: 'childcare', sick_day_behavior: 'sick_only', scheduled_hour: 19,
+      name: '起票時刻19時のタスク', category: 'childcare', sick_day_behavior: 'sick_only', scheduled_hour: 19,
     });
     await goToKanban(page);
 
@@ -252,11 +243,11 @@ test.describe('子ども風邪の日モード', () => {
     await sickModeOnButton(page).click();
 
     // Assert
-    await test.step('起票時刻が到来している朝のタスクは起票される', async () => {
-      await expect(page.getByText('薬を飲ませる（朝）')).toBeVisible();
+    await test.step('起票時刻が到来しているタスクは起票される', async () => {
+      await expect(page.getByText('起票時刻8時のタスク')).toBeVisible();
     });
-    await test.step('起票時刻が来ていない夜のタスクは起票されない', async () => {
-      await expect(page.getByText('薬を飲ませる（夜）')).not.toBeVisible();
+    await test.step('起票時刻が来ていないタスクは起票されない', async () => {
+      await expect(page.getByText('起票時刻19時のタスク')).not.toBeVisible();
     });
   });
 

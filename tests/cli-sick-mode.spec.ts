@@ -93,26 +93,42 @@ test.describe('ht sick-mode（子ども風邪の日モード）', () => {
     expect(result.stderr).toContain('state must be "on" or "off"');
   });
 
-  test('ht list はモードに応じてカンバンボードと同じタスクだけを表示する', async ({ page, baseURL }) => {
+  test('ht list はモードOFF時、風邪の日のみ表示タスクを表示しない', async ({ page, baseURL }) => {
     // Arrange
     await createTaskDef(page, baseURL!, { name: 'cli-床掃除', sick_day_behavior: 'normal_only', withInstance: true });
     await createTaskDef(page, baseURL!, { name: 'cli-ゴミ捨て', sick_day_behavior: 'always', withInstance: true });
     await createTaskDef(page, baseURL!, { name: 'cli-病院の予約', sick_day_behavior: 'sick_only' });
 
-    await test.step('モードOFF: 通常タスクのみ表示される', async () => {
-      const result = await runCli('list');
+    // Act
+    const result = await runCli('list');
+
+    // Assert
+    await test.step('通常時のみタスクと常に表示タスクが表示される', async () => {
       expect(result.stdout).toContain('cli-床掃除');
       expect(result.stdout).toContain('cli-ゴミ捨て');
+    });
+    await test.step('風邪の日のみ表示タスクは表示されない', async () => {
       expect(result.stdout).not.toContain('cli-病院の予約');
     });
+  });
 
+  test('ht list はモードON時、通常時のみタスクを表示しない', async ({ page, baseURL }) => {
+    // Arrange
+    await createTaskDef(page, baseURL!, { name: 'cli-床掃除', sick_day_behavior: 'normal_only', withInstance: true });
+    await createTaskDef(page, baseURL!, { name: 'cli-ゴミ捨て', sick_day_behavior: 'always', withInstance: true });
+    await createTaskDef(page, baseURL!, { name: 'cli-病院の予約', sick_day_behavior: 'sick_only' });
     await runCli('sick-mode on');
 
-    await test.step('モードON: 風邪の日のみ表示タスクと常に表示タスクだけ表示される', async () => {
-      const result = await runCli('list');
-      expect(result.stdout).not.toContain('cli-床掃除');
-      expect(result.stdout).toContain('cli-ゴミ捨て');
+    // Act
+    const result = await runCli('list');
+
+    // Assert
+    await test.step('風邪の日のみ表示タスクと常に表示タスクが表示される', async () => {
       expect(result.stdout).toContain('cli-病院の予約');
+      expect(result.stdout).toContain('cli-ゴミ捨て');
+    });
+    await test.step('通常時のみタスクは表示されない', async () => {
+      expect(result.stdout).not.toContain('cli-床掃除');
     });
   });
 
