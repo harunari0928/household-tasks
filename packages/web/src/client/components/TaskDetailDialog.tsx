@@ -21,6 +21,10 @@ interface Props {
 }
 
 function formatFrequency(task: TaskDefinition): string {
+  if (task.frequency_type === 'days_after_completion') {
+    return `完了後${task.frequency_interval}日 ${task.scheduled_hour}時`;
+  }
+
   const type = FREQUENCY_TYPES[task.frequency_type as FrequencyTypeKey] || task.frequency_type;
   const parts = [type];
 

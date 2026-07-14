@@ -208,6 +208,19 @@ export function hasRecentInstance(
   return !!row;
 }
 
+export function getLastCompletedDateJST(db: Database.Database, taskDefId: number): string | null {
+  const row = db.prepare(`
+    SELECT date(completed_at, '+9 hours') as d
+    FROM task_instances
+    WHERE task_definition_id = ?
+      AND status = 'done'
+      AND completed_at IS NOT NULL
+    ORDER BY completed_at DESC
+    LIMIT 1
+  `).get(taskDefId) as { d: string } | undefined;
+  return row?.d ?? null;
+}
+
 export function createTaskInstance(
   db: Database.Database,
   taskDefId: number,

@@ -142,6 +142,26 @@ async function registerUser(page: Page, name: string) {
   await page.getByText(name).waitFor();
 }
 
+// 対象タスクの未完了インスタンスを、指定日(JST正午)に完了にする。
+// completed_at がその日で記録され、完了駆動スケジューラの判定基準日になる。
+async function completeInstanceOn(
+  page: Page,
+  baseURL: string,
+  title: string,
+  dateJST: string,
+  assignee = 'test',
+) {
+  await setServerTime(page, baseURL, `${dateJST}T03:00:00.000Z`); // UTC+9 → JST正午
+  const res = await page.request.get(`${baseURL}/api/kanban`);
+  const items = await res.json();
+  const instance = items.find((i: any) => i.title === title && i.status !== 'done');
+  if (!instance) throw new Error(`未完了の「${title}」が見つかりません`);
+  await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+    data: { status: 'done', assignee },
+  });
+  await setServerTime(page, baseURL, null);
+}
+
 async function completeTaskViaUI(page: Page, cardName: string, assignee: string) {
   const userSwitcher = page.getByLabel('ユーザー切替');
   if ((await userSwitcher.textContent())?.includes(assignee) === false) {
@@ -729,5 +749,89 @@ test.describe('実行期間', () => {
 
     await goToKanban(page);
     await expect(page.getByText('period-wrap-outside-before')).not.toBeVisible();
+  });
+});
+
+test.describe('完了後N日', () => {
+  test('完了履歴がなければ初回に起票される', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日の完了駆動タスクを作成（完了履歴なし）
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-first',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+
+    // Act: スケジューラを実行する
+    await runScheduler('2026-03-14');
+
+    // Assert: 未着手列に起票される
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('after-first'),
+    ).toHaveCount(1);
+  });
+
+  test('完了日から指定日数が経過するまでは再起票されない', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日のタスクを起票し、基準日に完了させる
+    const base = '2026-03-14';
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-wait',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+    await runScheduler(base);
+    await completeInstanceOn(page, baseURL!, 'after-wait', base);
+
+    // Act: 完了日から2日後（3日未満）にスケジューラを実行する
+    await runScheduler(addDays(base, 2));
+
+    // Assert: 未着手列に再起票されない
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('after-wait'),
+    ).toHaveCount(0);
+  });
+
+  test('完了日から指定日数が経過すると再起票される', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日のタスクを起票し、基準日に完了させる
+    const base = '2026-03-14';
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-recur',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+    await runScheduler(base);
+    await completeInstanceOn(page, baseURL!, 'after-recur', base);
+
+    // Act: 完了日からちょうど3日後にスケジューラを実行する
+    await runScheduler(addDays(base, 3));
+
+    // Assert: 未着手列に再起票される
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('after-recur'),
+    ).toHaveCount(1);
+  });
+
+  test('未完了のまま指定日数が経過しても重複起票されない', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日のタスクを起票する（完了させない）
+    const base = '2026-03-14';
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-open',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+    await runScheduler(base);
+
+    // Act: 完了させないまま日数が経過した状態でスケジューラを実行する
+    await runScheduler(addDays(base, 5));
+
+    // Assert: 重複起票されず1件のまま
+    await goToKanban(page);
+    await expect(page.getByText('after-open')).toHaveCount(1);
   });
 });

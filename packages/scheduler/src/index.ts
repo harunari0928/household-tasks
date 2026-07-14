@@ -8,6 +8,7 @@ import {
   getFailedTasks,
   hasRecentInstance,
   createTaskInstance,
+  getLastCompletedDateJST,
 } from './db.js';
 import { shouldCreateToday, shouldCreateThisHour, isWithinActivePeriod, calculateNextDueDate } from './matcher.js';
 
@@ -27,7 +28,11 @@ async function main() {
 
   // Process scheduled tasks
   for (const task of tasks) {
-    if (!shouldCreateToday(task, today)) continue;
+    const lastCompletedDate =
+      task.frequency_type === 'days_after_completion'
+        ? getLastCompletedDateJST(db, task.id)
+        : null;
+    if (!shouldCreateToday(task, today, lastCompletedDate)) continue;
     if (!isWithinActivePeriod(task, today)) continue;
     if (!shouldCreateThisHour(task, currentHour)) continue;
 
