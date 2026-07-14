@@ -10,6 +10,7 @@ import attachmentsRouter from './routes/attachments.js';
 import statsRouter from './routes/stats.js';
 import settingsRouter from './routes/settings.js';
 import kanbanRouter from './routes/kanban.js';
+import sickModeRouter from './routes/sickMode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +32,7 @@ app.use('/api', attachmentsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/kanban', kanbanRouter);
+app.use('/api/sick-mode', sickModeRouter);
 
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {

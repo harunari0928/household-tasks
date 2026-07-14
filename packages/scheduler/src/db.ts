@@ -23,6 +23,7 @@ export interface TaskDefinitionRow {
   notes: string | null;
   points: number;
   scheduled_hour: number;
+  sick_day_behavior: 'normal_only' | 'always' | 'sick_only';
 }
 
 type Migration = {
@@ -116,6 +117,17 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 14,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN sick_day_behavior TEXT NOT NULL DEFAULT 'normal_only';
+
+        UPDATE task_definitions SET sick_day_behavior = 'always'
+        WHERE category IN ('trash', 'cooking', 'laundry');
+      `);
+    },
+  },
 ];
 
 function runMigrations(db: Database.Database): void {
@@ -149,6 +161,13 @@ export function getDb(): Database.Database {
 
 export function getActiveTasks(db: Database.Database): TaskDefinitionRow[] {
   return db.prepare('SELECT * FROM task_definitions WHERE is_active = 1').all() as TaskDefinitionRow[];
+}
+
+export function isSickChildModeEnabled(db: Database.Database): boolean {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'sick_child_mode'").get() as
+    | { value: string }
+    | undefined;
+  return row?.value === '1';
 }
 
 export function isAlreadyCreatedToday(db: Database.Database, taskDefId: number, today: string): boolean {

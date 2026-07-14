@@ -37,6 +37,14 @@ export const DAYS_OF_WEEK = {
 
 export type DayOfWeek = keyof typeof DAYS_OF_WEEK;
 
+export const SICK_DAY_BEHAVIORS = {
+  normal_only: '通常時のみ表示',
+  always: '常に表示',
+  sick_only: '風邪の日のみ表示',
+} as const;
+
+export type SickDayBehaviorKey = keyof typeof SICK_DAY_BEHAVIORS;
+
 export interface TaskDefinition {
   id: number;
   name: string;
@@ -56,6 +64,7 @@ export interface TaskDefinition {
   notes: string | null;
   points: number;
   scheduled_hour: number;
+  sick_day_behavior: SickDayBehaviorKey;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +85,7 @@ export interface TaskDefinitionInput {
   notes?: string;
   points?: number;
   scheduled_hour: number;
+  sick_day_behavior?: SickDayBehaviorKey;
 }
 
 export interface ExecutionLog {

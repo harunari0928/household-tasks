@@ -9,6 +9,7 @@ import SettingsPage from './components/SettingsPage.js';
 import useTheme from './hooks/useTheme.js';
 import { useAssignees } from './hooks/useAssignees.js';
 import { useApi } from './hooks/useApi.js';
+import { useSickMode } from './hooks/useSickMode.js';
 
 type Page = 'kanban' | 'tasks' | 'stats' | 'settings';
 
@@ -23,6 +24,7 @@ function getPage(): Page {
 export default function App() {
   const { request } = useApi();
   const { theme, toggleTheme } = useTheme();
+  const { sickMode, toggleSickMode } = useSickMode();
   const [currentPage, setCurrentPage] = useState<Page>(getPage);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('water');
   const [tasks, setTasks] = useState<TaskDefinition[]>([]);
@@ -161,11 +163,22 @@ export default function App() {
     { page: 'settings', hash: '#/settings', label: '設定' },
   ];
 
+  const pageBg = sickMode ? 'bg-red-50 dark:bg-red-950' : 'bg-gray-50 dark:bg-gray-900';
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      <header ref={headerRef} className="sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+    <div className={`min-h-screen ${pageBg} transition-colors`}>
+      <header
+        ref={headerRef}
+        className={`sticky top-0 z-30 shadow-sm border-b transition-colors ${
+          sickMode
+            ? 'bg-red-700 dark:bg-red-900 border-red-800 dark:border-red-950'
+            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-4 flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">家事</h1>
+          <h1 className={`text-lg sm:text-xl font-bold ${sickMode ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+            {sickMode ? '🤒 家事' : '家事'}
+          </h1>
           <div className="flex items-center gap-1 sm:gap-2">
             {/* PC: inline nav */}
             <nav className="hidden sm:flex gap-2">
@@ -175,8 +188,12 @@ export default function App() {
                   href={item.hash}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     currentPage === item.page
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
+                      ? sickMode
+                        ? 'bg-red-900/60 text-white'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                      : sickMode
+                        ? 'text-red-100 hover:text-white hover:bg-red-800'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
                   {item.label}
@@ -192,7 +209,11 @@ export default function App() {
                     if (!showUserMenu) fetchAssignees();
                     setShowUserMenu(!showUserMenu);
                   }}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-h-[36px]"
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors min-h-[36px] ${
+                    sickMode
+                      ? 'text-red-100 hover:bg-red-800'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                   aria-label="ユーザー切替"
                 >
                   <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center font-bold">
@@ -223,8 +244,25 @@ export default function App() {
             )}
 
             <button
+              onClick={toggleSickMode}
+              className={`p-2 rounded-lg text-base leading-none transition-colors ${
+                sickMode
+                  ? 'bg-red-900/60 hover:bg-red-800 ring-2 ring-red-300'
+                  : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+              }`}
+              aria-label={sickMode ? '子ども風邪の日モードを解除' : '子ども風邪の日モードにする'}
+              aria-pressed={sickMode}
+            >
+              <span aria-hidden="true">🤒</span>
+            </button>
+
+            <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+              className={`p-2 rounded-lg transition-colors ${
+                sickMode
+                  ? 'text-red-100 hover:bg-red-800'
+                  : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+              }`}
               aria-label={theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え'}
             >
               {theme === 'dark' ? (
@@ -238,7 +276,11 @@ export default function App() {
             <div className="relative sm:hidden">
               <button
                 onClick={() => setShowHamburger(!showHamburger)}
-                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+                className={`p-2 rounded-lg transition-colors ${
+                  sickMode
+                    ? 'text-red-100 hover:bg-red-800'
+                    : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+                }`}
                 aria-label="メニュー"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -270,6 +312,15 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {sickMode && (
+          <div
+            role="status"
+            className="bg-red-800 dark:bg-red-950 text-white text-center text-xs sm:text-sm font-bold py-1.5 px-3 sick-mode-banner"
+          >
+            🤒 子ども風邪の日モード中 — 不要不急のタスクはお休みしています
+          </div>
+        )}
       </header>
 
       <main className={`mx-auto px-3 sm:px-4 py-3 sm:py-4 ${currentPage === 'kanban' ? 'max-w-full' : 'max-w-5xl'}`}>
@@ -282,7 +333,7 @@ export default function App() {
         ) : (
           <>
         <div
-          className="sticky z-20 -mx-3 sm:-mx-4 -mt-3 sm:-mt-4 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700"
+          className={`sticky z-20 -mx-3 sm:-mx-4 -mt-3 sm:-mt-4 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 ${pageBg} border-b border-gray-200 dark:border-gray-700`}
           style={{ top: headerHeight }}
         >
           <CategoryTabs
@@ -310,7 +361,7 @@ export default function App() {
           onToggleActive={handleToggle}
         />
 
-        <div className="sticky bottom-0 z-20 -mx-3 sm:-mx-4 -mb-3 sm:-mb-4 px-3 sm:px-4 pt-2 pb-3 sm:pb-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+        <div className={`sticky bottom-0 z-20 -mx-3 sm:-mx-4 -mb-3 sm:-mb-4 px-3 sm:px-4 pt-2 pb-3 sm:pb-4 ${pageBg} border-t border-gray-200 dark:border-gray-700`}>
           <button
             onClick={handleAdd}
             className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors text-base"
