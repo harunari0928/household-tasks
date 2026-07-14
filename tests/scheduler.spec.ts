@@ -834,4 +834,44 @@ test.describe('完了後N日', () => {
     await goToKanban(page);
     await expect(page.getByText('after-open')).toHaveCount(1);
   });
+
+  test('N日ごとから完了後N日に変更し未完了の初回インスタンスを削除しても、翌日に再起票される', async ({ page, baseURL }) => {
+    // Arrange: N日ごと(3日)のタスクを作成し初回インスタンスを起票、頻度を完了後3日に変更後、
+    //          未完了の初回インスタンスをカンバンから削除する
+    await registerUser(page, 'test-user');
+    const task = await createTaskViaUI(page, baseURL!, {
+      name: 'type-change',
+      category: 'water',
+      frequency_type: 'n_days',
+      frequency_interval: 3,
+    });
+    const due = task.next_due_date;
+    await runScheduler(due);
+
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByText('type-change').click();
+    await page.getByLabel('頻度').selectOption('days_after_completion');
+    await page.getByLabel('間隔').fill('3');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('完了後3日').waitFor();
+
+    await goToKanban(page);
+    await page.getByText('type-change').hover();
+    await page.getByRole('button', { name: 'タスクを削除', exact: true }).click();
+    const deleteResponse = page.waitForResponse(
+      (r) => r.request().method() === 'DELETE' && /\/api\/kanban\/\d+$/.test(r.url()),
+    );
+    await page.getByRole('button', { name: '削除する' }).click();
+    await deleteResponse;
+
+    // Act: 翌日にスケジューラを実行する
+    await runScheduler(addDays(due, 1));
+
+    // Assert: 完了履歴がないため初回として再起票される
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('type-change'),
+    ).toHaveCount(1);
+  });
 });
