@@ -834,4 +834,64 @@ test.describe('完了後N日', () => {
     await goToKanban(page);
     await expect(page.getByText('after-open')).toHaveCount(1);
   });
+
+  // N日ごとで完了 → 完了後N日に頻度変更したタスクを、変更前の完了日を起点に再起票させる。
+  // 起票→完了→頻度変更までを共通化する。
+  async function arrangeCompletedThenChangedToAfterCompletion(
+    page: Page,
+    baseURL: string,
+    name: string,
+  ): Promise<string> {
+    await registerUser(page, 'test-user');
+    const task = await createTaskViaUI(page, baseURL, {
+      name,
+      category: 'water',
+      frequency_type: 'n_days',
+      frequency_interval: 3,
+    });
+    const completedOn = task.next_due_date;
+
+    // N日ごととして初回インスタンスを起票し、その日に完了させる
+    await runScheduler(completedOn);
+    await completeInstanceOn(page, baseURL, name, completedOn);
+
+    // 頻度を「完了後3日」に変更する（next_due_date はクリアされる）
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByText(name).click();
+    await page.getByLabel('頻度').selectOption('days_after_completion');
+    await page.getByLabel('間隔').fill('3');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('完了後3日').waitFor();
+
+    return completedOn;
+  }
+
+  test('N日ごとで完了後に完了後N日へ変更すると、変更前の完了日を起点に再起票される', async ({ page, baseURL }) => {
+    // Arrange
+    const completedOn = await arrangeCompletedThenChangedToAfterCompletion(page, baseURL!, 'carryover-recur');
+
+    // Act: 変更前の完了日からちょうど3日後にスケジューラを実行する
+    await runScheduler(addDays(completedOn, 3));
+
+    // Assert: 変更前の完了日を起点に再起票される
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('carryover-recur'),
+    ).toHaveCount(1);
+  });
+
+  test('N日ごとで完了後に完了後N日へ変更しても、完了日から指定日数の前は再起票されない', async ({ page, baseURL }) => {
+    // Arrange
+    const completedOn = await arrangeCompletedThenChangedToAfterCompletion(page, baseURL!, 'carryover-wait');
+
+    // Act: 変更前の完了日から2日後（3日未満）にスケジューラを実行する
+    await runScheduler(addDays(completedOn, 2));
+
+    // Assert: まだ再起票されない
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('carryover-wait'),
+    ).toHaveCount(0);
+  });
 });
