@@ -9,6 +9,7 @@ const router: ReturnType<typeof Router> = Router();
 const VALID_CATEGORIES = ['water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash', 'childcare', 'cooking', 'lifestyle'];
 const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month', 'days_after_completion'];
 const VALID_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const VALID_SICK_DAY_BEHAVIORS = ['normal_only', 'always', 'sick_only'];
 interface TaskInput {
   name: string;
   category: string;
@@ -25,6 +26,7 @@ interface TaskInput {
   notes?: string;
   points?: number;
   scheduled_hour?: number;
+  sick_day_behavior?: string;
 }
 
 function isValidMonthDay(mm: number, dd: number): boolean {
@@ -139,6 +141,12 @@ function validateTaskInput(body: TaskInput): string | null {
     }
   }
 
+  if (body.sick_day_behavior !== undefined && body.sick_day_behavior !== null) {
+    if (!VALID_SICK_DAY_BEHAVIORS.includes(body.sick_day_behavior)) {
+      return '無効な風邪の日の扱いです（normal_only / always / sick_only）';
+    }
+  }
+
   return null;
 }
 
@@ -228,14 +236,15 @@ router.post('/', (req: Request, res: Response) => {
 
   const points = body.points ?? 1;
   const scheduledHour = body.scheduled_hour ?? 0;
+  const sickDayBehavior = body.sick_day_behavior ?? 'normal_only';
   const periodStartMm = body.period_start_mm ?? null;
   const periodStartDd = body.period_start_dd ?? null;
   const periodEndMm = body.period_end_mm ?? null;
   const periodEndDd = body.period_end_dd ?? null;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -255,6 +264,7 @@ router.post('/', (req: Request, res: Response) => {
     body.notes || null,
     points,
     scheduledHour,
+    sickDayBehavior,
     now,
     now,
   );
@@ -306,6 +316,7 @@ router.put('/:id', (req: Request, res: Response) => {
 
   const points = body.points ?? 1;
   const scheduledHour = body.scheduled_hour ?? 0;
+  const sickDayBehavior = body.sick_day_behavior ?? existing.sick_day_behavior;
   const periodStartMm = body.period_start_mm ?? null;
   const periodStartDd = body.period_start_dd ?? null;
   const periodEndMm = body.period_end_mm ?? null;
@@ -315,7 +326,7 @@ router.put('/:id', (req: Request, res: Response) => {
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
         days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
         period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
-        next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = ?
+        next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -336,6 +347,7 @@ router.put('/:id', (req: Request, res: Response) => {
     body.notes || null,
     points,
     scheduledHour,
+    sickDayBehavior,
     new Date().toISOString(),
     req.params.id,
   );
@@ -403,11 +415,11 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const findStmt = db.prepare('SELECT id, created_at, updated_at FROM task_definitions WHERE name = ?');
+  const findStmt = db.prepare('SELECT id, created_at, updated_at, sick_day_behavior FROM task_definitions WHERE name = ?');
 
   const importAll = db.transaction(() => {
     for (const task of tasks) {
@@ -427,13 +439,14 @@ router.post('/import', (req: Request, res: Response) => {
           SET category = ?, frequency_type = ?, frequency_interval = ?,
               days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
               period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
-              next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, updated_at = created_at
+              next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?, updated_at = created_at
           WHERE id = ?
         `).run(
           task.category, task.frequency_type, interval,
           daysOfWeek, task.day_of_month ?? null, monthOfYear, task.nth_weekday_position ?? null,
           task.period_start_mm ?? null, task.period_start_dd ?? null, task.period_end_mm ?? null, task.period_end_dd ?? null,
-          nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0, existing.id,
+          nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
+          task.sick_day_behavior ?? existing.sick_day_behavior, existing.id,
         );
         inserted.push(existing.id);
       } else {
@@ -446,6 +459,7 @@ router.post('/import', (req: Request, res: Response) => {
           daysOfWeek, task.day_of_month ?? null, monthOfYear, task.nth_weekday_position ?? null,
           task.period_start_mm ?? null, task.period_start_dd ?? null, task.period_end_mm ?? null, task.period_end_dd ?? null,
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
+          task.sick_day_behavior ?? 'normal_only',
         );
         inserted.push(Number(result.lastInsertRowid));
       }

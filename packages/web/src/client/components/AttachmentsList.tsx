@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import type { Attachment } from '../types.js';
 import { useApi } from '../hooks/useApi.js';
 
@@ -29,17 +29,20 @@ export default function AttachmentsList({ taskId, refreshKey, pendingFiles, pend
   const { request } = useApi();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
-  const fetchAttachments = useCallback(async () => {
-    if (!taskId) return;
-    const result = await request<Attachment[]>(`/api/tasks/${taskId}/attachments`, undefined, {
-      errorMessage: '添付ファイルの取得に失敗しました',
-    });
-    if (result.ok) setAttachments(result.data);
-  }, [taskId, request]);
-
   useEffect(() => {
-    fetchAttachments();
-  }, [fetchAttachments, refreshKey]);
+    if (!taskId) return;
+    // refreshKey更新時に前回の未完了レスポンスを無視する（古い空レスポンスが最新結果を上書きするのを防ぐ）
+    let cancelled = false;
+    (async () => {
+      const result = await request<Attachment[]>(`/api/tasks/${taskId}/attachments`, undefined, {
+        errorMessage: '添付ファイルの取得に失敗しました',
+      });
+      if (!cancelled && result.ok) setAttachments(result.data);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId, refreshKey, request]);
 
   const visibleAttachments = attachments.filter((a) => !pendingDeleteIds?.includes(a.id));
   const hasPendingFiles = pendingFiles && pendingFiles.length > 0;

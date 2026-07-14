@@ -225,6 +225,17 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 14,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN sick_day_behavior TEXT NOT NULL DEFAULT 'normal_only';
+
+        UPDATE task_definitions SET sick_day_behavior = 'always'
+        WHERE category IN ('trash', 'cooking', 'laundry');
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

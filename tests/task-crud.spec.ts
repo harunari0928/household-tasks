@@ -343,7 +343,7 @@ test.describe('フォームバリデーション', () => {
   test('既にバリデーションエラーが表示された状態で再度保存しても、エラー位置までスクロールされる', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 400, height: 500 } });
     const page = await context.newPage();
-    await fetch('http://localhost:5174/api/test/reset', { method: 'POST' });
+    await fetch(`http://localhost:${process.env.TEST_WEB_PORT ?? '5174'}/api/test/reset`, { method: 'POST' });
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 

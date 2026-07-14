@@ -33,6 +33,7 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
 | `--notes <text>` | メモ | - |
 | `--points <n>` | ポイント（1〜10） | 1 |
 | `--scheduled-hour <hour>` | 起票時刻（0〜23） | 0 |
+| `--sick-day-behavior <behavior>` | 風邪の日の扱い（`normal_only`: 通常時のみ / `always`: 常に表示 / `sick_only`: 風邪の日のみ） | normal_only |
 
 ## 頻度タイプ別の必須オプション（重要）
 

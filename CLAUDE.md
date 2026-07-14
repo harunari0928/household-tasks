@@ -68,6 +68,10 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
    ```
 2. `docker compose up -d` で起動（プロジェクト名はディレクトリ名で自動分離）
 3. ブラウザは `http://localhost:<WEB_PORT>` でアクセス
+4. Playwrightテストも他の作業ツリーと並行実行するならポートを分ける:
+   ```bash
+   TEST_API_PORT=3102 TEST_WEB_PORT=5175 npx playwright test
+   ```
 
 ## Key conventions
 

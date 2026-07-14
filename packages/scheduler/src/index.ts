@@ -3,6 +3,7 @@ import {
   getDb,
   getActiveTasks,
   isAlreadyCreatedToday,
+  isSickChildModeEnabled,
   logExecution,
   updateNextDueDate,
   getFailedTasks,
@@ -21,7 +22,15 @@ async function main() {
 
   console.log(`[${new Date().toISOString()}] Scheduler running for date: ${today}, hour: ${currentHour}${dryRun ? ' (DRY RUN)' : ''}`);
 
-  const tasks = getActiveTasks(db);
+  const sickMode = isSickChildModeEnabled(db);
+  if (sickMode) {
+    console.log('Sick child mode is ON: skipping normal_only tasks, including sick_only tasks');
+  }
+
+  // 子ども風邪の日モード: ON中は通常時のみタスクを起票しない。OFF中は風邪の日専用タスクを起票しない
+  const tasks = getActiveTasks(db).filter((task) =>
+    sickMode ? task.sick_day_behavior !== 'normal_only' : task.sick_day_behavior !== 'sick_only'
+  );
   let created = 0;
   let skipped = 0;
   let failed = 0;

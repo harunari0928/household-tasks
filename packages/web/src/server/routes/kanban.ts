@@ -1,13 +1,14 @@
 import { Router, type Request, type Response } from 'express';
 import { getDb } from '../db.js';
 import { getNowISO } from '../test-time.js';
+import { isSickModeEnabled } from './sickMode.js';
 
 const router: ReturnType<typeof Router> = Router();
 
 // SSE clients
 const sseClients = new Set<Response>();
 
-function broadcast(event: object) {
+export function broadcast(event: object) {
   const data = `data: ${JSON.stringify(event)}\n\n`;
   for (const client of sseClients) {
     client.write(data);
@@ -31,6 +32,13 @@ router.get('/', (req: Request, res: Response) => {
   if (req.query.category) {
     conditions.push('td.category = ?');
     params.push(req.query.category);
+  }
+
+  // 子ども風邪の日モード: ON中は通常時のみタスクを非表示、OFF中は風邪の日専用タスクを非表示
+  if (isSickModeEnabled(db)) {
+    conditions.push("td.sick_day_behavior != 'normal_only'");
+  } else {
+    conditions.push("td.sick_day_behavior != 'sick_only'");
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

@@ -20,6 +20,16 @@
   animation: kanban-card-highlight 1.5s ease-out;
 }
 
+/* 子ども風邪の日モード: バナーをゆっくり点滅させて緊急感を出す */
+@keyframes sick-mode-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.sick-mode-banner {
+  animation: sick-mode-pulse 2.5s ease-in-out infinite;
+}
+
 .dark select,
 .dark input[type="date"],
 .dark input[type="number"],

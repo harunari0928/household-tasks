@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { CATEGORIES, type CategoryKey, type TaskDefinition, type FrequencyTypeKey } from '../types.js';
+import { CATEGORIES, SICK_DAY_BEHAVIORS, type CategoryKey, type TaskDefinition, type FrequencyTypeKey, type SickDayBehaviorKey } from '../types.js';
 import FrequencySelector from './FrequencySelector.js';
 import MarkdownEditor, { type PendingFile } from './MarkdownEditor.js';
 import AttachmentsList from './AttachmentsList.js';
@@ -71,6 +71,9 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   );
   const [scheduledHour, setScheduledHour] = useState<number>(task?.scheduled_hour ?? 0);
   const [points, setPoints] = useState<string>(String(task?.points ?? 1));
+  const [sickDayBehavior, setSickDayBehavior] = useState<SickDayBehaviorKey>(
+    task?.sick_day_behavior ?? 'normal_only',
+  );
   const initialPeriodEnabled =
     task?.period_start_mm != null &&
     task?.period_start_dd != null &&
@@ -238,6 +241,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       frequency_type: frequencyType,
       points: pointsValue,
       scheduled_hour: scheduledHour,
+      sick_day_behavior: sickDayBehavior,
     };
 
     if (['n_days', 'n_weeks', 'n_months', 'days_after_completion'].includes(frequencyType)) {
@@ -388,6 +392,27 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label htmlFor="sick-day-behavior" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              風邪の日の扱い
+            </label>
+            <select
+              id="sick-day-behavior"
+              value={sickDayBehavior}
+              onChange={(e) => setSickDayBehavior(e.target.value as SickDayBehaviorKey)}
+              className={inputBase}
+            >
+              {(Object.entries(SICK_DAY_BEHAVIORS) as [SickDayBehaviorKey, string][]).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              子ども風邪の日モード中にこのタスクをどう扱うか
+            </p>
           </div>
 
           <div>
