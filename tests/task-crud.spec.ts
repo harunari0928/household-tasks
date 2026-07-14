@@ -137,6 +137,21 @@ test.describe('タスクCRUD', () => {
     await expect(page.getByText('毎週(月)')).toBeVisible();
   });
 
+  test('完了後N日タスクを作成できる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト排水口掃除');
+    await page.getByLabel('頻度').selectOption('days_after_completion');
+    // 完了後は1日から指定できる（N日ごとの最小2とは異なる）
+    await page.getByLabel('間隔').fill('1');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByText('テスト排水口掃除')).toBeVisible();
+    await expect(page.getByText('完了後1日')).toBeVisible();
+  });
+
 });
 
 test.describe('フォームバリデーション', () => {
@@ -194,6 +209,17 @@ test.describe('フォームバリデーション', () => {
       await expect(page.getByLabel('間隔')).not.toBeVisible();
       await expect(page.getByLabel(/日指定/)).not.toBeVisible();
       await expect(page.getByLabel(/月指定/)).not.toBeVisible();
+    });
+
+    await page.getByLabel('頻度').selectOption('days_after_completion');
+
+    await test.step('完了後N日 → 間隔と完了駆動の説明が表示され、他は非表示', async () => {
+      await expect(page.getByLabel('間隔')).toBeVisible();
+      await expect(page.getByText('完了した日から指定日数が経過すると自動で再作成されます')).toBeVisible();
+      await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
+      await expect(page.getByLabel(/日指定/)).not.toBeVisible();
+      await expect(page.getByLabel(/月指定/)).not.toBeVisible();
+      await expect(page.getByLabel('何週目')).not.toBeVisible();
     });
   });
 

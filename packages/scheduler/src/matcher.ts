@@ -24,7 +24,17 @@ function getTodayDayOfWeek(today: string): string {
   return DAY_REVERSE[d.getDay()];
 }
 
-export function shouldCreateToday(task: TaskDefinitionRow, today: string): boolean {
+function addDays(dateStr: string, days: number): string {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + days);
+  return formatDate(d);
+}
+
+export function shouldCreateToday(
+  task: TaskDefinitionRow,
+  today: string,
+  lastCompletedDate?: string | null,
+): boolean {
   const ft = task.frequency_type;
 
   switch (ft) {
@@ -71,6 +81,15 @@ export function shouldCreateToday(task: TaskDefinitionRow, today: string): boole
       );
       if (!targetDate) return false; // Nth weekday doesn't exist this month
       return targetDate.getDate() === todayDate.getDate();
+    }
+
+    case 'days_after_completion': {
+      // 完了日から interval 日経過したら起票。
+      // 一度も完了していない場合は初回として起票（未完了インスタンスが残っている間は
+      // hasRecentInstance が再起票を抑止する）。
+      const interval = task.frequency_interval || 1;
+      if (!lastCompletedDate) return true;
+      return addDays(lastCompletedDate, interval) <= today;
     }
 
     default:

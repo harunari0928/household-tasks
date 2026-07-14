@@ -182,6 +182,12 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       return;
     }
 
+    if (frequencyType === 'days_after_completion' && (!frequencyInterval || frequencyInterval < 1)) {
+      setFrequencyError('完了後の日数は1以上の整数で入力してください');
+      scrollToError(frequencyErrorRef);
+      return;
+    }
+
     if (frequencyType === 'yearly') {
       const hasMonth = !!monthOfYear;
       const hasDay = !!dayOfMonth;
@@ -228,7 +234,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       scheduled_hour: scheduledHour,
     };
 
-    if (['n_days', 'n_weeks', 'n_months'].includes(frequencyType)) {
+    if (['n_days', 'n_weeks', 'n_months', 'days_after_completion'].includes(frequencyType)) {
       input.frequency_interval = frequencyInterval;
     }
     if (['weekly', 'n_weeks'].includes(frequencyType)) {

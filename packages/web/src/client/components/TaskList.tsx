@@ -22,6 +22,8 @@ function formatFrequency(task: TaskDefinition): string {
     }
     case 'n_days':
       return `${task.frequency_interval}日ごと`;
+    case 'days_after_completion':
+      return `完了後${task.frequency_interval}日`;
     case 'n_weeks': {
       const days = task.days_of_week
         ?.split(',')

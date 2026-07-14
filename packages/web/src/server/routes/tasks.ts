@@ -7,7 +7,7 @@ import { getTodayJST } from '@household-tasks/shared';
 const router: ReturnType<typeof Router> = Router();
 
 const VALID_CATEGORIES = ['water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash', 'childcare', 'cooking', 'lifestyle'];
-const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month'];
+const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month', 'days_after_completion'];
 const VALID_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 interface TaskInput {
   name: string;
@@ -58,6 +58,17 @@ function validateTaskInput(body: TaskInput): string | null {
   if (ft === 'n_days' || ft === 'n_weeks' || ft === 'n_months') {
     if (!body.frequency_interval || typeof body.frequency_interval !== 'number' || body.frequency_interval < 2) {
       return '間隔は2以上の整数で入力してください';
+    }
+  }
+
+  if (ft === 'days_after_completion') {
+    if (
+      !body.frequency_interval ||
+      typeof body.frequency_interval !== 'number' ||
+      !Number.isInteger(body.frequency_interval) ||
+      body.frequency_interval < 1
+    ) {
+      return '完了後の日数は1以上の整数で入力してください';
     }
   }
 
@@ -132,7 +143,7 @@ function validateTaskInput(body: TaskInput): string | null {
 }
 
 function calculateNextDueDate(ft: string, interval: number | null, today: string, monthOfYear?: number | null, dayOfMonth?: number | null): string | null {
-  if (['daily', 'weekly', 'monthly', 'nth_weekday_of_month'].includes(ft)) {
+  if (['daily', 'weekly', 'monthly', 'nth_weekday_of_month', 'days_after_completion'].includes(ft)) {
     return null;
   }
 
