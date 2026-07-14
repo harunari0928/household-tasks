@@ -138,16 +138,18 @@ test.describe('タスクCRUD', () => {
   });
 
   test('完了後N日タスクを作成できる', async ({ page }) => {
+    // Arrange: 水回りカテゴリでタスク追加フォームを開く
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /水回り/ }).click();
-
     await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    // Act: 完了後1日の完了駆動タスクを入力して保存する（間隔は最小1日、N日ごとの最小2とは異なる）
     await page.getByLabel('タスク名').fill('テスト排水口掃除');
     await page.getByLabel('頻度').selectOption('days_after_completion');
-    // 完了後は1日から指定できる（N日ごとの最小2とは異なる）
     await page.getByLabel('間隔').fill('1');
     await page.getByRole('button', { name: '保存' }).click();
 
+    // Assert: 一覧に「完了後1日」として表示される
     await expect(page.getByText('テスト排水口掃除')).toBeVisible();
     await expect(page.getByText('完了後1日')).toBeVisible();
   });
