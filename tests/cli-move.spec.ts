@@ -78,7 +78,7 @@ test.describe('ht move（ステータス変更）', () => {
     await goToKanban(page);
 
     // Assert
-    const doneColumn = page.locator('[data-column-status="done"]');
+    const doneColumn = page.getByRole('region', { name: '完了列' });
     await expect(doneColumn.getByText('move-to-done')).toBeVisible();
   });
 

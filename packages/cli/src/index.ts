@@ -382,7 +382,7 @@ task
   .option('--days-of-week <days>', 'Days of week (comma-separated: mon,tue,...)')
   .option('--day-of-month <day>', 'Day of month (1-28)', parseInt)
   .option('--notes <text>', 'Notes')
-  .option('--points <n>', 'Points (1-10)', parseInt)
+  .option('--points <n>', 'Points (0-10)', parseInt)
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
   .action(async (opts: {
     name: string;
@@ -428,7 +428,7 @@ task
   .option('--days-of-week <days>', 'Days of week (comma-separated)')
   .option('--day-of-month <day>', 'Day of month (1-28)', parseInt)
   .option('--notes <text>', 'Notes')
-  .option('--points <n>', 'Points (1-10)', parseInt)
+  .option('--points <n>', 'Points (0-10)', parseInt)
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
   .action(async (idStr: string, opts: {
     name?: string;

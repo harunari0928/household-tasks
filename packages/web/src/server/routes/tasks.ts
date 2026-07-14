@@ -73,8 +73,8 @@ function validateTaskInput(body: TaskInput): string | null {
   }
 
   if (body.points !== undefined && body.points !== null) {
-    if (typeof body.points !== 'number' || !Number.isInteger(body.points) || body.points < 1 || body.points > 10) {
-      return 'ポイントは1〜10の整数で入力してください';
+    if (typeof body.points !== 'number' || !Number.isInteger(body.points) || body.points < 0 || body.points > 10) {
+      return 'ポイントは0〜10の整数で入力してください';
     }
   }
 

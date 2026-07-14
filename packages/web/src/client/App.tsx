@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CATEGORIES, type CategoryKey, type TaskDefinition } from './types.js';
 import CategoryTabs from './components/CategoryTabs.js';
 import TaskList from './components/TaskList.js';
@@ -8,6 +8,7 @@ import KanbanBoard from './components/KanbanBoard.js';
 import SettingsPage from './components/SettingsPage.js';
 import useTheme from './hooks/useTheme.js';
 import { useAssignees } from './hooks/useAssignees.js';
+import { useApi } from './hooks/useApi.js';
 
 type Page = 'kanban' | 'tasks' | 'stats' | 'settings';
 
@@ -20,6 +21,7 @@ function getPage(): Page {
 }
 
 export default function App() {
+  const { request } = useApi();
   const { theme, toggleTheme } = useTheme();
   const [currentPage, setCurrentPage] = useState<Page>(getPage);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('water');
@@ -36,6 +38,19 @@ export default function App() {
   const { assignees, fetchAssignees } = useAssignees();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showHamburger, setShowHamburger] = useState(false);
+
+  // Measure sticky header height so the tabs/search bar can stick right below it
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () => setHeaderHeight(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const onHash = () => {
@@ -66,10 +81,12 @@ export default function App() {
   };
 
   const fetchTasks = useCallback(async () => {
-    const res = await fetch('/api/tasks');
-    const data = await res.json();
-    setAllTasks(data);
-  }, []);
+    const result = await request<TaskDefinition[]>('/api/tasks', undefined, {
+      errorMessage: 'タスク一覧の取得に失敗しました',
+      onRetry: () => fetchTasks(),
+    });
+    if (result.ok) setAllTasks(result.data);
+  }, [request]);
 
   useEffect(() => {
     fetchTasks();
@@ -104,8 +121,11 @@ export default function App() {
   };
 
   const handleToggle = async (task: TaskDefinition) => {
-    const res = await fetch(`/api/tasks/${task.id}/toggle`, { method: 'POST' });
-    if (res.ok) {
+    const result = await request(`/api/tasks/${task.id}/toggle`, { method: 'POST' }, {
+      errorMessage: 'タスクの有効/無効の切り替えに失敗しました',
+      onRetry: () => handleToggle(task),
+    });
+    if (result.ok) {
       await fetchTasks();
     }
   };
@@ -143,7 +163,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <header ref={headerRef} className="sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-4 flex items-center justify-between">
           <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">家事</h1>
           <div className="flex items-center gap-1 sm:gap-2">
@@ -261,23 +281,28 @@ export default function App() {
           <SettingsPage />
         ) : (
           <>
-        <CategoryTabs
-          selected={searchQuery ? null : selectedCategory}
-          onSelect={(key) => {
-            setSearchQuery('');
-            setSelectedCategory(key);
-          }}
-          counts={categoryCounts}
-        />
+        <div
+          className="sticky z-20 -mx-3 sm:-mx-4 -mt-3 sm:-mt-4 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700"
+          style={{ top: headerHeight }}
+        >
+          <CategoryTabs
+            selected={searchQuery ? null : selectedCategory}
+            onSelect={(key) => {
+              setSearchQuery('');
+              setSelectedCategory(key);
+            }}
+            counts={categoryCounts}
+          />
 
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="タスクを検索..."
-          aria-label="タスクを検索"
-          className="mt-3 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 min-h-[44px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
-        />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="タスクを検索..."
+            aria-label="タスクを検索"
+            className="mt-3 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 min-h-[44px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+          />
+        </div>
 
         <TaskList
           tasks={tasks}
@@ -285,12 +310,14 @@ export default function App() {
           onToggleActive={handleToggle}
         />
 
-        <button
-          onClick={handleAdd}
-          className="mt-4 w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors text-base"
-        >
-          ＋ タスクを追加
-        </button>
+        <div className="sticky bottom-0 z-20 -mx-3 sm:-mx-4 -mb-3 sm:-mb-4 px-3 sm:px-4 pt-2 pb-3 sm:pb-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={handleAdd}
+            className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors text-base"
+          >
+            ＋ タスクを追加
+          </button>
+        </div>
 
         {showForm && (
           <div

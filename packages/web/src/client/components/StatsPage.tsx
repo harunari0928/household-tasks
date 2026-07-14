@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 import CompletedTasksTable from './CompletedTasksTable.js';
+import { useApi } from '../hooks/useApi.js';
 
 interface PointDetail {
   task_name: string;
@@ -47,6 +48,7 @@ function todayStr(): string {
 }
 
 export default function StatsPage() {
+  const { request } = useApi();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [endIsToday, setEndIsToday] = useState(false);
@@ -59,49 +61,45 @@ export default function StatsPage() {
   const [savedEndIsToday, setSavedEndIsToday] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
-  // Load saved period settings
+  // Load saved period settings. A read failure degrades gracefully to the
+  // current-month default, so don't surface a toast here.
   useEffect(() => {
-    fetch('/api/settings')
-      .then((res) => res.json())
-      .then((settings: Record<string, string>) => {
-        if (settings.chart_start_date && settings.chart_end_date) {
-          const isToday = settings.chart_end_date === 'TODAY';
-          const resolvedEnd = isToday ? todayStr() : settings.chart_end_date;
-          setStartDate(settings.chart_start_date);
-          setEndDate(resolvedEnd);
-          setEndIsToday(isToday);
-          setSavedStart(settings.chart_start_date);
-          setSavedEnd(resolvedEnd);
-          setSavedEndIsToday(isToday);
-        } else {
-          const range = getMonthRange(0);
-          setStartDate(range.start);
-          setEndDate(range.end);
-          setSavedStart(range.start);
-          setSavedEnd(range.end);
-        }
-        setSettingsLoaded(true);
-      })
-      .catch(() => {
+    request<Record<string, string>>('/api/settings', undefined, { silent: true }).then((result) => {
+      const settings = result.ok ? result.data : {};
+      if (settings.chart_start_date && settings.chart_end_date) {
+        const isToday = settings.chart_end_date === 'TODAY';
+        const resolvedEnd = isToday ? todayStr() : settings.chart_end_date;
+        setStartDate(settings.chart_start_date);
+        setEndDate(resolvedEnd);
+        setEndIsToday(isToday);
+        setSavedStart(settings.chart_start_date);
+        setSavedEnd(resolvedEnd);
+        setSavedEndIsToday(isToday);
+      } else {
         const range = getMonthRange(0);
         setStartDate(range.start);
         setEndDate(range.end);
         setSavedStart(range.start);
         setSavedEnd(range.end);
-        setSettingsLoaded(true);
-      });
-  }, []);
+      }
+      setSettingsLoaded(true);
+    });
+  }, [request]);
 
   // Save period settings explicitly
   const savePeriod = useCallback(() => {
     if (!startDate || !endDate) return;
     const endValue = endIsToday ? 'TODAY' : endDate;
-    fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chart_start_date: startDate, chart_end_date: endValue }),
-    }).then((res) => {
-      if (res.ok) {
+    request(
+      '/api/settings',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chart_start_date: startDate, chart_end_date: endValue }),
+      },
+      { errorMessage: '期間設定の保存に失敗しました', onRetry: () => savePeriod() },
+    ).then((result) => {
+      if (result.ok) {
         setSavedStart(startDate);
         setSavedEnd(endDate);
         setSavedEndIsToday(endIsToday);
@@ -109,7 +107,7 @@ export default function StatsPage() {
         setTimeout(() => setSaveMessage(''), 2000);
       }
     });
-  }, [startDate, endDate, endIsToday]);
+  }, [startDate, endDate, endIsToday, request]);
 
   // Fetch stats data
   useEffect(() => {
@@ -117,15 +115,17 @@ export default function StatsPage() {
 
     setLoading(true);
     setError('');
-    fetch(`/api/stats/points?start=${startDate}&end=${endDate}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('データの取得に失敗しました');
-        return res.json();
+    // Keep the existing inline error in the chart area as the notification;
+    // suppress the toast to avoid double-reporting the same failure.
+    request<StatsData>(`/api/stats/points?start=${startDate}&end=${endDate}`, undefined, {
+      silent: true,
+    })
+      .then((result) => {
+        if (result.ok) setData(result.data);
+        else setError('データの取得に失敗しました');
       })
-      .then((d: StatsData) => setData(d))
-      .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [startDate, endDate, settingsLoaded]);
+  }, [startDate, endDate, settingsLoaded, request]);
 
   const handlePreset = (preset: 'thisMonth' | 'lastMonth' | 'thisWeek' | 'untilToday') => {
     if (preset === 'untilToday') {

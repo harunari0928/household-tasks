@@ -94,6 +94,28 @@ test.describe('期間設定の保存', () => {
       await expect(page.getByText('保存しました')).not.toBeVisible({ timeout: 5000 });
     });
   });
+
+  test('期間設定の保存が通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/stats');
+    await page.getByRole('button', { name: '先月' }).click();
+    await page.getByRole('button', { name: 'みんなに保存' }).waitFor();
+    await page.route('**/api/settings', (route) =>
+      route.request().method() === 'PUT' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: 'みんなに保存' }).click();
+
+    // Assert
+    await test.step('エラーが通知される', async () => {
+      await expect(page.getByRole('alert').filter({ hasText: '期間設定の保存に失敗しました' }).first()).toBeVisible();
+    });
+
+    await test.step('保存成功メッセージは表示されない', async () => {
+      await expect(page.getByText('保存しました')).toBeHidden();
+    });
+  });
 });
 
 test.describe('〜今日モード', () => {
