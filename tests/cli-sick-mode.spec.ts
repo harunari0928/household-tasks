@@ -53,7 +53,7 @@ test.describe('ht sick-mode（子ども風邪の日モード）', () => {
     expect(result.stdout).toContain('OFF');
   });
 
-  test('onで有効化すると病児タスクが起票され、状態確認でONになる', async ({ page, baseURL }) => {
+  test('onで有効化すると風邪の日のみ表示タスクが起票され、状態確認でONになる', async ({ page, baseURL }) => {
     // Arrange
     await createTaskDef(page, baseURL!, { name: 'cli-薬を飲ませる', sick_day_behavior: 'sick_only' });
 
@@ -108,7 +108,7 @@ test.describe('ht sick-mode（子ども風邪の日モード）', () => {
 
     await runCli('sick-mode on');
 
-    await test.step('モードON: 病児タスクと常時タスクだけ表示される', async () => {
+    await test.step('モードON: 風邪の日のみ表示タスクと常に表示タスクだけ表示される', async () => {
       const result = await runCli('list');
       expect(result.stdout).not.toContain('cli-床掃除');
       expect(result.stdout).toContain('cli-ゴミ捨て');
