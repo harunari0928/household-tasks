@@ -382,10 +382,23 @@ test.describe('Nヶ月ごと（日指定あり）', () => {
     await expect(page.getByText('n-months-day1')).toBeVisible();
   });
 
+  test('指定日の前日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'n-months-day-before', category: 'water', frequency_type: 'n_months', frequency_interval: 2, day_of_month: 1,
+    });
+
+    await runScheduler(addDays(dayOfMonthAfterMonths(2, 1), -1));
+
+    await goToKanban(page);
+    await expect(page.getByText('n-months-day-before')).not.toBeVisible();
+  });
+
   test('間隔を変更しても指定日に起票される', async ({ page, baseURL }) => {
     await createTaskViaUI(page, baseURL!, {
       name: 'n-months-reinterval', category: 'water', frequency_type: 'n_months', frequency_interval: 2, day_of_month: 1,
     });
+
+    // 間隔を3に変更
     await page.getByText('n-months-reinterval').click();
     await page.getByLabel('間隔').fill('3');
     await page.getByRole('button', { name: '保存' }).click();
@@ -400,6 +413,7 @@ test.describe('Nヶ月ごと（日指定あり）', () => {
     await createTaskViaUI(page, baseURL!, {
       name: 'n-months-recur', category: 'water', frequency_type: 'n_months', frequency_interval: 2, day_of_month: 1,
     });
+
     await runScheduler(dayOfMonthAfterMonths(2, 1));
 
     // 最初のインスタンスを完了にする（重複チェック回避のため）
