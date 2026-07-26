@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import { getTodayJST, formatLocalDate, addMonths } from '@household-tasks/shared';
 
 const DB_PATH = process.env.DB_PATH || './data/task_definitions.db';
 
@@ -234,6 +235,37 @@ const migrations: Migration[] = [
         UPDATE task_definitions SET sick_day_behavior = 'always'
         WHERE category IN ('trash', 'cooking', 'laundry');
       `);
+    },
+  },
+  {
+    version: 15,
+    up: (db) => {
+      // Nヶ月ごとタスクの next_due_date が day_of_month を無視して算出されていたため、指定日に揃え直す
+      const rows = db.prepare(`
+        SELECT id, frequency_interval, day_of_month, next_due_date
+        FROM task_definitions
+        WHERE frequency_type = 'n_months' AND day_of_month IS NOT NULL AND next_due_date IS NOT NULL
+      `).all() as { id: number; frequency_interval: number | null; day_of_month: number; next_due_date: string }[];
+
+      const today = getTodayJST();
+      const update = db.prepare('UPDATE task_definitions SET next_due_date = ? WHERE id = ?');
+
+      for (const row of rows) {
+        const due = new Date(row.next_due_date + 'T00:00:00');
+        if (due.getDate() === row.day_of_month) continue;
+
+        const interval = Math.max(1, row.frequency_interval ?? 1);
+        // 同月の指定日に寄せる
+        let fixed = addMonths(due, 0, row.day_of_month);
+        // 未来の予定だったものが是正で過去日になる場合のみ、突然の起票を避けるため1周期進める
+        // （もともと期限超過だったタスクは超過のまま残し、次回実行で起票させる）
+        if (row.next_due_date > today) {
+          while (formatLocalDate(fixed) < today) {
+            fixed = addMonths(fixed, interval, row.day_of_month);
+          }
+        }
+        update.run(formatLocalDate(fixed), row.id);
+      }
     },
   },
 ];
