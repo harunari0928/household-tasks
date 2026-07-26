@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { getDb, getUploadsDir } from '../db.js';
-import { getTodayJST } from '@household-tasks/shared';
+import { getTodayJST, formatLocalDate, addMonths } from '@household-tasks/shared';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -100,8 +100,7 @@ function calculateNextDueDate(ft: string, interval: number | null, today: string
       d.setDate(d.getDate() + (interval || 1) * 7);
       break;
     case 'n_months':
-      d.setMonth(d.getMonth() + (interval || 1));
-      break;
+      return formatLocalDate(addMonths(d, interval || 1, dayOfMonth));
     case 'yearly':
       if (monthOfYear && dayOfMonth) {
         const year = d.getFullYear();
@@ -117,7 +116,7 @@ function calculateNextDueDate(ft: string, interval: number | null, today: string
       break;
   }
 
-  return d.toISOString().split('T')[0];
+  return formatLocalDate(d);
 }
 
 // GET /api/tasks

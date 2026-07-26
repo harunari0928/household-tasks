@@ -1,3 +1,4 @@
+import { formatLocalDate, addMonths } from '@household-tasks/shared';
 import type { TaskDefinitionRow } from './db.js';
 
 const DAY_MAP: Record<string, number> = {
@@ -10,13 +11,6 @@ const DAY_REVERSE: Record<number, string> = {
 
 function parseDate(dateStr: string): Date {
   return new Date(dateStr + 'T00:00:00');
-}
-
-function formatDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 function getTodayDayOfWeek(today: string): string {
@@ -82,13 +76,13 @@ export function calculateNextDueDate(task: TaskDefinitionRow, currentDueDate: st
       break;
 
     case 'n_months':
-      d.setMonth(d.getMonth() + interval);
-      break;
+      // day_of_month 指定があれば必ずその日に揃える（未指定なら元の日を維持）
+      return formatLocalDate(addMonths(d, interval, task.day_of_month));
 
     case 'yearly':
       if (task.month_of_year && task.day_of_month) {
         const nextYear = d.getFullYear() + 1;
-        return formatDate(new Date(nextYear, task.month_of_year - 1, task.day_of_month));
+        return formatLocalDate(new Date(nextYear, task.month_of_year - 1, task.day_of_month));
       }
       d.setFullYear(d.getFullYear() + 1);
       break;
@@ -98,5 +92,5 @@ export function calculateNextDueDate(task: TaskDefinitionRow, currentDueDate: st
       break;
   }
 
-  return formatDate(d);
+  return formatLocalDate(d);
 }

@@ -88,6 +88,13 @@ function addDays(dateStr: string, n: number): string {
   return dt.toISOString().split('T')[0];
 }
 
+/** 今日(JST)からNヶ月後の、指定日の日付を返す */
+function dayOfMonthAfterMonths(months: number, dayOfMonth: number): string {
+  const [y, m] = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1 + months, dayOfMonth));
+  return dt.toISOString().split('T')[0];
+}
+
 async function goToKanban(page: Page) {
   // Force full page reload to get fresh data from the database
   await page.goto('about:blank');
@@ -230,6 +237,53 @@ test.describe('N日ごと', () => {
     await test.step('元のリズム通りに起票される', async () => {
       await expect(page.getByText('rhythm-test')).toHaveCount(2);
     });
+  });
+});
+
+test.describe('Nヶ月ごと（日指定あり）', () => {
+  test('指定日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'n-months-day1', category: 'water', frequency_type: 'n_months', frequency_interval: 2, day_of_month: 1,
+    });
+
+    await runScheduler(dayOfMonthAfterMonths(2, 1));
+
+    await goToKanban(page);
+    await expect(page.getByText('n-months-day1')).toBeVisible();
+  });
+
+  test('間隔を変更しても指定日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'n-months-reinterval', category: 'water', frequency_type: 'n_months', frequency_interval: 2, day_of_month: 1,
+    });
+    await page.getByText('n-months-reinterval').click();
+    await page.getByLabel('間隔').fill('3');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await runScheduler(dayOfMonthAfterMonths(3, 1));
+
+    await goToKanban(page);
+    await expect(page.getByText('n-months-reinterval')).toBeVisible();
+  });
+
+  test('起票後も指定日のリズムで起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'n-months-recur', category: 'water', frequency_type: 'n_months', frequency_interval: 2, day_of_month: 1,
+    });
+    await runScheduler(dayOfMonthAfterMonths(2, 1));
+
+    // 最初のインスタンスを完了にする（重複チェック回避のため）
+    const instances = await page.request.get(`${baseURL}/api/kanban`);
+    const items = await instances.json();
+    const instance = items.find((i: any) => i.title === 'n-months-recur');
+    await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+      data: { status: 'done', assignee: 'test' },
+    });
+
+    await runScheduler(dayOfMonthAfterMonths(4, 1));
+
+    await goToKanban(page);
+    await expect(page.getByText('n-months-recur')).toHaveCount(2);
   });
 });
 
