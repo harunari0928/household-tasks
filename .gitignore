@@ -3,6 +3,8 @@ dist/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+# 添付ファイルの実体（コンテナが root で作成する。DBと同じくバックアップ対象）
+data/uploads/
 .env
 test-results/
 playwright-report/

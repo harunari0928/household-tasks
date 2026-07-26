@@ -73,6 +73,17 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
    TEST_API_PORT=3102 TEST_WEB_PORT=5175 npx playwright test
    ```
 
+## 外部からの連携
+
+- **Home Assistant が電池交換タスクを起票する。** タスク定義 ID 108〜114 は SwitchBot 機器の電池切れ用で、
+  `is_active = 0`（スケジューラは起票しない）にしたうえで HA の automation `battery_low_create_task` が
+  `POST /api/kanban/create-from-definition/:id` で起票する。**この定義を削除すると自動起票が壊れる。**
+  対応表は `~/repos/homeassistant/CLAUDE.md` を参照。
+- **HA が家事レポートを議事録に埋め込む。** `~/repos/homeassistant/config/scripts/household_report.py` が
+  `data/task_definitions.db` を読み取り専用で参照している。集計の意味論は `GET /api/stats/points` と
+  同じ（共同タスク `ryo,yuka` は分割して両者に満額加算）。**`ht stats` は共同タスクを別枠で集計するため
+  数字が一致しない**ので、変更するときは3か所の整合に注意。
+
 ## Key conventions
 
 - All dates use JST (Asia/Tokyo). `getTodayJST()` in shared/ returns `YYYY-MM-DD`.
