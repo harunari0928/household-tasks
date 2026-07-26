@@ -17,7 +17,7 @@ async function runCli(args: string): Promise<{ stdout: string; stderr: string; e
       `node packages/cli/dist/index.js ${args}`,
       {
         cwd: process.cwd(),
-        env: { ...process.env, DB_PATH: 'data/test_task_definitions.db', WEB_URL: 'http://localhost:3101' },
+        env: { ...process.env, DB_PATH: 'data/test_task_definitions.db', WEB_URL: `http://localhost:${process.env.TEST_API_PORT ?? '3101'}` },
         encoding: 'utf-8',
         timeout: 15000,
       },

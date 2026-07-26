@@ -43,6 +43,7 @@ interface TaskDef {
   notes: string | null;
   points: number;
   scheduled_hour: number;
+  sick_day_behavior: string;
   created_at: string;
   updated_at: string;
 }
@@ -72,7 +73,7 @@ program
 program
   .command('list')
   .description('List task instances')
-  .option('--status <status>', 'Filter by status (todo, in_progress, done)')
+  .option('--status <status>', 'Filter by status (todo, done)')
   .option('--assignee <name>', 'Filter by assignee')
   .action((opts: { status?: string; assignee?: string }) => {
     const db = getDb();
@@ -81,17 +82,29 @@ program
       const params: unknown[] = [];
 
       if (opts.status) {
-        conditions.push('status = ?');
+        conditions.push('ti.status = ?');
         params.push(opts.status);
       }
       if (opts.assignee) {
-        conditions.push('assignee = ?');
+        conditions.push('ti.assignee = ?');
         params.push(opts.assignee);
       }
 
+      // 子ども風邪の日モード: Webのカンバンボードと同じ表示条件に揃える
+      const sickRow = db.prepare("SELECT value FROM app_settings WHERE key = 'sick_child_mode'").get() as
+        | { value: string }
+        | undefined;
+      const sickMode = sickRow?.value === '1';
+      conditions.push(
+        sickMode ? "td.sick_day_behavior != 'normal_only'" : "td.sick_day_behavior != 'sick_only'"
+      );
+
       const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
       const rows = db.prepare(
-        `SELECT id, title, status, assignee, points, created_at FROM task_instances ${where} ORDER BY id`
+        `SELECT ti.id, ti.title, ti.status, ti.assignee, ti.points, ti.created_at
+         FROM task_instances ti
+         JOIN task_definitions td ON ti.task_definition_id = td.id
+         ${where} ORDER BY ti.id`
       ).all(...params) as Array<{
         id: number;
         title: string;
@@ -142,10 +155,10 @@ program
   .command('move')
   .description('Move a task instance to a new status')
   .argument('<id>', 'Task instance ID')
-  .argument('<status>', 'New status (todo, in_progress, done)')
+  .argument('<status>', 'New status (todo, done)')
   .option('--assignee <names...>', 'Assignee name(s) (required when completing without existing assignee)')
   .action(async (idStr: string, status: string, opts: { assignee?: string[] }) => {
-    const validStatuses = ['todo', 'in_progress', 'done'];
+    const validStatuses = ['todo', 'done'];
     if (!validStatuses.includes(status)) {
       console.error(`Invalid status: ${status}. Must be one of: ${validStatuses.join(', ')}`);
       process.exit(1);
@@ -294,6 +307,36 @@ program
     }
   });
 
+// ht sick-mode
+program
+  .command('sick-mode')
+  .description('Get or set sick child day mode (子ども風邪の日モード)')
+  .argument('[state]', 'on | off (omit to show current state)')
+  .action(async (state?: string) => {
+    try {
+      if (state === undefined) {
+        const res = await apiFetch('GET', '/api/sick-mode') as { enabled: boolean };
+        console.log(`Sick child day mode is ${res.enabled ? 'ON' : 'OFF'}.`);
+        return;
+      }
+      if (state !== 'on' && state !== 'off') {
+        console.error('Error: state must be "on" or "off"');
+        process.exit(1);
+      }
+      const res = await apiFetch('PUT', '/api/sick-mode', { enabled: state === 'on' }) as {
+        enabled: boolean;
+        created: number;
+      };
+      console.log(`Sick child day mode is now ${res.enabled ? 'ON' : 'OFF'}.`);
+      if (res.enabled && res.created > 0) {
+        console.log(`Created ${res.created} sick-day task instance(s).`);
+      }
+    } catch (e: unknown) {
+      console.error(`Error: ${(e as Error).message}`);
+      process.exit(1);
+    }
+  });
+
 // ht task (task definition management via Web API)
 const task = program
   .command('task')
@@ -320,13 +363,14 @@ task
         return;
       }
 
-      const headers = ['ID', 'Name', 'Category', 'Frequency', 'Points', 'Active'];
+      const headers = ['ID', 'Name', 'Category', 'Frequency', 'Points', 'SickDay', 'Active'];
       const rows = tasks.map(t => [
         String(t.id),
         t.name,
         t.category,
         t.frequency_interval ? `${t.frequency_type}(${t.frequency_interval})` : t.frequency_type,
         String(t.points),
+        t.sick_day_behavior,
         t.is_active ? 'yes' : 'no',
       ]);
       formatTable(headers, rows);
@@ -361,6 +405,7 @@ task
         `Next due date:  ${t.next_due_date || '-'}`,
         `Points:         ${t.points}`,
         `Scheduled hour: ${t.scheduled_hour}`,
+        `Sick day:       ${t.sick_day_behavior}`,
         `Active:         ${t.is_active ? 'yes' : 'no'}`,
         `Notes:          ${t.notes || '-'}`,
       ];
@@ -382,8 +427,9 @@ task
   .option('--days-of-week <days>', 'Days of week (comma-separated: mon,tue,...)')
   .option('--day-of-month <day>', 'Day of month (1-28)', parseInt)
   .option('--notes <text>', 'Notes')
-  .option('--points <n>', 'Points (1-10)', parseInt)
+  .option('--points <n>', 'Points (0-10)', parseInt)
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
+  .option('--sick-day-behavior <behavior>', 'Sick child day behavior (normal_only,always,sick_only)')
   .action(async (opts: {
     name: string;
     category: string;
@@ -394,6 +440,7 @@ task
     notes?: string;
     points?: number;
     scheduledHour?: number;
+    sickDayBehavior?: string;
   }) => {
     try {
       const body: Record<string, unknown> = {
@@ -407,6 +454,7 @@ task
       if (opts.notes !== undefined) body.notes = opts.notes;
       if (opts.points !== undefined) body.points = opts.points;
       if (opts.scheduledHour !== undefined) body.scheduled_hour = opts.scheduledHour;
+      if (opts.sickDayBehavior !== undefined) body.sick_day_behavior = opts.sickDayBehavior;
 
       const task = await apiFetch('POST', '/api/tasks', body) as TaskDef;
       console.log(JSON.stringify(task, null, 2));
@@ -428,8 +476,9 @@ task
   .option('--days-of-week <days>', 'Days of week (comma-separated)')
   .option('--day-of-month <day>', 'Day of month (1-28)', parseInt)
   .option('--notes <text>', 'Notes')
-  .option('--points <n>', 'Points (1-10)', parseInt)
+  .option('--points <n>', 'Points (0-10)', parseInt)
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
+  .option('--sick-day-behavior <behavior>', 'Sick child day behavior (normal_only,always,sick_only)')
   .action(async (idStr: string, opts: {
     name?: string;
     category?: string;
@@ -440,6 +489,7 @@ task
     notes?: string;
     points?: number;
     scheduledHour?: number;
+    sickDayBehavior?: string;
   }) => {
     try {
       // Fetch current definition
@@ -476,6 +526,7 @@ task
       body.notes = opts.notes ?? current.notes ?? undefined;
       body.points = opts.points ?? current.points;
       body.scheduled_hour = opts.scheduledHour ?? current.scheduled_hour;
+      body.sick_day_behavior = opts.sickDayBehavior ?? current.sick_day_behavior;
 
       const updated = await apiFetch('PUT', `/api/tasks/${idStr}`, body) as TaskDef;
       console.log(JSON.stringify(updated, null, 2));

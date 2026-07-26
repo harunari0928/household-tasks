@@ -1,5 +1,127 @@
 import { test, expect } from './fixtures/setup.js';
 
+test.describe('実行期間設定', () => {
+  test('初期状態は期間指定しないが選択されている', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeChecked();
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+
+  test('期間指定するを選ぶと開始・終了の月日セレクトが表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+
+    await expect(page.getByLabel('開始月')).toBeVisible();
+    await expect(page.getByLabel('開始日')).toBeVisible();
+    await expect(page.getByLabel('終了月')).toBeVisible();
+    await expect(page.getByLabel('終了日')).toBeVisible();
+  });
+
+  test('指定した期間は保存後に再オープンしても復元される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('期間タスク');
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption('6');
+    await page.getByLabel('開始日').selectOption('1');
+    await page.getByLabel('終了月').selectOption('8');
+    await page.getByLabel('終了日').selectOption('31');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間タスク').waitFor();
+
+    await page.getByText('期間タスク').click();
+
+    await expect(page.getByRole('radio', { name: '期間指定する' })).toBeChecked();
+    await expect(page.getByLabel('開始月')).toHaveValue('6');
+    await expect(page.getByLabel('開始日')).toHaveValue('1');
+    await expect(page.getByLabel('終了月')).toHaveValue('8');
+    await expect(page.getByLabel('終了日')).toHaveValue('31');
+  });
+
+  test('開始と終了が同じ月日でも保存できる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('期間1日タスク');
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption('6');
+    await page.getByLabel('開始日').selectOption('1');
+    await page.getByLabel('終了月').selectOption('6');
+    await page.getByLabel('終了日').selectOption('1');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間1日タスク').waitFor();
+
+    await page.getByText('期間1日タスク').click();
+
+    await expect(page.getByLabel('開始月')).toHaveValue('6');
+    await expect(page.getByLabel('開始日')).toHaveValue('1');
+    await expect(page.getByLabel('終了月')).toHaveValue('6');
+    await expect(page.getByLabel('終了日')).toHaveValue('1');
+  });
+
+  test('終了月を2月に切り替えると終了日は2月の最大日数までしか選べない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('終了月').selectOption('3');
+    await page.getByLabel('終了日').selectOption('31');
+
+    await page.getByLabel('終了月').selectOption('2');
+
+    await expect(page.getByLabel('終了日')).toHaveValue('28');
+    await expect(page.getByLabel('終了日').getByRole('option')).toHaveCount(28);
+  });
+
+  test('1年毎の頻度では実行期間のラジオが無効化される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('頻度').selectOption('yearly');
+
+    await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: '期間指定する' })).toBeDisabled();
+    await expect(page.getByText('1年毎の頻度では実行期間を指定できません')).toBeVisible();
+  });
+
+  test('1年毎に切り替えると以前設定していた期間入力が非表示になる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await expect(page.getByLabel('開始月')).toBeVisible();
+
+    await page.getByLabel('頻度').selectOption('yearly');
+
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+
+  test('期間指定しないに戻して保存すると次回オープン時も未設定になる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('期間解除タスク');
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption('3');
+    await page.getByLabel('開始日').selectOption('15');
+    await page.getByLabel('終了月').selectOption('5');
+    await page.getByLabel('終了日').selectOption('20');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間解除タスク').waitFor();
+    await page.getByText('期間解除タスク').click();
+    await page.getByRole('radio', { name: '期間指定しない' }).check();
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('期間解除タスク').waitFor();
+
+    await page.getByText('期間解除タスク').click();
+
+    await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeChecked();
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+});
+
 test.describe('タスクCRUD', () => {
   test('タスクを新規作成できる', async ({ page }) => {
     await page.goto('/#/tasks');
@@ -15,6 +137,73 @@ test.describe('タスクCRUD', () => {
     await expect(page.getByText('毎週(月)')).toBeVisible();
   });
 
+  test('完了後N日タスクを作成できる', async ({ page }) => {
+    // Arrange: 水回りカテゴリでタスク追加フォームを開く
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    // Act: 完了後1日の完了駆動タスクを入力して保存する（間隔は最小1日、N日ごとの最小2とは異なる）
+    await page.getByLabel('タスク名').fill('テスト排水口掃除');
+    await page.getByLabel('頻度').selectOption('days_after_completion');
+    await page.getByLabel('間隔').fill('1');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    // Assert: 一覧に「完了後1日」として表示される
+    await expect(page.getByText('テスト排水口掃除')).toBeVisible();
+    await expect(page.getByText('完了後1日')).toBeVisible();
+  });
+
+  test('タスク一覧の取得が通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.route('**/api/tasks', (route) =>
+      route.request().method() === 'GET' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.goto('/#/tasks');
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: 'タスク一覧の取得に失敗しました' }).first()).toBeVisible();
+  });
+
+  test('タスクの保存が通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('保存失敗タスク');
+    await page.getByLabel('頻度').selectOption('daily');
+    await page.route('**/api/tasks', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '保存' }).click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: /保存に失敗しました/ }).first()).toBeVisible();
+  });
+
+  test('有効/無効の切り替えが通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('トグル失敗タスク');
+    await page.getByLabel('頻度').selectOption('daily');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('トグル失敗タスク').waitFor();
+    await page.route('**/api/tasks/*/toggle', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '無効にする' }).first().click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: 'タスクの有効/無効の切り替えに失敗しました' }).first()).toBeVisible();
+  });
 });
 
 test.describe('フォームバリデーション', () => {
@@ -63,6 +252,55 @@ test.describe('フォームバリデーション', () => {
       await expect(page.getByLabel('間隔')).not.toBeVisible();
       await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
     });
+
+    await page.getByLabel('頻度').selectOption('nth_weekday_of_month');
+
+    await test.step('第N曜日(毎月) → 何週目と曜日が表示される', async () => {
+      await expect(page.getByLabel('何週目')).toBeVisible();
+      await expect(page.getByRole('group', { name: '曜日' })).toBeVisible();
+      await expect(page.getByLabel('間隔')).not.toBeVisible();
+      await expect(page.getByLabel(/日指定/)).not.toBeVisible();
+      await expect(page.getByLabel(/月指定/)).not.toBeVisible();
+    });
+
+    await page.getByLabel('頻度').selectOption('days_after_completion');
+
+    await test.step('完了後N日 → 間隔と完了駆動の説明が表示され、他は非表示', async () => {
+      await expect(page.getByLabel('間隔')).toBeVisible();
+      await expect(page.getByText('完了した日から指定日数が経過すると自動で再作成されます')).toBeVisible();
+      await expect(page.getByRole('group', { name: '曜日' })).not.toBeVisible();
+      await expect(page.getByLabel(/日指定/)).not.toBeVisible();
+      await expect(page.getByLabel(/月指定/)).not.toBeVisible();
+      await expect(page.getByLabel('何週目')).not.toBeVisible();
+    });
+  });
+
+  test('バリデーション: 第N曜日(毎月)で何週目未選択だとエラー', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('第N曜日テスト');
+    await page.getByLabel('頻度').selectOption('nth_weekday_of_month');
+    await page.getByRole('group', { name: '曜日' }).getByText('月').click();
+
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('何週目');
+  });
+
+  test('バリデーション: 第N曜日(毎月)で曜日未選択だとエラー', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('第N曜日テスト2');
+    await page.getByLabel('頻度').selectOption('nth_weekday_of_month');
+    await page.getByLabel('何週目').selectOption('2');
+
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('曜日');
   });
 
   test('バリデーション: 毎週で曜日未選択だとエラー', async ({ page }) => {
@@ -105,7 +343,7 @@ test.describe('フォームバリデーション', () => {
   test('既にバリデーションエラーが表示された状態で再度保存しても、エラー位置までスクロールされる', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 400, height: 500 } });
     const page = await context.newPage();
-    await fetch('http://localhost:5174/api/test/reset', { method: 'POST' });
+    await fetch(`http://localhost:${process.env.TEST_WEB_PORT ?? '5174'}/api/test/reset`, { method: 'POST' });
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
@@ -123,7 +361,10 @@ test.describe('フォームバリデーション', () => {
     await page.waitForTimeout(500);
 
     // 下にスクロールするとエラーが見えなくなる
-    await dialog.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await dialog.evaluate((el) => {
+      const scroller = el.querySelector<HTMLElement>('.overflow-y-auto') ?? (el as HTMLElement);
+      scroller.scrollTop = scroller.scrollHeight;
+    });
     await page.waitForTimeout(100);
 
     await test.step('下にスクロールするとエラーが見えなくなる', async () => {
@@ -276,7 +517,9 @@ test.describe('マークダウン備考', () => {
     });
 
     // リンク
-    await notes.fill('');
+    await notes.selectText();
+    await notes.press('Delete');
+    await expect(notes).toHaveValue('');
     await page.getByTitle('リンク').click();
 
     await test.step('リンク', async () => {
@@ -284,7 +527,9 @@ test.describe('マークダウン備考', () => {
     });
 
     // リスト
-    await notes.fill('');
+    await notes.selectText();
+    await notes.press('Delete');
+    await expect(notes).toHaveValue('');
     await page.getByTitle('リスト').click();
 
     await test.step('リスト', async () => {
@@ -531,6 +776,45 @@ test.describe('ファイル添付（既存タスク）', () => {
 
     await expect(page.getByRole('region', { name: 'プレビュー' }).locator('img')).toBeVisible();
   });
+
+  test('添付ファイルのアップロードが通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: 'アップロード失敗テスト', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+    await page.getByText('アップロード失敗テスト').click();
+    await page.route('**/api/tasks/*/attachments', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByLabel('ファイル添付').setInputFiles({
+      name: 'fail.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('fail'),
+    });
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: '添付ファイルのアップロードに失敗しました' }).first()).toBeVisible();
+  });
+
+  test('編集画面で添付一覧の取得が通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '添付一覧失敗テスト', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+    await page.route('**/api/tasks/*/attachments', (route) =>
+      route.request().method() === 'GET' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByText('添付一覧失敗テスト').click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: '添付ファイルの取得に失敗しました' }).first()).toBeVisible();
+  });
 });
 
 test.describe('タスク削除', () => {
@@ -545,7 +829,7 @@ test.describe('タスク削除', () => {
     await page.getByText('削除テスト用タスク').click();
     await page.getByRole('button', { name: '削除' }).click();
 
-    await expect(page.getByText('本当に削除しますか？')).toBeVisible();
+    await expect(page.getByText('タスクを削除しますか？')).toBeVisible();
 
     await page.getByRole('button', { name: '削除する' }).click();
 
@@ -562,15 +846,39 @@ test.describe('タスク削除', () => {
 
     await page.getByText('削除キャンセルテスト').click();
     await page.getByRole('button', { name: '削除' }).click();
-    await expect(page.getByText('本当に削除しますか？')).toBeVisible();
+    const confirmDialog = page.getByRole('alertdialog', { name: '削除の確認' });
+    await expect(confirmDialog).toBeVisible();
 
-    await page.getByRole('button', { name: 'やめる' }).click();
+    await confirmDialog.getByRole('button', { name: 'キャンセル' }).click();
 
-    await expect(page.getByText('本当に削除しますか？')).not.toBeVisible();
+    await expect(confirmDialog).not.toBeVisible();
 
-    await page.getByRole('button', { name: 'キャンセル' }).click();
+    await page.getByRole('button', { name: '閉じる' }).click();
 
     await expect(page.getByText('削除キャンセルテスト')).toBeVisible();
+  });
+
+  test('カンバンに起票済みのタスクも削除でき、カンバンからもカードが消える', async ({ page, baseURL }) => {
+    const taskRes = await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '起票後削除テスト', category: 'water', frequency_type: 'daily' },
+    });
+    const task = await taskRes.json();
+    await page.request.post(`${baseURL}/api/kanban/create-from-definition/${task.id}`);
+    await page.goto('/#/tasks');
+    await page.getByText('起票後削除テスト').waitFor();
+
+    await page.getByText('起票後削除テスト').click();
+    await page.getByRole('button', { name: '削除' }).click();
+    await page.getByRole('button', { name: '削除する' }).click();
+
+    await test.step('タスク管理画面から消える', async () => {
+      await expect(page.getByText('起票後削除テスト')).not.toBeVisible();
+    });
+
+    await test.step('カンバンボードからもカードが消える', async () => {
+      await page.goto('/#/');
+      await expect(page.getByText('起票後削除テスト')).not.toBeVisible();
+    });
   });
 
   test('新規作成フォームに削除ボタンが表示されない', async ({ page }) => {
@@ -618,6 +926,72 @@ test.describe('タスク削除', () => {
       expect(res.status()).toBe(404);
     });
   });
+
+  test('タスクの削除が通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
+    // Arrange
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '削除失敗タスク', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+    await page.getByText('削除失敗タスク').click();
+    await page.route('**/api/tasks/*', (route) =>
+      route.request().method() === 'DELETE' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '削除' }).click();
+    await page.getByRole('button', { name: '削除する' }).click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: /削除に失敗しました/ }).first()).toBeVisible();
+  });
+});
+
+test.describe('重複名チェック', () => {
+  test('既存タスクと同じ名前で新規作成するとエラーが表示される', async ({ page, baseURL }) => {
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '重複チェック用', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('重複チェック用');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('同じ名前のタスクが既に存在します');
+  });
+
+  test('編集時に他タスクと同じ名前に変更するとエラーが表示される', async ({ page, baseURL }) => {
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: 'タスクA', category: 'water', frequency_type: 'daily' },
+    });
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: 'タスクB', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+
+    await page.getByText('タスクB').click();
+    await page.getByLabel('タスク名').fill('タスクA');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('同じ名前のタスクが既に存在します');
+  });
+
+  test('編集時に自分と同じ名前のまま保存できる', async ({ page, baseURL }) => {
+    await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: '自分の名前のまま', category: 'water', frequency_type: 'daily' },
+    });
+    await page.goto('/#/tasks');
+
+    await page.getByText('自分の名前のまま').click();
+    await page.getByLabel('備考').fill('編集メモ');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await expect(page.getByText('自分の名前のまま')).toBeVisible();
+  });
 });
 
 test.describe('今すぐ起票', () => {
@@ -625,7 +999,7 @@ test.describe('今すぐ起票', () => {
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
 
-    await expect(page.getByRole('button', { name: '今すぐ起票する' })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: '今すぐカンバンに起票' })).not.toBeVisible();
   });
 
   test('編集フォームで起票するとカンバンに未着手タスクが追加される', async ({ page }) => {
@@ -636,7 +1010,7 @@ test.describe('今すぐ起票', () => {
     await expect(page.getByText('起票テスト')).toBeVisible();
 
     await page.getByText('起票テスト').click();
-    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
 
     await expect(page.getByText('カンバンボードに追加しました')).toBeVisible();
 
@@ -654,12 +1028,31 @@ test.describe('今すぐ起票', () => {
     await expect(page.getByText('重複テスト')).toBeVisible();
 
     await page.getByText('重複テスト').click();
-    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
     await expect(page.getByText('カンバンボードに追加しました')).toBeVisible();
 
-    await page.getByRole('button', { name: '今すぐ起票する' }).click();
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
 
     await expect(page.getByText('すでにボード上に未完了のタスクがあります')).toBeVisible();
+  });
+
+  test('起票が通信エラーになると、エラーが通知される', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('起票失敗テスト');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('起票失敗テスト').waitFor();
+    await page.getByText('起票失敗テスト').click();
+    await page.route('**/api/kanban/create-from-definition/*', (route) =>
+      route.request().method() === 'POST' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.getByRole('button', { name: '今すぐカンバンに起票' }).click();
+
+    // Assert
+    await expect(page.getByRole('alert').filter({ hasText: /起票に失敗しました/ }).first()).toBeVisible();
   });
 });
 

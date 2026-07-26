@@ -3,6 +3,10 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { Page } from '@playwright/test';
 
+function getTodayJST(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
 const execAsync = promisify(exec);
 
 async function runScheduler(testToday: string, testHour?: number): Promise<string> {
@@ -45,7 +49,9 @@ async function createTaskViaUI(
     frequency_interval?: number;
     day_of_month?: number;
     month_of_year?: number;
+    nth_weekday_position?: number;
     scheduled_hour?: number;
+    period?: { start_mm: number; start_dd: number; end_mm: number; end_dd: number };
   },
 ) {
   const category = options.category || 'water';
@@ -70,8 +76,18 @@ async function createTaskViaUI(
   if (options.day_of_month != null) {
     await page.getByLabel(/日指定/).fill(String(options.day_of_month));
   }
+  if (options.nth_weekday_position != null) {
+    await page.getByLabel('何週目').selectOption(String(options.nth_weekday_position));
+  }
   if (options.scheduled_hour != null) {
     await page.getByLabel(/起票時刻/).fill(String(options.scheduled_hour));
+  }
+  if (options.period) {
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').selectOption(String(options.period.start_mm));
+    await page.getByLabel('開始日').selectOption(String(options.period.start_dd));
+    await page.getByLabel('終了月').selectOption(String(options.period.end_mm));
+    await page.getByLabel('終了日').selectOption(String(options.period.end_dd));
   }
 
   await page.getByRole('button', { name: '保存' }).click();
@@ -95,11 +111,107 @@ function dayOfMonthAfterMonths(months: number, dayOfMonth: number): string {
   return dt.toISOString().split('T')[0];
 }
 
+async function setServerTime(page: Page, baseURL: string, iso: string | null) {
+  await page.request.post(`${baseURL}/api/test/set-time`, { data: { time: iso } });
+}
+
 async function goToKanban(page: Page) {
   // Force full page reload to get fresh data from the database
   await page.goto('about:blank');
   await page.goto('/#/');
   await page.getByText('未着手').waitFor();
+}
+
+async function dragCardToColumn(page: Page, cardName: string, columnTitle: string) {
+  const card = page.getByText(cardName).first();
+  const columnHeading = page.getByRole('heading', { name: columnTitle });
+
+  const cardBox = await card.boundingBox();
+  const headingBox = await columnHeading.boundingBox();
+  if (!cardBox || !headingBox) throw new Error('Could not get bounding boxes');
+
+  const startX = cardBox.x + 10;
+  const startY = cardBox.y + cardBox.height / 2;
+  const endX = headingBox.x + headingBox.width / 2;
+  const endY = headingBox.y + headingBox.height + 40;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 10, startY, { steps: 2 });
+  await page.mouse.move(endX, endY, { steps: 10 });
+  await page.mouse.up();
+}
+
+async function registerUser(page: Page, name: string) {
+  await page.goto('/#/settings');
+  await page.getByLabel('新しいユーザー名').fill(name);
+  await page.getByRole('button', { name: '追加' }).click();
+  await page.getByText(name).waitFor();
+}
+
+// 対象タスクの未完了インスタンスを、指定日(JST正午)に完了にする。
+// completed_at がその日で記録され、完了駆動スケジューラの判定基準日になる。
+async function completeInstanceOn(
+  page: Page,
+  baseURL: string,
+  title: string,
+  dateJST: string,
+  assignee = 'test',
+) {
+  await setServerTime(page, baseURL, `${dateJST}T03:00:00.000Z`); // UTC+9 → JST正午
+  const res = await page.request.get(`${baseURL}/api/kanban`);
+  const items = await res.json();
+  const instance = items.find((i: any) => i.title === title && i.status !== 'done');
+  if (!instance) throw new Error(`未完了の「${title}」が見つかりません`);
+  await page.request.patch(`${baseURL}/api/kanban/${instance.id}/status`, {
+    data: { status: 'done', assignee },
+  });
+  await setServerTime(page, baseURL, null);
+}
+
+async function completeTaskViaUI(page: Page, cardName: string, assignee: string) {
+  const userSwitcher = page.getByLabel('ユーザー切替');
+  if ((await userSwitcher.textContent())?.includes(assignee) === false) {
+    await userSwitcher.click();
+    await page.getByRole('button', { name: assignee, exact: true }).click();
+  }
+  await dragCardToColumn(page, cardName, '完了');
+  await expect(
+    page.getByRole('region', { name: '完了列' }).getByText(cardName),
+  ).toBeVisible();
+}
+
+async function arrangeSkippedAndDeletedNDaysTask(
+  page: Page,
+  baseURL: string,
+  name = 'skip-advance-same',
+): Promise<string> {
+  await page.goto('/#/settings');
+  await page.getByLabel('新しいユーザー名').fill('test-user');
+  await page.getByRole('button', { name: '追加' }).click();
+  await page.getByText('test-user').waitFor();
+
+  const task = await createTaskViaUI(page, baseURL, {
+    name,
+    category: 'water',
+    frequency_type: 'n_days',
+    frequency_interval: 3,
+  });
+  const cycle1 = task.next_due_date;
+
+  await runScheduler(cycle1);
+  await runScheduler(addDays(cycle1, 3));
+
+  await goToKanban(page);
+  await page.getByText(name).hover();
+  await page.getByRole('button', { name: 'タスクを削除', exact: true }).click();
+  const deleteResponse = page.waitForResponse(
+    (r) => r.request().method() === 'DELETE' && /\/api\/kanban\/\d+$/.test(r.url()),
+  );
+  await page.getByRole('button', { name: '削除する' }).click();
+  await deleteResponse;
+
+  return cycle1;
 }
 
 test.describe('固定スケジュール', () => {
@@ -207,6 +319,24 @@ test.describe('N日ごと', () => {
     await expect(page.getByText('n-days-before')).not.toBeVisible();
   });
 
+  test('未完了のまま次の予定日に到達したタスクを削除しても、同じ予定日では再起票されない', async ({ page, baseURL }) => {
+    const cycle1 = await arrangeSkippedAndDeletedNDaysTask(page, baseURL!);
+
+    await runScheduler(addDays(cycle1, 3));
+
+    await goToKanban(page);
+    await expect(page.getByText('skip-advance-same')).toHaveCount(0);
+  });
+
+  test('未完了のまま次の予定日に到達したタスクを削除しても、その次の予定日には起票される', async ({ page, baseURL }) => {
+    const cycle1 = await arrangeSkippedAndDeletedNDaysTask(page, baseURL!, 'skip-advance-next');
+
+    await runScheduler(addDays(cycle1, 6));
+
+    await goToKanban(page);
+    await expect(page.getByText('skip-advance-next')).toHaveCount(1);
+  });
+
   test('実行が遅延しても元のリズムで起票される', async ({ page, baseURL }) => {
     const task = await createTaskViaUI(page, baseURL!, { name: 'rhythm-test', category: 'water', frequency_type: 'n_days', frequency_interval: 3 });
     const dueDate = task.next_due_date;
@@ -306,6 +436,64 @@ test.describe('重複起票の防止', () => {
 
     await goToKanban(page);
     await expect(page.getByText('cross-day-dup')).toHaveCount(1);
+  });
+
+  test('前日分を起票時刻より後に完了すると、当日分は再起票されない', async ({ page, baseURL }) => {
+    // Arrange: 起票時刻8時のタスク。前日分を未完了のまま持ち越し、当日9時（起票時刻より後）に完了する。
+    const today = getTodayJST();
+    await registerUser(page, 'test-user');
+    await createTaskViaUI(page, baseURL!, { name: 'morning-task', category: 'water', frequency_type: 'daily', scheduled_hour: 8 });
+    await runScheduler(addDays(today, -1), 8);
+    await setServerTime(page, baseURL!, `${today}T00:00:00.000Z`); // JST 09:00 当日
+    await goToKanban(page);
+    await completeTaskViaUI(page, 'morning-task', 'test-user');
+    await setServerTime(page, baseURL!, null);
+
+    // Act
+    await runScheduler(today, 10);
+
+    // Assert
+    await goToKanban(page);
+    await test.step('完了列に1件残っている', async () => {
+      await expect(
+        page.getByRole('region', { name: '完了列' }).getByText('morning-task'),
+      ).toHaveCount(1);
+    });
+
+    await test.step('未着手列に再起票されていない', async () => {
+      await expect(
+        page.getByRole('region', { name: '未着手列' }).getByText('morning-task'),
+      ).toHaveCount(0);
+    });
+  });
+
+  test('前日分を起票時刻より前に完了すると、当日分が起票される', async ({ page, baseURL }) => {
+    // Arrange: 起票時刻19時のタスク。前日分を未完了のまま持ち越し、当日8時（起票時刻より前）に完了する。
+    const today = getTodayJST();
+    await registerUser(page, 'test-user');
+    await createTaskViaUI(page, baseURL!, { name: 'evening-task', category: 'water', frequency_type: 'daily', scheduled_hour: 19 });
+    await runScheduler(addDays(today, -1), 19);
+    await setServerTime(page, baseURL!, `${addDays(today, -1)}T23:00:00.000Z`); // JST 08:00 当日
+    await goToKanban(page);
+    await completeTaskViaUI(page, 'evening-task', 'test-user');
+    await setServerTime(page, baseURL!, null);
+
+    // Act
+    await runScheduler(today, 19);
+
+    // Assert
+    await goToKanban(page);
+    await test.step('完了列に前日分が1件残っている', async () => {
+      await expect(
+        page.getByRole('region', { name: '完了列' }).getByText('evening-task'),
+      ).toHaveCount(1);
+    });
+
+    await test.step('未着手列に当日分が起票されている', async () => {
+      await expect(
+        page.getByRole('region', { name: '未着手列' }).getByText('evening-task'),
+      ).toHaveCount(1);
+    });
   });
 });
 
@@ -425,5 +613,339 @@ test.describe('1年ごと（月日指定あり）', () => {
 
     await goToKanban(page);
     await expect(page.getByText('yearly-recur')).toHaveCount(2);
+  });
+});
+
+test.describe('第N曜日(毎月)', () => {
+  test('第1月曜日のタスクは該当日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-1st-mon',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 1,
+    });
+
+    await runScheduler('2026-03-02');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-1st-mon')).toBeVisible();
+  });
+
+  test('第1月曜日のタスクは該当月の他の日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-1st-mon-skip',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 1,
+    });
+
+    await runScheduler('2026-03-09');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-1st-mon-skip')).not.toBeVisible();
+  });
+
+  test('第5月曜日のタスクは月内に第5週目がなければ起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-5th-mon',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 5,
+    });
+
+    await runScheduler('2026-09-28');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-5th-mon')).not.toBeVisible();
+  });
+
+  test('第5月曜日のタスクは該当日が存在する月の該当日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'nth-5th-mon-create',
+      category: 'water',
+      frequency_type: 'nth_weekday_of_month',
+      days_of_week: ['mon'],
+      nth_weekday_position: 5,
+    });
+
+    await runScheduler('2026-08-31');
+
+    await goToKanban(page);
+    await expect(page.getByText('nth-5th-mon-create')).toBeVisible();
+  });
+});
+
+test.describe('実行期間', () => {
+  test('実行期間の開始日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-start-boundary',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-06-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-start-boundary')).toBeVisible();
+  });
+
+  test('実行期間の終了日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-end-boundary',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-08-31');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-end-boundary')).toBeVisible();
+  });
+
+  test('実行期間の開始日の前日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-before-start',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-05-31');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-before-start')).not.toBeVisible();
+  });
+
+  test('実行期間の終了日の翌日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-after-end',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 6, start_dd: 1, end_mm: 8, end_dd: 31 },
+    });
+
+    await runScheduler('2026-09-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-after-end')).not.toBeVisible();
+  });
+
+  test('年跨ぎ期間は開始日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-start',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-12-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-start')).toBeVisible();
+  });
+
+  test('年跨ぎ期間は年明け後の期間内日にも起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-after-newyear',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-01-15');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-after-newyear')).toBeVisible();
+  });
+
+  test('年跨ぎ期間は終了日に起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-end',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-02-28');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-end')).toBeVisible();
+  });
+
+  test('年跨ぎ期間外（終了の翌日）には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-outside-after',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-03-01');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-outside-after')).not.toBeVisible();
+  });
+
+  test('年跨ぎ期間外（開始の前日）には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'period-wrap-outside-before',
+      category: 'water',
+      frequency_type: 'daily',
+      period: { start_mm: 12, start_dd: 1, end_mm: 2, end_dd: 28 },
+    });
+
+    await runScheduler('2026-11-30');
+
+    await goToKanban(page);
+    await expect(page.getByText('period-wrap-outside-before')).not.toBeVisible();
+  });
+});
+
+test.describe('完了後N日', () => {
+  test('完了履歴がなければ初回に起票される', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日の完了駆動タスクを作成（完了履歴なし）
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-first',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+
+    // Act: スケジューラを実行する
+    await runScheduler('2026-03-14');
+
+    // Assert: 未着手列に起票される
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('after-first'),
+    ).toHaveCount(1);
+  });
+
+  test('完了日から指定日数が経過するまでは再起票されない', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日のタスクを起票し、基準日に完了させる
+    const base = '2026-03-14';
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-wait',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+    await runScheduler(base);
+    await completeInstanceOn(page, baseURL!, 'after-wait', base);
+
+    // Act: 完了日から2日後（3日未満）にスケジューラを実行する
+    await runScheduler(addDays(base, 2));
+
+    // Assert: 未着手列に再起票されない
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('after-wait'),
+    ).toHaveCount(0);
+  });
+
+  test('完了日から指定日数が経過すると再起票される', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日のタスクを起票し、基準日に完了させる
+    const base = '2026-03-14';
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-recur',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+    await runScheduler(base);
+    await completeInstanceOn(page, baseURL!, 'after-recur', base);
+
+    // Act: 完了日からちょうど3日後にスケジューラを実行する
+    await runScheduler(addDays(base, 3));
+
+    // Assert: 未着手列に再起票される
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('after-recur'),
+    ).toHaveCount(1);
+  });
+
+  test('未完了のまま指定日数が経過しても重複起票されない', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日のタスクを起票する（完了させない）
+    const base = '2026-03-14';
+    await createTaskViaUI(page, baseURL!, {
+      name: 'after-open',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+    await runScheduler(base);
+
+    // Act: 完了させないまま日数が経過した状態でスケジューラを実行する
+    await runScheduler(addDays(base, 5));
+
+    // Assert: 重複起票されず1件のまま
+    await goToKanban(page);
+    await expect(page.getByText('after-open')).toHaveCount(1);
+  });
+
+  // N日ごとで完了 → 完了後N日に頻度変更したタスクを、変更前の完了日を起点に再起票させる。
+  // 起票→完了→頻度変更までを共通化する。
+  async function arrangeCompletedThenChangedToAfterCompletion(
+    page: Page,
+    baseURL: string,
+    name: string,
+  ): Promise<string> {
+    await registerUser(page, 'test-user');
+    const task = await createTaskViaUI(page, baseURL, {
+      name,
+      category: 'water',
+      frequency_type: 'n_days',
+      frequency_interval: 3,
+    });
+    const completedOn = task.next_due_date;
+
+    // N日ごととして初回インスタンスを起票し、その日に完了させる
+    await runScheduler(completedOn);
+    await completeInstanceOn(page, baseURL, name, completedOn);
+
+    // 頻度を「完了後3日」に変更する（next_due_date はクリアされる）
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByText(name).click();
+    await page.getByLabel('頻度').selectOption('days_after_completion');
+    await page.getByLabel('間隔').fill('3');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('完了後3日').waitFor();
+
+    return completedOn;
+  }
+
+  test('N日ごとで完了後に完了後N日へ変更すると、変更前の完了日を起点に再起票される', async ({ page, baseURL }) => {
+    // Arrange
+    const completedOn = await arrangeCompletedThenChangedToAfterCompletion(page, baseURL!, 'carryover-recur');
+
+    // Act: 変更前の完了日からちょうど3日後にスケジューラを実行する
+    await runScheduler(addDays(completedOn, 3));
+
+    // Assert: 変更前の完了日を起点に再起票される
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('carryover-recur'),
+    ).toHaveCount(1);
+  });
+
+  test('N日ごとで完了後に完了後N日へ変更しても、完了日から指定日数の前は再起票されない', async ({ page, baseURL }) => {
+    // Arrange
+    const completedOn = await arrangeCompletedThenChangedToAfterCompletion(page, baseURL!, 'carryover-wait');
+
+    // Act: 変更前の完了日から2日後（3日未満）にスケジューラを実行する
+    await runScheduler(addDays(completedOn, 2));
+
+    // Assert: まだ再起票されない
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('carryover-wait'),
+    ).toHaveCount(0);
   });
 });

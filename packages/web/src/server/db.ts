@@ -181,7 +181,63 @@ const migrations: Migration[] = [
     },
   },
   {
-    // 稼働中DBの schema_version は（既に破棄されたマイグレーションにより）14まで進んでいるため15から採番する
+    version: 11,
+    up: (db) => {
+      db.exec(`
+        UPDATE task_instances SET status = 'todo' WHERE status = 'in_progress';
+
+        CREATE TABLE task_instances_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_definition_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'done')),
+          assignee TEXT DEFAULT NULL,
+          points INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          completed_at TEXT DEFAULT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
+        );
+        INSERT INTO task_instances_new
+          SELECT id, task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order
+          FROM task_instances;
+        DROP TABLE task_instances;
+        ALTER TABLE task_instances_new RENAME TO task_instances;
+        CREATE INDEX idx_task_instances_status ON task_instances(status);
+        CREATE INDEX idx_task_instances_task_def ON task_instances(task_definition_id);
+        CREATE INDEX idx_task_instances_completed ON task_instances(completed_at);
+      `);
+    },
+  },
+  {
+    version: 12,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN nth_weekday_position INTEGER DEFAULT NULL');
+    },
+  },
+  {
+    version: 13,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN period_start_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_start_dd INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_dd INTEGER DEFAULT NULL;
+      `);
+    },
+  },
+  {
+    version: 14,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN sick_day_behavior TEXT NOT NULL DEFAULT 'normal_only';
+
+        UPDATE task_definitions SET sick_day_behavior = 'always'
+        WHERE category IN ('trash', 'cooking', 'laundry');
+      `);
+    },
+  },
+  {
     version: 15,
     up: (db) => {
       // Nヶ月ごとタスクの next_due_date が day_of_month を無視して算出されていたため、指定日に揃え直す

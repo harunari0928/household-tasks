@@ -22,6 +22,8 @@ function formatFrequency(task: TaskDefinition): string {
     }
     case 'n_days':
       return `${task.frequency_interval}日ごと`;
+    case 'days_after_completion':
+      return `完了後${task.frequency_interval}日`;
     case 'n_weeks': {
       const days = task.days_of_week
         ?.split(',')
@@ -42,6 +44,14 @@ function formatFrequency(task: TaskDefinition): string {
         return `1年ごと(${task.month_of_year}月${task.day_of_month}日)`;
       }
       return '1年ごと';
+    }
+    case 'nth_weekday_of_month': {
+      const day = task.days_of_week
+        ?.split(',')[0]
+        .trim() as DayOfWeek | undefined;
+      const dayLabel = day ? DAYS_OF_WEEK[day] || day : '?';
+      const pos = task.nth_weekday_position ?? '?';
+      return `毎月第${pos}${dayLabel}曜日`;
     }
     default:
       return label;
@@ -91,8 +101,18 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
 
           >
             <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{task.name}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 flex gap-2">
+            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
               <span>{formatFrequency(task)} {formatScheduledHour(task)}</span>
+              {task.sick_day_behavior === 'sick_only' && (
+                <span className="flex-shrink-0 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-full px-2 py-0.5">
+                  🤒 風邪の日のみ
+                </span>
+              )}
+              {task.sick_day_behavior === 'always' && (
+                <span className="flex-shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-2 py-0.5">
+                  常に表示
+                </span>
+              )}
             </div>
           </div>
         </div>

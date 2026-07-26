@@ -5,6 +5,7 @@ Playwright E2E tests.
 ## Setup
 
 - `playwright.config.ts` starts two webServers: Express on `:3101`, Vite on `:5174`.
+- worktree等で並行してテストを実行する場合は `TEST_API_PORT` / `TEST_WEB_PORT` でポートを変える（例: `TEST_API_PORT=3102 TEST_WEB_PORT=5175 npx playwright test`）。`reuseExistingServer: true` のため、同一ポートで並行実行すると他リポジトリコピーのサーバー・DBに接続してしまい、テストが不安定になる。
 - `fixtures/setup.ts` overrides `baseURL` to call `POST /api/test/reset` before every test.
 - Test DB: `data/test_task_definitions.db` (separate from production).
 

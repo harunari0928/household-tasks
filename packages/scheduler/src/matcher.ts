@@ -18,7 +18,17 @@ function getTodayDayOfWeek(today: string): string {
   return DAY_REVERSE[d.getDay()];
 }
 
-export function shouldCreateToday(task: TaskDefinitionRow, today: string): boolean {
+function addDays(dateStr: string, days: number): string {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + days);
+  return formatLocalDate(d);
+}
+
+export function shouldCreateToday(
+  task: TaskDefinitionRow,
+  today: string,
+  lastCompletedDate?: string | null,
+): boolean {
   const ft = task.frequency_type;
 
   switch (ft) {
@@ -52,13 +62,62 @@ export function shouldCreateToday(task: TaskDefinitionRow, today: string): boole
       return days.includes(getTodayDayOfWeek(today));
     }
 
+    case 'nth_weekday_of_month': {
+      if (!task.days_of_week || !task.nth_weekday_position) return false;
+      const targetDay = DAY_MAP[task.days_of_week.split(',')[0].trim()];
+      if (targetDay === undefined) return false;
+      const todayDate = parseDate(today);
+      const targetDate = nthWeekdayOfMonth(
+        todayDate.getFullYear(),
+        todayDate.getMonth(),
+        task.nth_weekday_position,
+        targetDay,
+      );
+      if (!targetDate) return false; // Nth weekday doesn't exist this month
+      return targetDate.getDate() === todayDate.getDate();
+    }
+
+    case 'days_after_completion': {
+      // 完了日から interval 日経過したら起票。
+      // 一度も完了していない場合は初回として起票（未完了インスタンスが残っている間は
+      // hasRecentInstance が再起票を抑止する）。
+      const interval = task.frequency_interval || 1;
+      if (!lastCompletedDate) return true;
+      return addDays(lastCompletedDate, interval) <= today;
+    }
+
     default:
       return false;
   }
 }
 
+function nthWeekdayOfMonth(year: number, month: number, position: number, dayOfWeek: number): Date | null {
+  const firstOfMonth = new Date(year, month, 1);
+  const firstDow = firstOfMonth.getDay();
+  const offset = (dayOfWeek - firstDow + 7) % 7;
+  const day = 1 + offset + (position - 1) * 7;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  if (day > lastDay) return null;
+  return new Date(year, month, day);
+}
+
 export function shouldCreateThisHour(task: TaskDefinitionRow, currentHour: number): boolean {
   return currentHour >= task.scheduled_hour;
+}
+
+export function isWithinActivePeriod(task: TaskDefinitionRow, today: string): boolean {
+  const { period_start_mm, period_start_dd, period_end_mm, period_end_dd } = task;
+  if (period_start_mm == null || period_start_dd == null || period_end_mm == null || period_end_dd == null) {
+    return true;
+  }
+  const d = parseDate(today);
+  const cur = (d.getMonth() + 1) * 100 + d.getDate();
+  const start = period_start_mm * 100 + period_start_dd;
+  const end = period_end_mm * 100 + period_end_dd;
+  if (start <= end) {
+    return cur >= start && cur <= end;
+  }
+  return cur >= start || cur <= end;
 }
 
 export function calculateNextDueDate(task: TaskDefinitionRow, currentDueDate: string): string {

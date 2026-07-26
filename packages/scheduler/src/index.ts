@@ -3,13 +3,15 @@ import {
   getDb,
   getActiveTasks,
   isAlreadyCreatedToday,
+  isSickChildModeEnabled,
   logExecution,
   updateNextDueDate,
   getFailedTasks,
-  hasUncompletedInstance,
+  hasRecentInstance,
   createTaskInstance,
+  getLastCompletedDateJST,
 } from './db.js';
-import { shouldCreateToday, shouldCreateThisHour, calculateNextDueDate } from './matcher.js';
+import { shouldCreateToday, shouldCreateThisHour, isWithinActivePeriod, calculateNextDueDate } from './matcher.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -20,14 +22,27 @@ async function main() {
 
   console.log(`[${new Date().toISOString()}] Scheduler running for date: ${today}, hour: ${currentHour}${dryRun ? ' (DRY RUN)' : ''}`);
 
-  const tasks = getActiveTasks(db);
+  const sickMode = isSickChildModeEnabled(db);
+  if (sickMode) {
+    console.log('Sick child mode is ON: skipping normal_only tasks, including sick_only tasks');
+  }
+
+  // 子ども風邪の日モード: ON中は通常時のみタスクを起票しない。OFF中は風邪の日専用タスクを起票しない
+  const tasks = getActiveTasks(db).filter((task) =>
+    sickMode ? task.sick_day_behavior !== 'normal_only' : task.sick_day_behavior !== 'sick_only'
+  );
   let created = 0;
   let skipped = 0;
   let failed = 0;
 
   // Process scheduled tasks
   for (const task of tasks) {
-    if (!shouldCreateToday(task, today)) continue;
+    const lastCompletedDate =
+      task.frequency_type === 'days_after_completion'
+        ? getLastCompletedDateJST(db, task.id)
+        : null;
+    if (!shouldCreateToday(task, today, lastCompletedDate)) continue;
+    if (!isWithinActivePeriod(task, today)) continue;
     if (!shouldCreateThisHour(task, currentHour)) continue;
 
     if (isAlreadyCreatedToday(db, task.id, today)) {
@@ -42,11 +57,17 @@ async function main() {
     }
 
     try {
-      const hasDuplicate = hasUncompletedInstance(db, task.id);
+      const hasDuplicate = hasRecentInstance(db, task.id, today, task.scheduled_hour);
       if (hasDuplicate) {
         logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
         skipped++;
         console.log(`  SKIP (duplicate): "${task.name}"`);
+        // Consume this cycle so deleting the lingering instance doesn't trigger
+        // immediate re-creation on the next cron run.
+        if (task.next_due_date) {
+          const nextDate = calculateNextDueDate(task, task.next_due_date);
+          updateNextDueDate(db, task.id, nextDate);
+        }
         continue;
       }
 
@@ -77,11 +98,15 @@ async function main() {
       if (!task) continue;
 
       try {
-        const hasDuplicate = hasUncompletedInstance(db, task.id);
+        const hasDuplicate = hasRecentInstance(db, task.id, today, task.scheduled_hour);
         if (hasDuplicate) {
           logExecution(db, task.id, null, 'skipped_duplicate', undefined, today);
           skipped++;
           console.log(`  RETRY SKIP (duplicate): "${task.name}"`);
+          if (task.next_due_date) {
+            const nextDate = calculateNextDueDate(task, task.next_due_date);
+            updateNextDueDate(db, task.id, nextDate);
+          }
           continue;
         }
 
@@ -90,6 +115,11 @@ async function main() {
         logExecution(db, task.id, instanceId, 'created', undefined, today);
         created++;
         console.log(`  RETRY OK: "${task.name}" (instance_id=${instanceId})`);
+
+        if (task.next_due_date) {
+          const nextDate = calculateNextDueDate(task, task.next_due_date);
+          updateNextDueDate(db, task.id, nextDate);
+        }
       } catch (err: any) {
         logExecution(db, task.id, null, 'failed', err.message, today);
         failed++;

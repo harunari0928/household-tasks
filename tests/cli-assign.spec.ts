@@ -42,7 +42,7 @@ async function runCliAssign(args: string): Promise<{ stdout: string; stderr: str
         env: {
           ...process.env,
           DB_PATH: 'data/test_task_definitions.db',
-          WEB_URL: 'http://localhost:3101',
+          WEB_URL: `http://localhost:${process.env.TEST_API_PORT ?? '3101'}`,
         },
         encoding: 'utf-8',
         timeout: 15000,

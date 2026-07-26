@@ -108,20 +108,76 @@ test.describe('ポイントフィールド', () => {
     await expect(page.getByLabel('ポイント')).toHaveValue('1');
   });
 
-  test('ポイントは1〜10の範囲に制限される', async ({ page }) => {
+  test('ポイントは0〜10の範囲に制限される', async ({ page }) => {
+    // Arrange: タスク追加ダイアログを開き、境界値ケースを用意する
+    const cases = [
+      { input: '11', expected: '10', label: '上限超過の11は10に制限される' },
+      { input: '10', expected: '10', label: '上限値の10はそのまま保持される' },
+      { input: '1', expected: '1', label: '下限近傍の1はそのまま保持される' },
+      { input: '0', expected: '0', label: '下限値の0はそのまま保持される' },
+      { input: '-1', expected: '0', label: '下限未満の-1は0に制限される' },
+    ];
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
-
     const pointsInput = page.getByLabel('ポイント');
 
-    await pointsInput.fill('11');
-    await test.step('11を入力すると10に制限される', async () => {
-      await expect(pointsInput).toHaveValue('10');
+    for (const { input, expected, label } of cases) {
+      // Act: 境界値を入力してフォーカスを外す
+      await pointsInput.fill(input);
+      await pointsInput.blur();
+
+      // Assert: 制限後の値が表示される
+      await test.step(label, async () => {
+        await expect(pointsInput).toHaveValue(expected);
+      });
+    }
+  });
+
+  test('0点のタスクを保存するとリロード後も0点が維持される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('0点タスク');
+    await page.getByLabel('ポイント').fill('0');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('0点タスク').waitFor();
+
+    await test.step('一覧に0ptが表示される', async () => {
+      await expect(page.getByText('0pt')).toBeVisible();
     });
 
-    await pointsInput.fill('0');
-    await test.step('0を入力すると1に制限される', async () => {
-      await expect(pointsInput).toHaveValue('1');
+    await page.reload();
+
+    await test.step('リロード後も0ptが永続化される', async () => {
+      await expect(page.getByText('0pt')).toBeVisible();
+    });
+  });
+
+  test('既存タスクのポイントを末尾から打ち直して保存できる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('ポイント変更テスト');
+    await page.getByLabel('ポイント').fill('5');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('ポイント変更テスト').waitFor();
+
+    await page.getByText('ポイント変更テスト').click();
+    const pointsInput = page.getByLabel('ポイント');
+    await pointsInput.focus();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('8');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
+
+    await test.step('一覧に入力したポイントがそのまま表示される', async () => {
+      await expect(page.getByText('8pt')).toBeVisible();
+    });
+
+    await page.reload();
+
+    await test.step('リロード後も入力したポイントが永続化される', async () => {
+      await expect(page.getByText('8pt')).toBeVisible();
     });
   });
 
@@ -239,6 +295,19 @@ test.describe('ポイント集計の表示', () => {
     const skeleton = page.getByLabel('読み込み中');
     await expect(skeleton).toBeVisible();
     await expect(skeleton.locator('.rounded-full')).toBeVisible();
+  });
+
+  test('集計データの取得が通信エラーになると、画面内にエラーが表示される', async ({ page }) => {
+    // Arrange
+    await page.route('**/api/stats/points**', (route) =>
+      route.request().method() === 'GET' ? route.abort() : route.continue(),
+    );
+
+    // Act
+    await page.goto('/#/stats');
+
+    // Assert
+    await expect(page.getByText('データの取得に失敗しました')).toBeVisible();
   });
 });
 

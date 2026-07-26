@@ -13,11 +13,17 @@ export interface TaskDefinitionRow {
   days_of_week: string | null;
   day_of_month: number | null;
   month_of_year: number | null;
+  nth_weekday_position: number | null;
+  period_start_mm: number | null;
+  period_start_dd: number | null;
+  period_end_mm: number | null;
+  period_end_dd: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
   points: number;
   scheduled_hour: number;
+  sick_day_behavior: 'normal_only' | 'always' | 'sick_only';
 }
 
 type Migration = {
@@ -65,6 +71,63 @@ const migrations: Migration[] = [
       db.exec('ALTER TABLE task_definitions ADD COLUMN month_of_year INTEGER DEFAULT NULL');
     },
   },
+  {
+    version: 11,
+    up: (db) => {
+      db.exec(`
+        UPDATE task_instances SET status = 'todo' WHERE status = 'in_progress';
+
+        CREATE TABLE task_instances_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_definition_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'done')),
+          assignee TEXT DEFAULT NULL,
+          points INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          completed_at TEXT DEFAULT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
+        );
+        INSERT INTO task_instances_new
+          SELECT id, task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order
+          FROM task_instances;
+        DROP TABLE task_instances;
+        ALTER TABLE task_instances_new RENAME TO task_instances;
+        CREATE INDEX idx_task_instances_status ON task_instances(status);
+        CREATE INDEX idx_task_instances_task_def ON task_instances(task_definition_id);
+        CREATE INDEX idx_task_instances_completed ON task_instances(completed_at);
+      `);
+    },
+  },
+  {
+    version: 12,
+    up: (db) => {
+      db.exec('ALTER TABLE task_definitions ADD COLUMN nth_weekday_position INTEGER DEFAULT NULL');
+    },
+  },
+  {
+    version: 13,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN period_start_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_start_dd INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_mm INTEGER DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN period_end_dd INTEGER DEFAULT NULL;
+      `);
+    },
+  },
+  {
+    version: 14,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN sick_day_behavior TEXT NOT NULL DEFAULT 'normal_only';
+
+        UPDATE task_definitions SET sick_day_behavior = 'always'
+        WHERE category IN ('trash', 'cooking', 'laundry');
+      `);
+    },
+  },
 ];
 
 function runMigrations(db: Database.Database): void {
@@ -100,6 +163,13 @@ export function getActiveTasks(db: Database.Database): TaskDefinitionRow[] {
   return db.prepare('SELECT * FROM task_definitions WHERE is_active = 1').all() as TaskDefinitionRow[];
 }
 
+export function isSickChildModeEnabled(db: Database.Database): boolean {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'sick_child_mode'").get() as
+    | { value: string }
+    | undefined;
+  return row?.value === '1';
+}
+
 export function isAlreadyCreatedToday(db: Database.Database, taskDefId: number, today: string): boolean {
   const row = db.prepare(`
     SELECT id FROM execution_log
@@ -131,11 +201,43 @@ export function logExecution(
   }
 }
 
-export function hasUncompletedInstance(db: Database.Database, taskDefId: number): boolean {
+export function hasRecentInstance(
+  db: Database.Database,
+  taskDefId: number,
+  todayJST: string,
+  scheduledHour: number,
+): boolean {
+  // 再起票を抑止する条件:
+  //   - 未完了インスタンスが残っている（バックログ）
+  //   - 当日(JST)の起票時刻以降に完了済み = 今日の分は消化済み
+  // 当日の起票時刻より前に完了した場合（前日以前のバックログを朝に片付けた等）は、
+  // 今日の分が未消化なので再起票を許可する。
   const row = db.prepare(`
-    SELECT 1 FROM task_instances WHERE task_definition_id = ? AND status != 'done' LIMIT 1
-  `).get(taskDefId);
+    SELECT 1 FROM task_instances
+    WHERE task_definition_id = ?
+      AND (
+        status != 'done'
+        OR (
+          date(completed_at, '+9 hours') = ?
+          AND CAST(strftime('%H', completed_at, '+9 hours') AS INTEGER) >= ?
+        )
+      )
+    LIMIT 1
+  `).get(taskDefId, todayJST, scheduledHour);
   return !!row;
+}
+
+export function getLastCompletedDateJST(db: Database.Database, taskDefId: number): string | null {
+  const row = db.prepare(`
+    SELECT date(completed_at, '+9 hours') as d
+    FROM task_instances
+    WHERE task_definition_id = ?
+      AND status = 'done'
+      AND completed_at IS NOT NULL
+    ORDER BY completed_at DESC
+    LIMIT 1
+  `).get(taskDefId) as { d: string } | undefined;
+  return row?.d ?? null;
 }
 
 export function createTaskInstance(

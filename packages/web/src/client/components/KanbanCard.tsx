@@ -20,6 +20,33 @@ function parseAssignees(assignee: string | null): string[] {
   return assignee.split(',').map((a) => a.trim()).filter(Boolean);
 }
 
+/** YYYY-MM-DD (JST) を返す */
+function toJSTDate(date: Date): string {
+  return date.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
+/**
+ * 起票日(created_at)が今日(JST)より前なら繰り越しバッジ情報を返す。
+ * 今日起票のタスクは null（バッジなし）。
+ */
+function getCarryOverBadge(createdAt: string): { label: string; className: string } | null {
+  const createdJST = toJSTDate(new Date(createdAt));
+  const todayJST = toJSTDate(new Date());
+  if (createdJST >= todayJST) return null;
+
+  // JST日付文字列同士の差分（日数）を算出
+  const diffDays = Math.round(
+    (Date.parse(`${todayJST}T00:00:00Z`) - Date.parse(`${createdJST}T00:00:00Z`)) / 86_400_000,
+  );
+  const label = diffDays === 1 ? '昨日' : `${diffDays}日前`;
+  // 昨日はオレンジ、2日以上前は赤で警告度を上げる
+  const className =
+    diffDays === 1
+      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+      : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+  return { label, className };
+}
+
 interface Props {
   task: TaskInstance;
   isRecentlyMoved?: boolean;
@@ -41,6 +68,8 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
   };
 
   const assignees = parseAssignees(task.assignee);
+  // 未着手のまま繰り越されたタスクだけ起票日バッジを出す
+  const carryOver = task.status === 'todo' ? getCarryOverBadge(task.created_at) : null;
 
   // Split listeners: onMouseDown for card (desktop), onTouchStart for handle (mobile)
   const { mouseListeners, touchListeners } = useMemo(() => {
@@ -89,6 +118,17 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
         </button>
       )}
 
+      {carryOver && (
+        <div className="mb-1 pl-3">
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${carryOver.className}`}
+            aria-label={`${carryOver.label}に起票（繰り越し）`}
+          >
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            {carryOver.label}
+          </span>
+        </div>
+      )}
       <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2 pr-6 pl-3">
         {task.title}
       </div>

@@ -31,7 +31,7 @@ async function runCli(args: string): Promise<{ stdout: string; stderr: string; e
       `node packages/cli/dist/index.js ${args}`,
       {
         cwd: process.cwd(),
-        env: { ...process.env, DB_PATH: 'data/test_task_definitions.db', WEB_URL: 'http://localhost:3101' },
+        env: { ...process.env, DB_PATH: 'data/test_task_definitions.db', WEB_URL: `http://localhost:${process.env.TEST_API_PORT ?? '3101'}` },
         encoding: 'utf-8',
         timeout: 15000,
       },
@@ -70,21 +70,22 @@ test.describe('ht list（タスクインスタンス一覧）', () => {
 
   test('--status で指定したステータスのタスクだけ表示される', async ({ page, baseURL }) => {
     // Arrange
+    await page.request.put(`${baseURL}/api/kanban/assignees`, { data: { assignees: ['MTMR'] } });
     await createTaskViaUI(page, { name: 'list-status-filter', frequency_type: 'daily' });
     await runScheduler('2026-03-29');
     const taskId = await getTaskId(page, 'list-status-filter');
-    await runCli(`move ${taskId} in_progress`);
+    await runCli(`move ${taskId} done --assignee MTMR`);
 
     // Act
     const todoResult = await runCli('list --status todo');
-    const inProgressResult = await runCli('list --status in_progress');
+    const doneResult = await runCli('list --status done');
 
     // Assert
     await test.step('未着手一覧にはフィルタしたタスクが含まれない', async () => {
       expect(todoResult.stdout).not.toContain('list-status-filter');
     });
-    await test.step('進行中一覧にフィルタしたタスクが含まれる', async () => {
-      expect(inProgressResult.stdout).toContain('list-status-filter');
+    await test.step('完了一覧にフィルタしたタスクが含まれる', async () => {
+      expect(doneResult.stdout).toContain('list-status-filter');
     });
   });
 

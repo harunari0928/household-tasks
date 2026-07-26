@@ -1,13 +1,14 @@
 import { Router, type Request, type Response } from 'express';
 import { getDb } from '../db.js';
 import { getNowISO } from '../test-time.js';
+import { isSickModeEnabled } from './sickMode.js';
 
 const router: ReturnType<typeof Router> = Router();
 
 // SSE clients
 const sseClients = new Set<Response>();
 
-function broadcast(event: object) {
+export function broadcast(event: object) {
   const data = `data: ${JSON.stringify(event)}\n\n`;
   for (const client of sseClients) {
     client.write(data);
@@ -33,6 +34,13 @@ router.get('/', (req: Request, res: Response) => {
     params.push(req.query.category);
   }
 
+  // 子ども風邪の日モード: ON中は通常時のみタスクを非表示、OFF中は風邪の日専用タスクを非表示
+  if (isSickModeEnabled(db)) {
+    conditions.push("td.sick_day_behavior != 'normal_only'");
+  } else {
+    conditions.push("td.sick_day_behavior != 'sick_only'");
+  }
+
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const rows = db.prepare(`
@@ -50,7 +58,7 @@ router.get('/', (req: Request, res: Response) => {
 router.patch('/reorder', (req: Request, res: Response) => {
   const db = getDb();
   const { status, sortedIds } = req.body;
-  const validStatuses = ['todo', 'in_progress', 'done'];
+  const validStatuses = ['todo', 'done'];
 
   if (!status || !validStatuses.includes(status)) {
     res.status(400).json({ error: 'Invalid status' });
@@ -77,10 +85,10 @@ router.patch('/reorder', (req: Request, res: Response) => {
 router.patch('/:id/status', (req: Request, res: Response) => {
   const db = getDb();
   const { status, assignee } = req.body;
-  const validStatuses = ['todo', 'in_progress', 'done'];
+  const validStatuses = ['todo', 'done'];
 
   if (!status || !validStatuses.includes(status)) {
-    res.status(400).json({ error: 'status must be one of: todo, in_progress, done' });
+    res.status(400).json({ error: 'status must be one of: todo, done' });
     return;
   }
 
@@ -247,9 +255,9 @@ router.delete('/:id', (req: Request, res: Response) => {
 router.delete('/', (req: Request, res: Response) => {
   const db = getDb();
   const status = req.query.status as string;
-  const validStatuses = ['todo', 'in_progress', 'done'];
+  const validStatuses = ['todo', 'done'];
   if (!status || !validStatuses.includes(status)) {
-    res.status(400).json({ error: 'status query parameter required (todo, in_progress, done)' });
+    res.status(400).json({ error: 'status query parameter required (todo, done)' });
     return;
   }
   const result = db.prepare('DELETE FROM task_instances WHERE status = ?').run(status);

@@ -20,6 +20,8 @@ export const FREQUENCY_TYPES = {
   monthly: '毎月',
   n_months: 'Nヶ月ごと',
   yearly: '1年ごと',
+  nth_weekday_of_month: '第N曜日(毎月)',
+  days_after_completion: '完了後N日',
 } as const;
 
 export type FrequencyTypeKey = keyof typeof FREQUENCY_TYPES;
@@ -36,6 +38,14 @@ export const DAYS_OF_WEEK = {
 
 export type DayOfWeek = keyof typeof DAYS_OF_WEEK;
 
+export const SICK_DAY_BEHAVIORS = {
+  normal_only: '通常時のみ表示',
+  always: '常に表示',
+  sick_only: '風邪の日のみ表示',
+} as const;
+
+export type SickDayBehaviorKey = keyof typeof SICK_DAY_BEHAVIORS;
+
 export interface TaskDefinition {
   id: number;
   name: string;
@@ -45,11 +55,17 @@ export interface TaskDefinition {
   days_of_week: string | null;
   day_of_month: number | null;
   month_of_year: number | null;
+  nth_weekday_position: number | null;
+  period_start_mm: number | null;
+  period_start_dd: number | null;
+  period_end_mm: number | null;
+  period_end_dd: number | null;
   next_due_date: string | null;
   is_active: number;
   notes: string | null;
   points: number;
   scheduled_hour: number;
+  sick_day_behavior: SickDayBehaviorKey;
   created_at: string;
   updated_at: string;
 }
@@ -61,9 +77,16 @@ export interface TaskDefinitionInput {
   frequency_interval?: number;
   days_of_week?: string[];
   day_of_month?: number;
+  month_of_year?: number;
+  nth_weekday_position?: number;
+  period_start_mm?: number | null;
+  period_start_dd?: number | null;
+  period_end_mm?: number | null;
+  period_end_dd?: number | null;
   notes?: string;
   points?: number;
   scheduled_hour: number;
+  sick_day_behavior?: SickDayBehaviorKey;
 }
 
 export interface ExecutionLog {
@@ -84,11 +107,10 @@ export interface Attachment {
   created_at: string;
 }
 
-export type TaskInstanceStatus = 'todo' | 'in_progress' | 'done';
+export type TaskInstanceStatus = 'todo' | 'done';
 
 export const KANBAN_COLUMNS = {
   todo: '未着手',
-  in_progress: '進行中',
   done: '完了',
 } as const;
 
@@ -113,4 +135,6 @@ export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
   monthly: ['day_of_month'],
   n_months: ['frequency_interval', 'day_of_month'],
   yearly: ['month_of_year', 'day_of_month'],
+  nth_weekday_of_month: ['nth_weekday_position', 'days_of_week'],
+  days_after_completion: ['frequency_interval'],
 };
