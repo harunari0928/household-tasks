@@ -130,6 +130,10 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
     **そちらに相乗りさせると年1タスクが「不在で1年後送り」になる**。
   - `daily`/`weekly`/`monthly` は日付マッチなので不在日ぶんは単に消える
     （旅行中の浴槽掃除が積み上がらない、が意図）。
+  - **予定名のキーワード判定と期間の日付への展開は HA 側が持つ**
+    （`absence_sync.py` の `expand_event`）。このアプリは展開済みの日付を
+    `POST /api/absence/days` で受けるだけなので、**同じロジックをこちらに書かない**
+    （終日予定の `end` は排他的、という罠を二重に抱えて片方だけ直す事故になる）。
   - Playwright の `getByRole('button', {name})` は**部分一致**。設定画面に
     「追加」ボタンを増やすときは aria-label に「追加」を**含めない**
     （含めると既存テストが strict mode violation で落ちる）。

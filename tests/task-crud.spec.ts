@@ -1185,3 +1185,100 @@ test.describe('1年ごとタスクの月日指定', () => {
     await expect(page.getByRole('alert')).toContainText('月と日の両方');
   });
 });
+
+test.describe('不在時の扱い', () => {
+  test('「不在中は非表示」で作成すると一覧にお休みのバッジが表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('テスト浴槽掃除');
+    await page.getByLabel('カテゴリ').selectOption('lifestyle');
+    await page.getByLabel('不在時の扱い').selectOption({ label: '不在中は非表示' });
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByText('不在中は休み')).toBeVisible();
+  });
+
+  test('「不在でも表示」で作成すると一覧にお休みのバッジが表示されない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('タスク名').fill('テストパル注文');
+    await page.getByLabel('カテゴリ').selectOption('lifestyle');
+    await page.getByLabel('不在時の扱い').selectOption({ label: '不在でも表示' });
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await page.getByText('テストパル注文').waitFor();
+    await expect(page.getByText('不在中は休み')).not.toBeVisible();
+  });
+
+  test('不在時の扱いを変更すると保存後に反映される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト扱い変更');
+    await page.getByLabel('カテゴリ').selectOption('lifestyle');
+    await page.getByLabel('不在時の扱い').selectOption({ label: '不在でも表示' });
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テスト扱い変更').waitFor();
+
+    await page.getByText('テスト扱い変更').click();
+    await page.getByLabel('不在時の扱い').selectOption({ label: '不在中は非表示' });
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(page.getByText('不在中は休み')).toBeVisible();
+  });
+
+  test('編集時に不在時の扱いの値が保持される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト扱い保持');
+    await page.getByLabel('カテゴリ').selectOption('lifestyle');
+    await page.getByLabel('不在時の扱い').selectOption({ label: '不在中は非表示' });
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await page.getByText('テスト扱い保持').click();
+
+    await expect(page.getByLabel('不在時の扱い')).toHaveValue('hidden');
+  });
+
+  /**
+   * 在宅でないとできない家事（水回り・キッチン等）は、既定で不在中は休みにする。
+   * 毎回選ばせると付け忘れて旅行中にタスクが積み上がるため。
+   */
+  for (const { category, label } of [
+    { label: '水回り' },
+    { label: 'キッチン' },
+    { label: 'フロア・室内' },
+    { label: '玄関・ベランダ・その他' },
+    { label: '洗濯・布もの' },
+    { label: 'ごみ関連' },
+  ]) {
+    test(`${label}は新規作成時の不在時の扱いが「不在中は非表示」になっている`, async ({ page }) => {
+      await page.goto('/#/tasks');
+      await page.getByRole('button', { name: new RegExp(label) }).click();
+
+      await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+      await expect(page.getByLabel('不在時の扱い')).toHaveValue('hidden');
+    });
+  }
+
+  for (const { category, label } of [
+    { label: '育児タスク' },
+    { label: '料理・食事タスク' },
+    { label: '生活・その他' },
+  ]) {
+    test(`${label}は新規作成時の不在時の扱いが「不在でも表示」になっている`, async ({ page }) => {
+      await page.goto('/#/tasks');
+      await page.getByRole('button', { name: new RegExp(label) }).click();
+
+      await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+      await expect(page.getByLabel('不在時の扱い')).toHaveValue('normal');
+    });
+  }
+});

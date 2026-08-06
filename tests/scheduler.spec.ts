@@ -52,6 +52,7 @@ async function createTaskViaUI(
     nth_weekday_position?: number;
     scheduled_hour?: number;
     period?: { start_mm: number; start_dd: number; end_mm: number; end_dd: number };
+    absenceBehaviorLabel?: '不在でも表示' | '不在中は非表示';
   },
 ) {
   const category = options.category || 'water';
@@ -61,6 +62,10 @@ async function createTaskViaUI(
   await page.getByLabel('タスク名').fill(options.name);
   await page.getByLabel('カテゴリ').selectOption(options.category || 'water');
   await page.getByLabel('頻度').selectOption(options.frequency_type);
+
+  if (options.absenceBehaviorLabel) {
+    await page.getByLabel('不在時の扱い').selectOption({ label: options.absenceBehaviorLabel });
+  }
 
   if (options.days_of_week) {
     for (const day of options.days_of_week) {
@@ -961,5 +966,181 @@ test.describe('完了後N日', () => {
     await expect(
       page.getByRole('region', { name: '未着手列' }).getByText('carryover-wait'),
     ).toHaveCount(0);
+  });
+});
+
+test.describe('不在日（帰省・旅行）', () => {
+  /** 家族カレンダー由来の不在日が同期されてきた状態にする */
+  async function setAbsenceDays(page: Page, baseURL: string, dates: string[]) {
+    await page.request.post(`${baseURL}/api/absence/days`, {
+      data: { days: dates.map((date) => ({ date, summary: '沼津旅行' })) },
+    });
+  }
+
+  /**
+   * 不在日はカンバン側でも隠れるので、不在日のまま見ると
+   * 「起票されなかった」のか「起票されたが隠れている」のか区別できない。
+   * 不在日を明けてから見ることで、起票そのものが無かったことを確かめる。
+   */
+  /**
+   * 不在の日として使う固定日。
+   *
+   * 毎月タスクの起票日をこの日に合わせてあるのは、フォーム保存時の即時起票を
+   * 避けるため（実際の今日に当たる日を選ぶと、スケジューラを回す前に起票されて
+   * 「不在日に起票しない」ことを確かめられない）。
+   */
+  const AWAY_DAY = '2026-08-14';
+  const AWAY_DAY_OF_MONTH = 14;
+
+  test('不在日は「不在中は非表示」のタスクが起票されない', async ({ page, baseURL }) => {
+    // Arrange
+    await createTaskViaUI(page, baseURL!, {
+      name: 'absence-hidden', category: 'water', frequency_type: 'monthly',
+      day_of_month: AWAY_DAY_OF_MONTH, absenceBehaviorLabel: '不在中は非表示',
+    });
+    await setAbsenceDays(page, baseURL!, [AWAY_DAY]);
+
+    // Act
+    await runScheduler(AWAY_DAY);
+
+    // Assert: 不在日を明けてから見て、起票そのものが無かったことを確かめる
+    await setAbsenceDays(page, baseURL!, []);
+    await goToKanban(page);
+    await expect(page.getByText('absence-hidden')).not.toBeVisible();
+  });
+
+  test('不在日でも「不在でも表示」のタスクは起票される', async ({ page, baseURL }) => {
+    // Arrange
+    await createTaskViaUI(page, baseURL!, {
+      name: 'absence-normal', category: 'cooking', frequency_type: 'monthly',
+      day_of_month: AWAY_DAY_OF_MONTH, absenceBehaviorLabel: '不在でも表示',
+    });
+    await setAbsenceDays(page, baseURL!, [AWAY_DAY]);
+
+    // Act
+    await runScheduler(AWAY_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('absence-normal')).toBeVisible();
+  });
+
+  test('不在日ではない日は「不在中は非表示」のタスクも起票される', async ({ page, baseURL }) => {
+    // Arrange: 不在日は別の日にしておき、スケジューラを回す日は在宅の状態にする
+    await createTaskViaUI(page, baseURL!, {
+      name: 'absence-other-day', category: 'water', frequency_type: 'monthly',
+      day_of_month: AWAY_DAY_OF_MONTH, absenceBehaviorLabel: '不在中は非表示',
+    });
+    await setAbsenceDays(page, baseURL!, [addDays(AWAY_DAY, 10)]);
+
+    // Act
+    await runScheduler(AWAY_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('absence-other-day')).toBeVisible();
+  });
+
+  /**
+   * 日付・曜日でマッチする頻度は、不在日ぶんは消えて積み上がらない。
+   * 帰省から帰ったら浴槽掃除が3日ぶん待っている、という状態を避けるための仕様
+   * （期限到来型の yearly が帰宅日に繰り越されるのとは非対称で、これは意図した挙動）。
+   */
+  for (const { label, frequency, extra } of [
+    { label: '毎週', frequency: 'weekly', extra: { days_of_week: ['fri'] } },
+    { label: '毎月', frequency: 'monthly', extra: { day_of_month: AWAY_DAY_OF_MONTH } },
+  ]) {
+    test(`${label}タスクは不在日ぶんが帰宅後に積み上がらない`, async ({ page, baseURL }) => {
+      // Arrange: 不在日(2026-08-14 金)に当たるよう曜日・日付を指定してある
+      const name = `absence-no-pileup-${frequency}`;
+      await createTaskViaUI(page, baseURL!, {
+        name, category: 'water', frequency_type: frequency,
+        absenceBehaviorLabel: '不在中は非表示', ...extra,
+      });
+      await setAbsenceDays(page, baseURL!, [AWAY_DAY]);
+      await runScheduler(AWAY_DAY);
+
+      // Act: 帰宅日に実行する
+      await setAbsenceDays(page, baseURL!, []);
+      await runScheduler(addDays(AWAY_DAY, 1));
+
+      // Assert
+      await goToKanban(page);
+      await expect(
+        page.getByRole('region', { name: '未着手列' }).getByText(name),
+      ).toHaveCount(0);
+    });
+  }
+
+  /** 不在の3日間。初日が1年ごとタスクの期限に当たる */
+  const AWAY_RANGE = [AWAY_DAY, addDays(AWAY_DAY, 1), addDays(AWAY_DAY, 2)];
+  const HOMECOMING_DAY = addDays(AWAY_DAY, 3);
+
+  /** 期限を不在の初日に合わせた1年ごとタスクを用意する */
+  async function arrangeYearlyTaskDueOnFirstAwayDay(page: Page, baseURL: string, name: string) {
+    const task = await createTaskViaUI(page, baseURL, {
+      name, category: 'lifestyle', frequency_type: 'yearly',
+      month_of_year: 8, day_of_month: AWAY_DAY_OF_MONTH,
+      absenceBehaviorLabel: '不在中は非表示',
+    });
+    // PUT /api/tasks は次回予定日を実際の今日から再計算するので、
+    // 狙った日を期限にするにはここで直接指定する（でないと実行日に依存して壊れる）
+    await page.request.post(`${baseURL}/api/test/set-next-due-date`, {
+      data: { id: task.id, next_due_date: AWAY_DAY },
+    });
+    return task;
+  }
+
+  test('1年ごとタスクは不在中は起票されない', async ({ page, baseURL }) => {
+    // Arrange
+    await arrangeYearlyTaskDueOnFirstAwayDay(page, baseURL!, 'absence-yearly-skip');
+    await setAbsenceDays(page, baseURL!, AWAY_RANGE);
+
+    // Act
+    for (const day of AWAY_RANGE) {
+      await runScheduler(day);
+    }
+
+    // Assert: 不在日を明けてから見て、起票そのものが無かったことを確かめる
+    await setAbsenceDays(page, baseURL!, []);
+    await goToKanban(page);
+    await expect(page.getByText('absence-yearly-skip')).not.toBeVisible();
+  });
+
+  test('1年ごとタスクは不在で飛ばしても帰宅日に起票される', async ({ page, baseURL }) => {
+    // Arrange: 不在中はスケジューラを回しても起票されない
+    await arrangeYearlyTaskDueOnFirstAwayDay(page, baseURL!, 'absence-yearly-carryover');
+    await setAbsenceDays(page, baseURL!, AWAY_RANGE);
+    for (const day of AWAY_RANGE) {
+      await runScheduler(day);
+    }
+
+    // Act: 帰宅して不在日が明けた状態で実行する
+    await setAbsenceDays(page, baseURL!, []);
+    await runScheduler(HOMECOMING_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('absence-yearly-carryover')).toBeVisible();
+  });
+
+  test('1年ごとタスクは帰宅日に起票された後は同じ年のうちは起票されない', async ({ page, baseURL }) => {
+    // Arrange: 帰宅日に起票させるところまで進める
+    await arrangeYearlyTaskDueOnFirstAwayDay(page, baseURL!, 'absence-yearly-next');
+    await setAbsenceDays(page, baseURL!, AWAY_RANGE);
+    await runScheduler(AWAY_DAY);
+    await setAbsenceDays(page, baseURL!, []);
+    await runScheduler(HOMECOMING_DAY);
+    await goToKanban(page);
+    await page.getByText('absence-yearly-next').waitFor();
+
+    // Act: 同じ年のうちに再度実行する
+    await runScheduler(addDays(HOMECOMING_DAY, 30));
+
+    // Assert
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('absence-yearly-next'),
+    ).toHaveCount(1);
   });
 });

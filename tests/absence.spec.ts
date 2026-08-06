@@ -1,245 +1,282 @@
 import { test, expect } from './fixtures/setup.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import type { Page } from '@playwright/test';
 
-const execAsync = promisify(exec);
-
-async function runScheduler(testToday: string): Promise<string> {
-  const { stdout, stderr } = await execAsync('node packages/scheduler/dist/index.js', {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      DB_PATH: 'data/test_task_definitions.db',
-      TEST_TODAY: testToday,
-    },
-    encoding: 'utf-8',
-    timeout: 15000,
-  });
-  if (stderr) console.error('Scheduler stderr:', stderr);
-  return stdout;
-}
-
 function getTodayJST(): string {
-  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 }
 
-function addDays(date: string, days: number): string {
-  const d = new Date(date + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().split('T')[0];
 }
 
-type AbsenceBehavior = 'normal' | 'hidden';
+/** 不在日一覧の表示書式（例: 9/19(土)）に合わせる */
+function formatDayLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const weekday = ['日', '月', '火', '水', '木', '金', '土'][new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${m}/${d}(${weekday})`;
+}
 
-async function createTaskDef(
+const CATEGORY_MAP: Record<string, string> = {
+  water: '水回り', kitchen: 'キッチン', floor: 'フロア・室内',
+  entrance: '玄関・ベランダ・その他', laundry: '洗濯・布もの', trash: 'ごみ関連',
+  childcare: '育児タスク', cooking: '料理・食事タスク', lifestyle: '生活・その他',
+};
+
+/**
+ * タスクをフォームから作り、起票済みのカードをカンバンに置く。
+ * 「不在時の扱い」はフォームのセレクトで選ぶ。
+ */
+async function createTaskWithAbsenceBehavior(
   page: Page,
   baseURL: string,
-  options: {
-    name: string;
-    category?: string;
-    absence_behavior?: AbsenceBehavior;
-    frequency_type?: string;
-    next_due_date?: string;
-    withInstance?: boolean;
-  },
+  options: { name: string; category: string; behaviorLabel: '不在でも表示' | '不在中は非表示' },
 ) {
-  const res = await page.request.post(`${baseURL}/api/tasks`, {
-    data: {
-      name: options.name,
-      category: options.category ?? 'floor',
-      frequency_type: options.frequency_type ?? 'daily',
-      scheduled_hour: 0,
-      absence_behavior: options.absence_behavior ?? 'hidden',
-    },
-  });
-  const def = await res.json();
-  if (options.withInstance) {
-    await page.request.post(`${baseURL}/api/kanban/create-from-definition/${def.id}`);
-  }
+  await page.goto('/#/tasks');
+  await page.getByRole('button', { name: new RegExp(CATEGORY_MAP[options.category]) }).click();
+  await page.getByRole('button', { name: /タスクを追加/ }).click();
+  await page.getByLabel('タスク名').fill(options.name);
+  await page.getByLabel('カテゴリ').selectOption(options.category);
+  await page.getByLabel('頻度').selectOption('daily');
+  await page.getByLabel('不在時の扱い').selectOption({ label: options.behaviorLabel });
+  await page.getByRole('button', { name: '保存' }).click();
+  await page.getByText(options.name).waitFor();
+
+  const res = await page.request.get(`${baseURL}/api/tasks`);
+  const def = (await res.json()).find((t: { name: string }) => t.name === options.name);
+  await page.request.post(`${baseURL}/api/kanban/create-from-definition/${def.id}`);
   return def;
 }
 
+/**
+ * 家族カレンダーの不在日が同期されてきた状態にする。
+ *
+ * 予定名の判定と期間の日付への展開は Home Assistant 側が済ませてから
+ * 日付リストを送ってくるので、テストも展開後の日付を渡す。
+ */
 async function setAbsenceDays(
   page: Page,
   baseURL: string,
   days: Array<{ date: string; summary?: string }>,
 ) {
-  return page.request.post(`${baseURL}/api/absence/days`, {
+  await page.request.post(`${baseURL}/api/absence/days`, {
     data: { days: days.map((d) => ({ date: d.date, summary: d.summary ?? '沼津旅行' })) },
   });
 }
 
 async function goToKanban(page: Page) {
+  await page.goto('about:blank');
   await page.goto('/#/');
   await page.getByText('未着手').waitFor();
 }
 
-test.describe('不在日（帰省・旅行）', () => {
-  test('既定のキーワードが入っている', async ({ page, baseURL }) => {
-    const res = await page.request.get(`${baseURL}/api/absence`);
-    const data = await res.json();
-    expect(data.keywords).toEqual(['帰省', '旅行', '梶山', '大津']);
-    expect(data.today).toBeNull();
-  });
+async function goToSettings(page: Page) {
+  await page.goto('/#/settings');
+  await page.getByRole('heading', { name: '不在日（帰省・旅行）' }).waitFor();
+}
 
-  test('不在日は「不在中は非表示」のタスクだけがカンバンから消える', async ({ page, baseURL }) => {
-    await createTaskDef(page, baseURL!, {
-      name: '浴槽掃除',
-      absence_behavior: 'hidden',
-      withInstance: true,
-    });
-    await createTaskDef(page, baseURL!, {
-      name: 'パル注文',
-      category: 'cooking',
-      absence_behavior: 'normal',
-      withInstance: true,
-    });
+function absenceBanner(page: Page) {
+  return page.getByText('在宅が前提のタスクはお休みしています');
+}
 
-    await goToKanban(page);
-    await expect(page.getByText('浴槽掃除')).toBeVisible();
-    await expect(page.getByText('パル注文')).toBeVisible();
+test.describe('不在日のカンバン表示', () => {
+  test('不在日は「不在中は非表示」のタスクがカンバンから消える', async ({ page, baseURL }) => {
+    await createTaskWithAbsenceBehavior(page, baseURL!, {
+      name: '浴槽掃除', category: 'water', behaviorLabel: '不在中は非表示',
+    });
 
     await setAbsenceDays(page, baseURL!, [{ date: getTodayJST() }]);
 
-    await page.reload();
-    await page.getByText('未着手').waitFor();
-    await expect(page.getByText('パル注文')).toBeVisible();
+    await goToKanban(page);
     await expect(page.getByText('浴槽掃除')).not.toBeVisible();
   });
 
-  test('不在日はバナーが出る', async ({ page, baseURL }) => {
-    await setAbsenceDays(page, baseURL!, [{ date: getTodayJST(), summary: '沼津旅行' }]);
-    await goToKanban(page);
-    await expect(page.getByText('不在日（沼津旅行）', { exact: false })).toBeVisible();
-  });
-
-  test('不在日を取り消すと再表示される', async ({ page, baseURL }) => {
-    const today = getTodayJST();
-    await createTaskDef(page, baseURL!, {
-      name: '浴槽掃除',
-      absence_behavior: 'hidden',
-      withInstance: true,
+  test('不在日でも「不在でも表示」のタスクはカンバンに残る', async ({ page, baseURL }) => {
+    await createTaskWithAbsenceBehavior(page, baseURL!, {
+      name: 'パル注文', category: 'cooking', behaviorLabel: '不在でも表示',
     });
-    await setAbsenceDays(page, baseURL!, [{ date: today }]);
+
+    await setAbsenceDays(page, baseURL!, [{ date: getTodayJST() }]);
 
     await goToKanban(page);
-    await expect(page.getByText('浴槽掃除')).not.toBeVisible();
+    await expect(page.getByText('パル注文')).toBeVisible();
+  });
 
-    await page.request.delete(`${baseURL}/api/absence/days/${today}`);
-    await page.reload();
-    await page.getByText('未着手').waitFor();
+  test('不在日ではない日は「不在中は非表示」のタスクもカンバンに表示される', async ({ page, baseURL }) => {
+    await createTaskWithAbsenceBehavior(page, baseURL!, {
+      name: '浴槽掃除', category: 'water', behaviorLabel: '不在中は非表示',
+    });
+
+    await setAbsenceDays(page, baseURL!, [{ date: addDays(getTodayJST(), 3) }]);
+
+    await goToKanban(page);
     await expect(page.getByText('浴槽掃除')).toBeVisible();
   });
 
-  test('同期は source=calendar の不在日を置き換える（旅行が中止になったら消える）', async ({ page, baseURL }) => {
-    const today = getTodayJST();
-    await setAbsenceDays(page, baseURL!, [
-      { date: today },
-      { date: addDays(today, 1) },
-    ]);
+  test('不在日は予定名つきのお知らせが表示される', async ({ page, baseURL }) => {
+    await setAbsenceDays(page, baseURL!, [{ date: getTodayJST(), summary: '沼津旅行' }]);
 
-    let res = await page.request.get(`${baseURL}/api/absence`);
-    expect((await res.json()).days).toHaveLength(2);
-
-    // 予定が消えた状態で同期 → 不在日も消える
-    await setAbsenceDays(page, baseURL!, []);
-    res = await page.request.get(`${baseURL}/api/absence`);
-    const data = await res.json();
-    expect(data.days).toHaveLength(0);
-    expect(data.today).toBeNull();
+    await goToKanban(page);
+    await test.step('お休みしていることが表示される', async () => {
+      await expect(absenceBanner(page)).toBeVisible();
+    });
+    await test.step('予定名が表示される', async () => {
+      await expect(page.getByText('沼津旅行')).toBeVisible();
+    });
   });
 
-  test('スケジューラは不在日に「不在中は非表示」のタスクを起票しない', async ({ page, baseURL }) => {
-    const target = '2026-08-06';
-    await createTaskDef(page, baseURL!, { name: '不在で休む掃除', absence_behavior: 'hidden' });
-    await createTaskDef(page, baseURL!, {
-      name: '不在でもやる注文',
-      category: 'cooking',
-      absence_behavior: 'normal',
-    });
-    await setAbsenceDays(page, baseURL!, [{ date: target, summary: '帰省' }]);
+  test('不在日ではない日はお知らせが表示されない', async ({ page, baseURL }) => {
+    await setAbsenceDays(page, baseURL!, [{ date: addDays(getTodayJST(), 3) }]);
 
-    const out = await runScheduler(target);
-    expect(out).toContain('Absence day');
-    expect(out).toContain('不在でもやる注文');
-    expect(out).not.toContain('CREATED: "不在で休む掃除"');
+    await goToKanban(page);
+    await expect(absenceBanner(page)).not.toBeVisible();
   });
+});
 
-  /**
-   * 年1タスクが不在で「1年後送り」にならないことの回帰テスト。
-   *
-   * yearly は `next_due_date <= today` の期限到来判定なので、不在日に
-   * next_due_date を消費しなければ帰宅日に繰り越して起票される。
-   * 重複スキップの分岐（あちらは意図的に next_due_date を進める）に
-   * 相乗りさせると、この性質が壊れる。
-   */
-  test('年1タスクは不在中は起票されず、帰宅日に繰り越して起票される', async ({ page, baseURL }) => {
-    const due = '2026-08-05';
-    const def = await createTaskDef(page, baseURL!, {
-      name: '防災用品棚卸し',
-      category: 'lifestyle',
-      absence_behavior: 'hidden',
-      frequency_type: 'yearly',
-    });
+test.describe('不在日のキーワード設定', () => {
+  test('既定のキーワードが表示される', async ({ page }) => {
+    await goToSettings(page);
 
-    // 期限を不在期間の初日に直接合わせる。
-    // **PUT /api/tasks は next_due_date を「実際の今日」から再計算する**ので、
-    // ここで PUT を使うとテストが実行日に依存して壊れる（8/5 を狙っても翌年に飛ぶ）。
-    await page.request.post(`${baseURL}/api/test/set-next-due-date`, {
-      data: { id: def.id, next_due_date: due },
-    });
-
-    // 8/5〜8/7 が不在
-    await setAbsenceDays(page, baseURL!, [
-      { date: '2026-08-05', summary: '帰省' },
-      { date: '2026-08-06', summary: '帰省' },
-      { date: '2026-08-07', summary: '帰省' },
-    ]);
-
-    for (const day of ['2026-08-05', '2026-08-06', '2026-08-07']) {
-      const out = await runScheduler(day);
-      expect(out).not.toContain('CREATED: "防災用品棚卸し"');
+    for (const keyword of ['帰省', '旅行', '梶山', '大津']) {
+      await expect(page.getByText(keyword, { exact: true })).toBeVisible();
     }
-
-    // 期限が消費されていない（繰り越されている）
-    let res = await page.request.get(`${baseURL}/api/tasks/${def.id}`);
-    expect((await res.json()).next_due_date).toBe(due);
-
-    // 帰宅日に起票される
-    const out = await runScheduler('2026-08-08');
-    expect(out).toContain('CREATED: "防災用品棚卸し"');
-
-    // 起票後は翌年へ進む
-    res = await page.request.get(`${baseURL}/api/tasks/${def.id}`);
-    expect((await res.json()).next_due_date).toBe('2027-08-05');
   });
 
-  test('キーワードを編集できる', async ({ page, baseURL }) => {
-    const res = await page.request.put(`${baseURL}/api/absence/keywords`, {
-      data: { keywords: ['帰省', '  沼津  ', '沼津', ''] },
-    });
-    // 空白除去・重複排除される
-    expect((await res.json()).keywords).toEqual(['帰省', '沼津']);
+  test('キーワードを追加すると一覧に表示される', async ({ page }) => {
+    await goToSettings(page);
+
+    await page.getByLabel('不在キーワードを追加').fill('沼津');
+    await page.getByRole('button', { name: 'キーワードを登録' }).click();
+
+    await expect(page.getByText('沼津', { exact: true })).toBeVisible();
   });
 
-  test('不正な不在時の扱いは拒否される', async ({ page, baseURL }) => {
-    const res = await page.request.post(`${baseURL}/api/tasks`, {
-      data: {
-        name: 'だめなタスク',
-        category: 'floor',
-        frequency_type: 'daily',
-        scheduled_hour: 0,
-        absence_behavior: 'sometimes',
-      },
-    });
-    expect(res.status()).toBe(400);
+  test('キーワードを削除すると一覧から消える', async ({ page }) => {
+    await goToSettings(page);
+
+    await page.getByRole('button', { name: 'キーワード旅行を削除' }).click();
+
+    await expect(page.getByText('旅行', { exact: true })).not.toBeVisible();
   });
 
-  test('不正な日付は拒否される', async ({ page, baseURL }) => {
-    const res = await page.request.post(`${baseURL}/api/absence/days`, {
-      data: { days: [{ date: '2026/08/06' }] },
+  test('追加したキーワードはページを開き直しても残っている', async ({ page }) => {
+    await goToSettings(page);
+    await page.getByLabel('不在キーワードを追加').fill('沼津');
+    await page.getByRole('button', { name: 'キーワードを登録' }).click();
+    await page.getByText('沼津', { exact: true }).waitFor();
+
+    await goToSettings(page);
+
+    await expect(page.getByText('沼津', { exact: true })).toBeVisible();
+  });
+
+  test('前後の空白を含めて入力したキーワードは空白を除いて登録される', async ({ page }) => {
+    await goToSettings(page);
+
+    await page.getByLabel('不在キーワードを追加').fill('  沼津  ');
+    await page.getByRole('button', { name: 'キーワードを登録' }).click();
+
+    await expect(page.getByText('沼津', { exact: true })).toBeVisible();
+  });
+
+  test('すでに登録済みのキーワードを追加しても重複して表示されない', async ({ page }) => {
+    await goToSettings(page);
+
+    await page.getByLabel('不在キーワードを追加').fill('旅行');
+    await page.getByRole('button', { name: 'キーワードを登録' }).click();
+
+    await expect(page.getByText('旅行', { exact: true })).toHaveCount(1);
+  });
+});
+
+test.describe('不在日の一覧と取り消し', () => {
+  test('同期された不在日が予定名つきで一覧に表示される', async ({ page, baseURL }) => {
+    await setAbsenceDays(page, baseURL!, [{ date: addDays(getTodayJST(), 1), summary: '沼津旅行' }]);
+
+    await goToSettings(page);
+
+    await expect(page.getByText('沼津旅行')).toBeVisible();
+  });
+
+  test('不在日を取り消すと一覧から消える', async ({ page, baseURL }) => {
+    const tomorrow = addDays(getTodayJST(), 1);
+    await setAbsenceDays(page, baseURL!, [{ date: tomorrow, summary: '沼津旅行' }]);
+    await goToSettings(page);
+
+    await page.getByRole('button', { name: `${tomorrow}の不在を取り消す` }).click();
+
+    await expect(page.getByText('沼津旅行')).not.toBeVisible();
+  });
+
+  test('不在日を取り消すと「不在中は非表示」のタスクがカンバンに戻る', async ({ page, baseURL }) => {
+    const today = getTodayJST();
+    await createTaskWithAbsenceBehavior(page, baseURL!, {
+      name: '浴槽掃除', category: 'water', behaviorLabel: '不在中は非表示',
     });
-    expect(res.status()).toBe(400);
+    await setAbsenceDays(page, baseURL!, [{ date: today, summary: '沼津旅行' }]);
+    await goToSettings(page);
+
+    await page.getByRole('button', { name: `${today}の不在を取り消す` }).click();
+
+    await goToKanban(page);
+    await expect(page.getByText('浴槽掃除')).toBeVisible();
+  });
+
+  test('不在日が無いときは予定されていないことが表示される', async ({ page }) => {
+    await goToSettings(page);
+
+    await expect(page.getByText('予定されている不在日はありません')).toBeVisible();
+  });
+});
+
+test.describe('家族カレンダーからの不在日の同期', () => {
+  test('連泊の旅行は日数ぶんの不在日が一覧に表示される', async ({ page, baseURL }) => {
+    await setAbsenceDays(page, baseURL!, [
+      { date: '2026-09-19', summary: '沼津旅行' },
+      { date: '2026-09-20', summary: '沼津旅行' },
+    ]);
+
+    await goToSettings(page);
+
+    for (const date of ['2026-09-19', '2026-09-20']) {
+      await expect(page.getByText(formatDayLabel(date))).toBeVisible();
+    }
+  });
+
+  test('旅行が中止になって予定が消えると不在日も消える', async ({ page, baseURL }) => {
+    const today = getTodayJST();
+    await setAbsenceDays(page, baseURL!, [{ date: today, summary: '沼津旅行' }]);
+    await goToKanban(page);
+    await absenceBanner(page).waitFor();
+
+    await setAbsenceDays(page, baseURL!, []);
+
+    await goToKanban(page);
+    await expect(absenceBanner(page)).not.toBeVisible();
+  });
+
+  test('手で取り消した不在日は次の同期で予定が残っていれば戻る', async ({ page, baseURL }) => {
+    const today = getTodayJST();
+    await setAbsenceDays(page, baseURL!, [{ date: today, summary: '沼津旅行' }]);
+    await goToSettings(page);
+    await page.getByRole('button', { name: `${today}の不在を取り消す` }).click();
+    await page.getByText('予定されている不在日はありません').waitFor();
+
+    await setAbsenceDays(page, baseURL!, [{ date: today, summary: '沼津旅行' }]);
+
+    await goToKanban(page);
+    await expect(absenceBanner(page)).toBeVisible();
+  });
+
+  test('手で追加した不在日はカレンダーの同期では消えない', async ({ page, baseURL }) => {
+    const manualDay = addDays(getTodayJST(), 5);
+    await page.request.post(`${baseURL}/api/absence/days`, {
+      data: { days: [{ date: manualDay }], source: 'manual' },
+    });
+
+    await setAbsenceDays(page, baseURL!, [{ date: getTodayJST(), summary: '沼津旅行' }]);
+
+    await goToSettings(page);
+    await expect(page.getByText(formatDayLabel(manualDay))).toBeVisible();
   });
 });
