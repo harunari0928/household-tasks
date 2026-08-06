@@ -1,4 +1,10 @@
-import { getTodayJST, getCurrentHourJST } from '@household-tasks/shared';
+import {
+  getTodayJST,
+  getCurrentHourJST,
+  getVisibleGarbageTypes,
+  buildGarbageTaskTitle,
+  type GarbageTypeId,
+} from '@household-tasks/shared';
 import {
   getDb,
   getActiveTasks,
@@ -10,10 +16,31 @@ import {
   hasRecentInstance,
   createTaskInstance,
   getLastCompletedDateJST,
+  getHiddenGarbageTypes,
+  type TaskDefinitionRow,
 } from './db.js';
 import { shouldCreateToday, shouldCreateThisHour, isWithinActivePeriod, calculateNextDueDate } from './matcher.js';
 
 const dryRun = process.argv.includes('--dry-run');
+
+/**
+ * ごみ捨てタスク（special_kind='garbage'）の起票可否とタイトルを決める。
+ *
+ * 収集が無い日（日曜・年末年始など）と、設定で非表示にした種類しか無い日は起票しない。
+ * 起票する場合はタイトルに種類を添える（例: `ゴミ捨て（燃せるごみ）`）。
+ * ごみ捨て以外のタスクは常にそのまま起票する。
+ */
+function resolveGarbageTask(
+  task: TaskDefinitionRow,
+  today: string,
+  hiddenTypes: readonly GarbageTypeId[],
+): { skip: boolean; title: string } {
+  if (task.special_kind !== 'garbage') return { skip: false, title: task.name };
+
+  const types = getVisibleGarbageTypes(today, hiddenTypes);
+  if (types.length === 0) return { skip: true, title: task.name };
+  return { skip: false, title: buildGarbageTaskTitle(task.name, types) };
+}
 
 async function main() {
   const today = getTodayJST();
@@ -31,6 +58,7 @@ async function main() {
   const tasks = getActiveTasks(db).filter((task) =>
     sickMode ? task.sick_day_behavior !== 'normal_only' : task.sick_day_behavior !== 'sick_only'
   );
+  const hiddenGarbageTypes = getHiddenGarbageTypes(db);
   let created = 0;
   let skipped = 0;
   let failed = 0;
@@ -45,13 +73,20 @@ async function main() {
     if (!isWithinActivePeriod(task, today)) continue;
     if (!shouldCreateThisHour(task, currentHour)) continue;
 
+    // 収集が無い日／設定で非表示にした種類だけの日はごみ捨てを起票しない
+    const garbage = resolveGarbageTask(task, today, hiddenGarbageTypes);
+    if (garbage.skip) {
+      console.log(`  SKIP (no garbage collection today): "${task.name}"`);
+      continue;
+    }
+
     if (isAlreadyCreatedToday(db, task.id, today)) {
       skipped++;
       continue;
     }
 
     if (dryRun) {
-      console.log(`  [DRY RUN] Would create: "${task.name}"`);
+      console.log(`  [DRY RUN] Would create: "${garbage.title}"`);
       created++;
       continue;
     }
@@ -72,10 +107,10 @@ async function main() {
       }
 
       const now = new Date().toISOString();
-      const instanceId = createTaskInstance(db, task.id, task.name, task.points, now);
+      const instanceId = createTaskInstance(db, task.id, garbage.title, task.points, now);
       logExecution(db, task.id, instanceId, 'created', undefined, today);
       created++;
-      console.log(`  CREATED: "${task.name}" (instance_id=${instanceId})`);
+      console.log(`  CREATED: "${garbage.title}" (instance_id=${instanceId})`);
 
       // Update next_due_date for interval-based tasks
       if (task.next_due_date) {
@@ -97,6 +132,13 @@ async function main() {
       const task = tasks.find((t) => t.id === task_definition_id);
       if (!task) continue;
 
+      // 再試行でも同じ判定を通す（失敗を引きずって収集の無い日に起票しないため）
+      const retryGarbage = resolveGarbageTask(task, today, hiddenGarbageTypes);
+      if (retryGarbage.skip) {
+        console.log(`  RETRY SKIP (no garbage collection today): "${task.name}"`);
+        continue;
+      }
+
       try {
         const hasDuplicate = hasRecentInstance(db, task.id, today, task.scheduled_hour);
         if (hasDuplicate) {
@@ -111,10 +153,10 @@ async function main() {
         }
 
         const now = new Date().toISOString();
-        const instanceId = createTaskInstance(db, task.id, task.name, task.points, now);
+        const instanceId = createTaskInstance(db, task.id, retryGarbage.title, task.points, now);
         logExecution(db, task.id, instanceId, 'created', undefined, today);
         created++;
-        console.log(`  RETRY OK: "${task.name}" (instance_id=${instanceId})`);
+        console.log(`  RETRY OK: "${retryGarbage.title}" (instance_id=${instanceId})`);
 
         if (task.next_due_date) {
           const nextDate = calculateNextDueDate(task, task.next_due_date);

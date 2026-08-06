@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { parseHiddenGarbageTypes, type GarbageTypeId } from '@household-tasks/shared';
 
 const DB_PATH = process.env.DB_PATH || './data/task_definitions.db';
 
@@ -24,6 +25,7 @@ export interface TaskDefinitionRow {
   points: number;
   scheduled_hour: number;
   sick_day_behavior: 'normal_only' | 'always' | 'sick_only';
+  special_kind: string | null;
 }
 
 type Migration = {
@@ -128,6 +130,22 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 16,
+    up: (db) => {
+      // special_kind: アプリ組み込みの特別な扱いを持つタスクの識別子。
+      // 'garbage' はごみ収集カレンダーと連動し、削除も禁止される（識別子が失われると
+      // 設定画面だけが残って起票されない、という分かりにくい壊れ方をするため）。
+      db.exec("ALTER TABLE task_definitions ADD COLUMN special_kind TEXT DEFAULT NULL");
+
+      // 既存の「ゴミ捨て」定義を拾って紐付ける。ID決め打ちを避けるため名前とカテゴリで探す。
+      db.prepare(`
+        UPDATE task_definitions SET special_kind = 'garbage'
+        WHERE category = 'trash'
+          AND (name = 'ゴミ捨て' OR name = 'ごみ捨て')
+      `).run();
+    },
+  },
 ];
 
 function runMigrations(db: Database.Database): void {
@@ -168,6 +186,19 @@ export function isSickChildModeEnabled(db: Database.Database): boolean {
     | { value: string }
     | undefined;
   return row?.value === '1';
+}
+
+export function getHiddenGarbageTypes(db: Database.Database): GarbageTypeId[] {
+  // app_settings は web 側のマイグレーションで作られるため、scheduler が先に起動した
+  // 直後は存在しないことがある。設定が読めない場合は「何も隠さない」に倒す。
+  try {
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'garbage_hidden_types'").get() as
+      | { value: string }
+      | undefined;
+    return parseHiddenGarbageTypes(row?.value);
+  } catch {
+    return [];
+  }
 }
 
 export function isAlreadyCreatedToday(db: Database.Database, taskDefId: number, today: string): boolean {

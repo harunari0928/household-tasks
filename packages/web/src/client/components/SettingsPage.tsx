@@ -1,5 +1,74 @@
 import { useState, useEffect } from 'react';
 import { useAssignees } from '../hooks/useAssignees.js';
+import { useGarbageSettings } from '../hooks/useGarbageSettings.js';
+
+const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+function formatNextDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAY_JA[d.getDay()]})`;
+}
+
+function GarbageSection() {
+  const { types, hiddenTypes, next, loading, toggleType } = useGarbageSettings();
+
+  if (loading) return null;
+
+  return (
+    <section className="mt-10">
+      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">ごみ収集</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        出すごみの種類を選びます。チェックを外した種類の日と、収集が無い日は
+        ごみ捨てタスクを起票しません（すでに起票済みのタスクは残ります）。
+      </p>
+
+      <div className="flex flex-col gap-2 mb-4">
+        {types.map((type) => {
+          const checked = !hiddenTypes.includes(type.id);
+          return (
+            <label
+              key={type.id}
+              className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 cursor-pointer"
+            >
+              <span className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleType(type.id)}
+                  className="w-4 h-4 accent-blue-500 cursor-pointer"
+                />
+                <span
+                  className={`text-sm font-medium ${
+                    checked
+                      ? 'text-gray-700 dark:text-gray-300'
+                      : 'text-gray-400 dark:text-gray-500 line-through'
+                  }`}
+                >
+                  {type.label}
+                </span>
+              </span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 ml-3">
+                {type.scheduleLabel}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        次回のごみ捨て:{' '}
+        {next ? (
+          <span className="font-medium text-gray-800 dark:text-gray-200">
+            {formatNextDate(next.date)}{' '}
+            {next.types.map((t) => types.find((x) => x.id === t)?.label ?? t).join('、')}
+          </span>
+        ) : (
+          <span className="text-gray-400 dark:text-gray-500">当分ありません</span>
+        )}
+      </p>
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const { assignees, fetchAssignees, addAssignee, removeAssignee } = useAssignees();
@@ -61,6 +130,8 @@ export default function SettingsPage() {
           </button>
         </div>
       </section>
+
+      <GarbageSection />
     </div>
   );
 }

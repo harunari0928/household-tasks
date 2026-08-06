@@ -11,6 +11,7 @@ import statsRouter from './routes/stats.js';
 import settingsRouter from './routes/settings.js';
 import kanbanRouter from './routes/kanban.js';
 import sickModeRouter from './routes/sickMode.js';
+import garbageRouter from './routes/garbage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,6 +34,7 @@ app.use('/api/stats', statsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/kanban', kanbanRouter);
 app.use('/api/sick-mode', sickModeRouter);
+app.use('/api/garbage', garbageRouter);
 
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {
@@ -57,6 +59,15 @@ app.post('/api/test/reset', (_req, res) => {
 // Test-only: override server time
 app.post('/api/test/set-time', (req, res) => {
   setTestNow(req.body.time || null);
+  res.json({ success: true });
+});
+
+// Test-only: mark a task definition as a special (built-in) task.
+// 通常のAPIからは設定できない（マイグレーションで付与される）ため、テスト用に用意する。
+app.post('/api/test/special-kind', (req, res) => {
+  const { id, specialKind } = req.body ?? {};
+  const db = getDb();
+  db.prepare('UPDATE task_definitions SET special_kind = ? WHERE id = ?').run(specialKind ?? null, id);
   res.json({ success: true });
 });
 
