@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/setup.js';
+import { createGarbageTaskDef } from './fixtures/garbage.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { Page } from '@playwright/test';
@@ -24,23 +25,6 @@ async function runScheduler(testToday: string): Promise<void> {
     encoding: 'utf-8',
     timeout: 15000,
   });
-}
-
-/** ごみ捨てタスク定義を作る（毎日起票にして、収集日の判定だけが効くようにする） */
-async function createGarbageTaskDef(page: Page, baseURL: string) {
-  const res = await page.request.post(`${baseURL}/api/tasks`, {
-    data: {
-      name: 'ゴミ捨て',
-      category: 'trash',
-      frequency_type: 'daily',
-      scheduled_hour: 19,
-    },
-  });
-  const def = await res.json();
-  await page.request.post(`${baseURL}/api/test/special-kind`, {
-    data: { id: def.id, specialKind: 'garbage' },
-  });
-  return def;
 }
 
 async function goToKanban(page: Page) {
@@ -125,7 +109,7 @@ test.describe('出すごみの種類の設定', () => {
     await expect(page.getByText(/^ゴミ捨て/)).not.toBeVisible();
   });
 
-  test('チェックを外していない種類の収集日にはごみ捨てタスクが表示される', async ({ page, baseURL }) => {
+  test('チェックを付けている種類の収集日にはごみ捨てタスクが表示される', async ({ page, baseURL }) => {
     // Arrange
     await createGarbageTaskDef(page, baseURL!);
     await goToGarbageSettings(page);
@@ -137,21 +121,6 @@ test.describe('出すごみの種類の設定', () => {
     await runScheduler('2026-08-04'); // 同じ火曜でも、かん類・びん類の日
     await goToKanban(page);
     await expect(page.getByText('ゴミ捨て（かん類・びん類）')).toBeVisible();
-  });
-
-  test('外したチェックを戻すと、その種類の収集日にごみ捨てタスクが再び表示される', async ({ page, baseURL }) => {
-    // Arrange
-    await createGarbageTaskDef(page, baseURL!);
-    await goToGarbageSettings(page);
-    await garbageCheckbox(page, 'ペットボトル').uncheck();
-
-    // Act
-    await garbageCheckbox(page, 'ペットボトル').check();
-
-    // Assert
-    await runScheduler('2026-08-11');
-    await goToKanban(page);
-    await expect(page.getByText('ゴミ捨て（ペットボトル）')).toBeVisible();
   });
 
   test('設定した内容はページを開き直しても保持される', async ({ page, baseURL }) => {

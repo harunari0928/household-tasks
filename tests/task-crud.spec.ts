@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/setup.js';
+import { createGarbageTaskDef } from './fixtures/garbage.js';
 
 test.describe('実行期間設定', () => {
   test('初期状態は期間指定しないが選択されている', async ({ page }) => {
@@ -929,13 +930,7 @@ test.describe('タスク削除', () => {
 
   test('ごみ捨てタスクには削除ボタンが表示されない', async ({ page, baseURL }) => {
     // Arrange
-    const res = await page.request.post(`${baseURL}/api/tasks`, {
-      data: { name: 'ゴミ捨て', category: 'trash', frequency_type: 'daily' },
-    });
-    const def = await res.json();
-    await page.request.post(`${baseURL}/api/test/special-kind`, {
-      data: { id: def.id, specialKind: 'garbage' },
-    });
+    await createGarbageTaskDef(page, baseURL!);
 
     // Act
     await page.goto('/#/tasks');
