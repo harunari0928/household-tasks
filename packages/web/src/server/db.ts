@@ -268,6 +268,22 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 16,
+    up: (db) => {
+      // special_kind: アプリ組み込みの特別な扱いを持つタスクの識別子。
+      // 'garbage' はごみ収集カレンダーと連動し、削除も禁止される（識別子が失われると
+      // 設定画面だけが残って起票されない、という分かりにくい壊れ方をするため）。
+      db.exec("ALTER TABLE task_definitions ADD COLUMN special_kind TEXT DEFAULT NULL");
+
+      // 既存の「ゴミ捨て」定義を拾って紐付ける。ID決め打ちを避けるため名前とカテゴリで探す。
+      db.prepare(`
+        UPDATE task_definitions SET special_kind = 'garbage'
+        WHERE category = 'trash'
+          AND (name = 'ゴミ捨て' OR name = 'ごみ捨て')
+      `).run();
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

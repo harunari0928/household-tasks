@@ -344,7 +344,8 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
         <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
           {task ? 'タスクを編集' : 'タスクを追加'}
         </h2>
-        {task && onDeleted ? (
+        {/* special_kind 付き（ごみ捨て等）はアプリ機能と紐付くため削除させない。無効化で止める */}
+        {task && onDeleted && !task.special_kind ? (
           <button
             type="button"
             onClick={() => setShowDeleteConfirm(true)}

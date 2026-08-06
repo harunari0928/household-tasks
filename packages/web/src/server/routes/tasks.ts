@@ -358,9 +358,21 @@ router.put('/:id', (req: Request, res: Response) => {
 // DELETE /api/tasks/:id (物理削除)
 router.delete('/:id', (req: Request, res: Response) => {
   const db = getDb();
-  const existing = db.prepare('SELECT * FROM task_definitions WHERE id = ?').get(req.params.id);
+  const existing = db.prepare('SELECT * FROM task_definitions WHERE id = ?').get(req.params.id) as
+    | { special_kind: string | null }
+    | undefined;
   if (!existing) {
     res.status(404).json({ error: 'タスクが見つかりません' });
+    return;
+  }
+
+  // special_kind を持つタスクはアプリ機能と紐付いているため物理削除させない。
+  // 削除すると設定画面だけが残って起票されない状態になり、原因が分かりにくい。
+  // 使わない場合は is_active のトグル（無効化）で止める。
+  if (existing.special_kind) {
+    res.status(409).json({
+      error: 'このタスクはごみ収集設定と連動しているため削除できません。使わない場合は無効にしてください。',
+    });
     return;
   }
 

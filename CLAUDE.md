@@ -84,6 +84,26 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
   同じ（共同タスク `ryo,yuka` は分割して両者に満額加算）。**`ht stats` は共同タスクを別枠で集計するため
   数字が一致しない**ので、変更するときは3か所の整合に注意。
 
+## ごみ収集カレンダー連動
+
+- **ごみ捨てタスクは収集日に合わせて起票される。** カレンダー（小田原・足柄地区）は
+  `shared/garbage.ts` にあり、曜日と第何週かだけで計算する（外部データ・APIに依存しない）。
+  - 収集が無い日（**日曜**・年末年始 12/31〜1/3）は起票しない。
+  - タイトルに種類を出す（例:「ゴミ捨て（燃せるごみ）」）。`task_instances.title` に
+    可変文字列が入るので、**タスク名の完全一致で照合するコードを書かないこと**。
+  - 設定画面（`#/settings` → ごみ収集）で種類ごとに表示/非表示を切り替えられる。
+    保存先は `app_settings` の `garbage_hidden_types`（JSON配列）。
+    **設定変更は起票済みのタスクには遡及しない**（当日分は残る）。
+- **同じ収集ルールが Home Assistant 側にもある。**
+  `~/repos/homeassistant/config/custom_components/claude_code_conversation/conversation.py`
+  の `_execute_garbage_collection`（音声で「今日のごみは何？」に答えるもの）。
+  **収集ルールが変わったら両方を直す。** 共有していないのは、HA の音声応答を
+  このアプリの死活に依存させないため。
+- **`special_kind` 付きのタスク定義は物理削除できない**（API が 409 を返し、UI は削除ボタンを出さない）。
+  ごみ捨ては `special_kind = 'garbage'`。識別子が失われると設定画面だけが残って起票されない、という
+  分かりにくい壊れ方をするため。**止めたいときは `is_active` のトグル（無効化）を使う。**
+  マイグレーション v16 が名前（`ゴミ捨て`/`ごみ捨て`）とカテゴリで既存定義に付与する（ID決め打ちではない）。
+
 ## Key conventions
 
 - All dates use JST (Asia/Tokyo). `getTodayJST()` in shared/ returns `YYYY-MM-DD`.

@@ -66,6 +66,8 @@ export interface TaskDefinition {
   points: number;
   scheduled_hour: number;
   sick_day_behavior: SickDayBehaviorKey;
+  /** アプリ機能と紐付く特別なタスクの識別子（'garbage' 等）。付いていると削除できない */
+  special_kind: string | null;
   created_at: string;
   updated_at: string;
 }

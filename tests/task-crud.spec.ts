@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/setup.js';
+import { createGarbageTaskDef } from './fixtures/garbage.js';
 
 test.describe('実行期間設定', () => {
   test('初期状態は期間指定しないが選択されている', async ({ page }) => {
@@ -925,6 +926,19 @@ test.describe('タスク削除', () => {
       const res = await page.request.get(attachmentUrl);
       expect(res.status()).toBe(404);
     });
+  });
+
+  test('ごみ捨てタスクには削除ボタンが表示されない', async ({ page, baseURL }) => {
+    // Arrange
+    await createGarbageTaskDef(page, baseURL!);
+
+    // Act
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /ごみ関連/ }).click();
+    await page.getByText('ゴミ捨て').click();
+
+    // Assert
+    await expect(page.getByRole('button', { name: '削除' })).not.toBeVisible();
   });
 
   test('タスクの削除が通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
