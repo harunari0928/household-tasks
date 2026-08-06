@@ -44,6 +44,7 @@ interface TaskDef {
   points: number;
   scheduled_hour: number;
   sick_day_behavior: string;
+  absence_behavior: string;
   created_at: string;
   updated_at: string;
 }
@@ -98,6 +99,17 @@ program
       conditions.push(
         sickMode ? "td.sick_day_behavior != 'normal_only'" : "td.sick_day_behavior != 'sick_only'"
       );
+
+      // 不在日（帰省・旅行）: カンバンと同じく在宅前提のタスクを隠す。
+      // ここを抜くと音声アシスタントが「やり残し」として読み上げてしまう。
+      // absence_days は web 側のマイグレーションで作られるので、無いときは不在扱いしない。
+      try {
+        const todayJST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const absent = db.prepare('SELECT 1 FROM absence_days WHERE date = ?').get(todayJST);
+        if (absent) conditions.push("td.absence_behavior != 'hidden'");
+      } catch {
+        // テーブルが無い（マイグレーション前）ときは通常表示
+      }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
       const rows = db.prepare(
@@ -337,6 +349,38 @@ program
     }
   });
 
+// ht absence
+program
+  .command('absence')
+  .description('Show absence days (帰省・旅行で不在の日) and keywords')
+  .action(async () => {
+    try {
+      const res = (await apiFetch('GET', '/api/absence')) as {
+        keywords: string[];
+        today: { date: string; summary: string | null } | null;
+        days: Array<{ date: string; summary: string | null; source: string }>;
+        hiddenTaskCount: number;
+      };
+      if (res.today) {
+        const why = res.today.summary ? `「${res.today.summary}」` : 'manual';
+        console.log(`Today IS an absence day (${why}).`);
+      } else {
+        console.log('Today is not an absence day.');
+      }
+      console.log(`Keywords: ${res.keywords.join(', ') || '(none)'}`);
+      console.log(`Tasks hidden while away: ${res.hiddenTaskCount}`);
+      if (res.days.length > 0) {
+        console.log('\nUpcoming absence days:');
+        for (const day of res.days) {
+          console.log(`  ${day.date}  ${day.summary ?? ''} [${day.source}]`);
+        }
+      }
+    } catch (e: unknown) {
+      console.error(`Error: ${(e as Error).message}`);
+      process.exit(1);
+    }
+  });
+
 // ht task (task definition management via Web API)
 const task = program
   .command('task')
@@ -406,6 +450,7 @@ task
         `Points:         ${t.points}`,
         `Scheduled hour: ${t.scheduled_hour}`,
         `Sick day:       ${t.sick_day_behavior}`,
+        `Absence:        ${t.absence_behavior}`,
         `Active:         ${t.is_active ? 'yes' : 'no'}`,
         `Notes:          ${t.notes || '-'}`,
       ];
@@ -430,6 +475,7 @@ task
   .option('--points <n>', 'Points (0-10)', parseInt)
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
   .option('--sick-day-behavior <behavior>', 'Sick child day behavior (normal_only,always,sick_only)')
+  .option('--absence-behavior <behavior>', 'Absence (帰省・旅行) behavior (normal,hidden)')
   .action(async (opts: {
     name: string;
     category: string;
@@ -441,6 +487,7 @@ task
     points?: number;
     scheduledHour?: number;
     sickDayBehavior?: string;
+    absenceBehavior?: string;
   }) => {
     try {
       const body: Record<string, unknown> = {
@@ -455,6 +502,7 @@ task
       if (opts.points !== undefined) body.points = opts.points;
       if (opts.scheduledHour !== undefined) body.scheduled_hour = opts.scheduledHour;
       if (opts.sickDayBehavior !== undefined) body.sick_day_behavior = opts.sickDayBehavior;
+      if (opts.absenceBehavior !== undefined) body.absence_behavior = opts.absenceBehavior;
 
       const task = await apiFetch('POST', '/api/tasks', body) as TaskDef;
       console.log(JSON.stringify(task, null, 2));
@@ -479,6 +527,7 @@ task
   .option('--points <n>', 'Points (0-10)', parseInt)
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
   .option('--sick-day-behavior <behavior>', 'Sick child day behavior (normal_only,always,sick_only)')
+  .option('--absence-behavior <behavior>', 'Absence (帰省・旅行) behavior (normal,hidden)')
   .action(async (idStr: string, opts: {
     name?: string;
     category?: string;
@@ -490,6 +539,7 @@ task
     points?: number;
     scheduledHour?: number;
     sickDayBehavior?: string;
+    absenceBehavior?: string;
   }) => {
     try {
       // Fetch current definition
@@ -527,6 +577,7 @@ task
       body.points = opts.points ?? current.points;
       body.scheduled_hour = opts.scheduledHour ?? current.scheduled_hour;
       body.sick_day_behavior = opts.sickDayBehavior ?? current.sick_day_behavior;
+      body.absence_behavior = opts.absenceBehavior ?? current.absence_behavior;
 
       const updated = await apiFetch('PUT', `/api/tasks/${idStr}`, body) as TaskDef;
       console.log(JSON.stringify(updated, null, 2));

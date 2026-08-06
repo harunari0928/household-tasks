@@ -284,6 +284,61 @@ const migrations: Migration[] = [
       `).run();
     },
   },
+  {
+    version: 17,
+    up: (db) => {
+      // absence_behavior: 帰省・旅行などで家を空ける日の扱い。
+      // 'hidden' なら不在日は起票せず、カンバンにも出さない。
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN absence_behavior TEXT NOT NULL DEFAULT 'normal';
+
+        -- 不在日。Home Assistant の家族カレンダー同期が入れ替える。
+        -- source='calendar' の行は同期のたびに全消し＆再投入するので、
+        -- 手動で足した休みが消えないよう source='manual' と分けて持つ。
+        CREATE TABLE IF NOT EXISTS absence_days (
+          date TEXT PRIMARY KEY,
+          summary TEXT DEFAULT NULL,
+          source TEXT NOT NULL DEFAULT 'calendar',
+          updated_at TEXT NOT NULL
+        );
+      `);
+
+      // 既定値: 「家に居ないと物理的にできない家事」を hidden に倒す。
+      // 不在中でもできる/やるべきもの（注文・家計・受診・子の世話）は normal のまま。
+      // カテゴリで一括指定してから、下で例外を戻す。
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'hidden'
+        WHERE category IN ('water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash');
+      `);
+
+      // カテゴリ既定から外れるもの: 注文・在庫確認・電池交換は外出先や帰宅後でも支障なく、
+      // 締切のある注文（パル・Oisix）を不在で飛ばすと1週間ぶん買い物が消えるので normal に戻す。
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'normal'
+        WHERE name LIKE '%注文%'
+           OR name LIKE '%在庫のチェック%'
+           OR name LIKE '%電池交換%';
+      `);
+
+      // childcare は既定 normal（帰省先でも子の世話は要る）だが、
+      // 保育園の送り迎え・家の設備に紐づくものは不在日には発生しないので hidden。
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'hidden'
+        WHERE category = 'childcare'
+          AND (name LIKE '%保育園%' OR name LIKE '%布団シーツ%' OR name LIKE '%植物水やり%'
+               OR name LIKE '%チェーン%');
+      `);
+
+      // 自宅の炊事・自宅設備に紐づくものは、カテゴリ既定が normal でも不在日には発生しない。
+      // （帰省先で「晩御飯つくる」「食後片付け」は出ても意味がない）
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'hidden'
+        WHERE (category = 'cooking' AND (
+                 name LIKE '%晩御飯%' OR name LIKE '%片付け%' OR name LIKE '%食器%'))
+           OR (category = 'lifestyle' AND name LIKE '%サーキュレーター%');
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

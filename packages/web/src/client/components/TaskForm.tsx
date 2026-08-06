@@ -1,10 +1,23 @@
 import { useState, useCallback, useRef } from 'react';
-import { CATEGORIES, SICK_DAY_BEHAVIORS, type CategoryKey, type TaskDefinition, type FrequencyTypeKey, type SickDayBehaviorKey } from '../types.js';
+import { CATEGORIES, SICK_DAY_BEHAVIORS, ABSENCE_BEHAVIORS, type CategoryKey, type TaskDefinition, type FrequencyTypeKey, type SickDayBehaviorKey, type AbsenceBehaviorKey } from '../types.js';
 import FrequencySelector from './FrequencySelector.js';
 import MarkdownEditor, { type PendingFile } from './MarkdownEditor.js';
 import AttachmentsList from './AttachmentsList.js';
 import { apiFetch, type ApiResult } from '../lib/api.js';
 import { useToast } from '../contexts/ToastContext.js';
+
+/**
+ * 在宅が前提になりやすいカテゴリ。新規タスクの「不在時の扱い」の初期値に使う。
+ * サーバー側 (`routes/tasks.ts` の HOME_BOUND_CATEGORIES) と揃えること。
+ */
+const HOME_BOUND_CATEGORIES = new Set<string>([
+  'water',
+  'kitchen',
+  'floor',
+  'entrance',
+  'laundry',
+  'trash',
+]);
 
 interface Props {
   task?: TaskDefinition | null;
@@ -73,6 +86,13 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   const [points, setPoints] = useState<string>(String(task?.points ?? 1));
   const [sickDayBehavior, setSickDayBehavior] = useState<SickDayBehaviorKey>(
     task?.sick_day_behavior ?? 'normal_only',
+  );
+  // 新規作成時はカテゴリから推定した既定値を初期値にする（在宅前提の家事は非表示側）。
+  // 初期値を1度だけ決めるのは、カテゴリを切り替えたときに利用者が明示的に選んだ値を
+  // 黙って書き換えないため。
+  const [absenceBehavior, setAbsenceBehavior] = useState<AbsenceBehaviorKey>(
+    task?.absence_behavior ??
+      (HOME_BOUND_CATEGORIES.has(task?.category ?? defaultCategory) ? 'hidden' : 'normal'),
   );
   const initialPeriodEnabled =
     task?.period_start_mm != null &&
@@ -242,6 +262,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       points: pointsValue,
       scheduled_hour: scheduledHour,
       sick_day_behavior: sickDayBehavior,
+      absence_behavior: absenceBehavior,
     };
 
     if (['n_days', 'n_weeks', 'n_months', 'days_after_completion'].includes(frequencyType)) {
@@ -413,6 +434,28 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
             </select>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               子ども風邪の日モード中にこのタスクをどう扱うか
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="absence-behavior" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              不在時の扱い
+            </label>
+            <select
+              id="absence-behavior"
+              value={absenceBehavior}
+              onChange={(e) => setAbsenceBehavior(e.target.value as AbsenceBehaviorKey)}
+              className={inputBase}
+            >
+              {(Object.entries(ABSENCE_BEHAVIORS) as [AbsenceBehaviorKey, string][]).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              帰省・旅行などで家を空ける日（家族カレンダー由来）の扱い。
+              「不在中は非表示」にすると、その日は起票されません
             </p>
           </div>
 

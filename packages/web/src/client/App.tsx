@@ -10,6 +10,7 @@ import useTheme from './hooks/useTheme.js';
 import { useAssignees } from './hooks/useAssignees.js';
 import { useApi } from './hooks/useApi.js';
 import { useSickMode } from './hooks/useSickMode.js';
+import { useAbsence } from './hooks/useAbsence.js';
 
 type Page = 'kanban' | 'tasks' | 'stats' | 'settings';
 
@@ -25,6 +26,7 @@ export default function App() {
   const { request } = useApi();
   const { theme, toggleTheme } = useTheme();
   const { sickMode, toggleSickMode } = useSickMode();
+  const { today: absenceToday } = useAbsence();
   const [currentPage, setCurrentPage] = useState<Page>(getPage);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('water');
   const [tasks, setTasks] = useState<TaskDefinition[]>([]);
@@ -319,6 +321,15 @@ export default function App() {
             className="bg-red-800 dark:bg-red-950 text-white text-center text-xs sm:text-sm font-bold py-1.5 px-3 sick-mode-banner"
           >
             🤒 子ども風邪の日モード中 — 不要不急のタスクはお休みしています
+          </div>
+        )}
+
+        {absenceToday && (
+          <div
+            role="status"
+            className="bg-amber-700 dark:bg-amber-900 text-white text-center text-xs sm:text-sm font-bold py-1.5 px-3 absence-banner"
+          >
+            🧳 不在日{absenceToday.summary ? `（${absenceToday.summary}）` : ''} — 在宅が前提のタスクはお休みしています
           </div>
         )}
       </header>

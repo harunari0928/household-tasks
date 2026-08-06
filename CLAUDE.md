@@ -113,4 +113,23 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
 - Express `app` and `router` require explicit type annotations to avoid TS2742 errors with pnpm's strict module resolution.
 - `package.json` `pnpm.onlyBuiltDependencies` must include `better-sqlite3`, `esbuild`, `sqlite3` — otherwise Docker builds fail with missing native modules.
 - Kanban board uses SSE (`/api/kanban/events`) for real-time updates between users.
+  - **ブラウザの同時接続上限（HTTP/1.1 で 1オリジン約6本）に注意。** 1タブで
+    KanbanBoard と useSickMode が常時 EventSource を張っているので、
+    新しいフックが無条件に SSE を開くと**2タブ目の SSE が繋がらなくなる**
+    （風邪の日モードの別タブ即時反映が壊れる形で実際に踏んだ）。
+    購読は `useAbsence({ subscribe: true })` のように**必要な画面だけ opt-in** にする。
 - `@dnd-kit` for drag-and-drop on the Kanban board.
+- **不在日（帰省・旅行）**: `absence_days` テーブルの日付は
+  Home Assistant の `config/scripts/absence_sync.py` が家族カレンダーから同期する
+  （判定キーワードはアプリ側 `app_settings.absence_keywords`、設定画面で編集可）。
+  タスクごとの扱いは `task_definitions.absence_behavior`（`normal` / `hidden`）。
+  - **不在判定のスキップは `updateNextDueDate` より手前で行う**（scheduler の
+    トップレベル filter）。これにより `yearly` などの期限到来型は
+    next_due_date を消費せず**帰宅日に繰り越して起票**される。
+    重複スキップの分岐は意図的に next_due_date を進めるので、
+    **そちらに相乗りさせると年1タスクが「不在で1年後送り」になる**。
+  - `daily`/`weekly`/`monthly` は日付マッチなので不在日ぶんは単に消える
+    （旅行中の浴槽掃除が積み上がらない、が意図）。
+  - Playwright の `getByRole('button', {name})` は**部分一致**。設定画面に
+    「追加」ボタンを増やすときは aria-label に「追加」を**含めない**
+    （含めると既存テストが strict mode violation で落ちる）。

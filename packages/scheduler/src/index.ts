@@ -10,6 +10,7 @@ import {
   getActiveTasks,
   isAlreadyCreatedToday,
   isSickChildModeEnabled,
+  findAbsenceDay,
   logExecution,
   updateNextDueDate,
   getFailedTasks,
@@ -54,10 +55,25 @@ async function main() {
     console.log('Sick child mode is ON: skipping normal_only tasks, including sick_only tasks');
   }
 
+  // 不在日（帰省・旅行）は在宅が前提のタスクを起票しない。
+  //
+  // ここで対象タスクを丸ごと落としているのは意図的。main/retry の両ループより手前で
+  // 除外することで next_due_date に一切触れず、期限到来型（yearly/n_days/n_months/n_weeks）が
+  // **帰宅日に繰り越して起票される**ようにしている。
+  // 重複スキップの分岐は逆に next_due_date を消費するので、そちらに相乗りさせてはいけない
+  // （相乗りさせると年1タスクが「不在で1年後送り」になる）。
+  const absence = findAbsenceDay(db, today);
+  if (absence) {
+    const why = absence.summary ? `「${absence.summary}」` : '手動設定';
+    console.log(`Absence day (${why}): skipping tasks with absence_behavior='hidden'`);
+  }
+
   // 子ども風邪の日モード: ON中は通常時のみタスクを起票しない。OFF中は風邪の日専用タスクを起票しない
-  const tasks = getActiveTasks(db).filter((task) =>
-    sickMode ? task.sick_day_behavior !== 'normal_only' : task.sick_day_behavior !== 'sick_only'
-  );
+  const tasks = getActiveTasks(db)
+    .filter((task) =>
+      sickMode ? task.sick_day_behavior !== 'normal_only' : task.sick_day_behavior !== 'sick_only'
+    )
+    .filter((task) => !absence || task.absence_behavior !== 'hidden');
   const hiddenGarbageTypes = getHiddenGarbageTypes(db);
   let created = 0;
   let skipped = 0;
