@@ -46,6 +46,14 @@ export const SICK_DAY_BEHAVIORS = {
 
 export type SickDayBehaviorKey = keyof typeof SICK_DAY_BEHAVIORS;
 
+/** 帰省・旅行などで家を空ける日の扱い */
+export const ABSENCE_BEHAVIORS = {
+  normal: '不在でも表示',
+  hidden: '不在中は非表示',
+} as const;
+
+export type AbsenceBehaviorKey = keyof typeof ABSENCE_BEHAVIORS;
+
 export interface TaskDefinition {
   id: number;
   name: string;
@@ -68,6 +76,7 @@ export interface TaskDefinition {
   sick_day_behavior: SickDayBehaviorKey;
   /** アプリ機能と紐付く特別なタスクの識別子（'garbage' 等）。付いていると削除できない */
   special_kind: string | null;
+  absence_behavior: AbsenceBehaviorKey;
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +98,7 @@ export interface TaskDefinitionInput {
   points?: number;
   scheduled_hour: number;
   sick_day_behavior?: SickDayBehaviorKey;
+  absence_behavior?: AbsenceBehaviorKey;
 }
 
 export interface ExecutionLog {

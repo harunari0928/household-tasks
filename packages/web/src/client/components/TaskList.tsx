@@ -113,6 +113,11 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
                   常に表示
                 </span>
               )}
+              {task.absence_behavior === 'hidden' && (
+                <span className="flex-shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded-full px-2 py-0.5">
+                  🧳 不在中は休み
+                </span>
+              )}
             </div>
           </div>
         </div>

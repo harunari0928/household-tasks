@@ -1,5 +1,9 @@
 import Database from 'better-sqlite3';
-import { parseHiddenGarbageTypes, type GarbageTypeId } from '@household-tasks/shared';
+import {
+  parseHiddenGarbageTypes,
+  type GarbageTypeId,
+  type AbsenceBehaviorKey,
+} from '@household-tasks/shared';
 
 const DB_PATH = process.env.DB_PATH || './data/task_definitions.db';
 
@@ -26,6 +30,7 @@ export interface TaskDefinitionRow {
   scheduled_hour: number;
   sick_day_behavior: 'normal_only' | 'always' | 'sick_only';
   special_kind: string | null;
+  absence_behavior: AbsenceBehaviorKey;
 }
 
 type Migration = {
@@ -146,6 +151,49 @@ const migrations: Migration[] = [
       `).run();
     },
   },
+  {
+    version: 17,
+    up: (db) => {
+      // 不在日（帰省・旅行）の扱い。列と表の定義は web 側の v17 と必ず揃えること。
+      // scheduler が web より先に起動した場合はこちらが先に作る。
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN absence_behavior TEXT NOT NULL DEFAULT 'normal';
+
+        CREATE TABLE IF NOT EXISTS absence_days (
+          date TEXT PRIMARY KEY,
+          summary TEXT DEFAULT NULL,
+          source TEXT NOT NULL DEFAULT 'calendar',
+          updated_at TEXT NOT NULL
+        );
+      `);
+
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'hidden'
+        WHERE category IN ('water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash');
+      `);
+
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'normal'
+        WHERE name LIKE '%注文%'
+           OR name LIKE '%在庫のチェック%'
+           OR name LIKE '%電池交換%';
+      `);
+
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'hidden'
+        WHERE category = 'childcare'
+          AND (name LIKE '%保育園%' OR name LIKE '%布団シーツ%' OR name LIKE '%植物水やり%'
+               OR name LIKE '%チェーン%');
+      `);
+
+      db.exec(`
+        UPDATE task_definitions SET absence_behavior = 'hidden'
+        WHERE (category = 'cooking' AND (
+                 name LIKE '%晩御飯%' OR name LIKE '%片付け%' OR name LIKE '%食器%'))
+           OR (category = 'lifestyle' AND name LIKE '%サーキュレーター%');
+      `);
+    },
+  },
 ];
 
 function runMigrations(db: Database.Database): void {
@@ -198,6 +246,27 @@ export function getHiddenGarbageTypes(db: Database.Database): GarbageTypeId[] {
     return parseHiddenGarbageTypes(row?.value);
   } catch {
     return [];
+  }
+}
+
+/**
+ * 指定日が不在日か。不在なら由来の予定名（手動追加なら null）を添えて返す。
+ *
+ * absence_days は web 側のマイグレーションでも作られるため、scheduler が先に起動した
+ * 直後は存在しないことがある。読めない場合は「不在ではない」に倒す
+ * （＝通常どおり起票する。判定不能でタスクが黙って消えるより、余分に出る方が安全）。
+ */
+export function findAbsenceDay(
+  db: Database.Database,
+  date: string,
+): { date: string; summary: string | null } | null {
+  try {
+    const row = db.prepare('SELECT date, summary FROM absence_days WHERE date = ?').get(date) as
+      | { date: string; summary: string | null }
+      | undefined;
+    return row ?? null;
+  } catch {
+    return null;
   }
 }
 

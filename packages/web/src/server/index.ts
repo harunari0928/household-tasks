@@ -12,6 +12,7 @@ import settingsRouter from './routes/settings.js';
 import kanbanRouter from './routes/kanban.js';
 import sickModeRouter from './routes/sickMode.js';
 import garbageRouter from './routes/garbage.js';
+import absenceRouter from './routes/absence.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +36,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/kanban', kanbanRouter);
 app.use('/api/sick-mode', sickModeRouter);
 app.use('/api/garbage', garbageRouter);
+app.use('/api/absence', absenceRouter);
 
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {
@@ -45,6 +47,7 @@ app.post('/api/test/reset', (_req, res) => {
   db.exec('DELETE FROM task_definitions');
   db.exec('DELETE FROM app_settings');
   db.exec('DELETE FROM users');
+  db.exec('DELETE FROM absence_days');
   setTestNow(null);
   // Clean uploads directory
   const uploadsDir = getUploadsDir();
@@ -68,6 +71,21 @@ app.post('/api/test/special-kind', (req, res) => {
   const { id, specialKind } = req.body ?? {};
   const db = getDb();
   db.prepare('UPDATE task_definitions SET special_kind = ? WHERE id = ?').run(specialKind ?? null, id);
+  res.json({ success: true });
+});
+
+// Test-only: set next_due_date directly.
+// PUT /api/tasks recalculates it from the real today, so tests that need a
+// specific due date (e.g. absence carry-over across a fixed date range)
+// cannot go through the normal update path without becoming date-dependent.
+app.post('/api/test/set-next-due-date', (req, res) => {
+  const { id, next_due_date: nextDueDate } = req.body ?? {};
+  if (typeof id !== 'number' || typeof nextDueDate !== 'string') {
+    res.status(400).json({ error: 'id (number) and next_due_date (string) are required' });
+    return;
+  }
+  const db = getDb();
+  db.prepare('UPDATE task_definitions SET next_due_date = ? WHERE id = ?').run(nextDueDate, id);
   res.json({ success: true });
 });
 

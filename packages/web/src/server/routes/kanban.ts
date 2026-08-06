@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { getDb } from '../db.js';
 import { getNowISO } from '../test-time.js';
 import { isSickModeEnabled } from './sickMode.js';
+import { isAbsentToday } from './absence.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -39,6 +40,13 @@ router.get('/', (req: Request, res: Response) => {
     conditions.push("td.sick_day_behavior != 'normal_only'");
   } else {
     conditions.push("td.sick_day_behavior != 'sick_only'");
+  }
+
+  // 不在日（帰省・旅行）: 在宅が前提のタスクを隠す。
+  // スケジューラが不在日に起票しないので通常は該当インスタンスが無いが、
+  // 不在日の直前に起票済みのぶんや、旅行の予定が後から入った場合はここで隠れる。
+  if (isAbsentToday(db)) {
+    conditions.push("td.absence_behavior != 'hidden'");
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
