@@ -15,7 +15,7 @@ function GarbageSection() {
   if (loading) return null;
 
   return (
-    <section className="mt-10">
+    <section className="mt-10" aria-label="ごみ収集">
       <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">ごみ収集</h3>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         出すごみの種類を選びます。チェックを外した種類の日と、収集が無い日は
@@ -35,6 +35,7 @@ function GarbageSection() {
                   type="checkbox"
                   checked={checked}
                   onChange={() => toggleType(type.id)}
+                  aria-label={type.label}
                   className="w-4 h-4 accent-blue-500 cursor-pointer"
                 />
                 <span

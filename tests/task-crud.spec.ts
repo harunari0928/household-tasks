@@ -927,6 +927,25 @@ test.describe('タスク削除', () => {
     });
   });
 
+  test('ごみ捨てタスクには削除ボタンが表示されない', async ({ page, baseURL }) => {
+    // Arrange
+    const res = await page.request.post(`${baseURL}/api/tasks`, {
+      data: { name: 'ゴミ捨て', category: 'trash', frequency_type: 'daily' },
+    });
+    const def = await res.json();
+    await page.request.post(`${baseURL}/api/test/special-kind`, {
+      data: { id: def.id, specialKind: 'garbage' },
+    });
+
+    // Act
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /ごみ関連/ }).click();
+    await page.getByText('ゴミ捨て').click();
+
+    // Assert
+    await expect(page.getByRole('button', { name: '削除' })).not.toBeVisible();
+  });
+
   test('タスクの削除が通信エラーになると、エラーが通知される', async ({ page, baseURL }) => {
     // Arrange
     await page.request.post(`${baseURL}/api/tasks`, {
