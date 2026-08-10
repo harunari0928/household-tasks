@@ -4,6 +4,8 @@ export {
   getGarbageTypeLabel,
   getGarbageTypesForDate,
   getVisibleGarbageTypes,
+  getVisibleGarbageTypesForDisposalDate,
+  getCollectionDateForDisposalDate,
   buildGarbageTaskTitle,
   parseHiddenGarbageTypes,
   findNextGarbageDay,

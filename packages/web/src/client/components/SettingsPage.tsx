@@ -61,7 +61,7 @@ function GarbageSection() {
       </div>
 
       <p className="text-sm text-gray-600 dark:text-gray-400">
-        次回のごみ捨て:{' '}
+        次にごみを出す日:{' '}
         {next ? (
           <span className="font-medium text-gray-800 dark:text-gray-200">
             {formatNextDate(next.date)}{' '}

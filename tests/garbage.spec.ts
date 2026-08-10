@@ -11,6 +11,10 @@ const execAsync = promisify(exec);
  *
  * 2026-08 の実際の収集日を基準にしている。
  * 第N週が絡む種類は「第1・第3」「第2・第4」の両方の週を確認する。
+ *
+ * ごみは前夜に出すので、scheduler に渡す日付は「出す日」であり、
+ * タスク名に出る種類は「その翌日に収集されるもの」になる。
+ * 例: 8/9(日)に起票されるタスクは、8/10(月)収集の燃せるごみ。
  */
 
 async function runScheduler(testToday: string): Promise<void> {
@@ -42,23 +46,23 @@ function garbageCheckbox(page: Page, label: string) {
 }
 
 test.describe('ごみ収集日ごとのごみ捨てタスク', () => {
-  // 種類ごとに、その種類が収集される日と、タスク名に出る表記
-  const COLLECTION_DAYS = [
-    { date: '2026-08-03', weekday: '月', label: '燃せるごみ' },
-    { date: '2026-08-06', weekday: '木', label: '燃せるごみ' },
-    { date: '2026-08-05', weekday: '水', label: 'トレー・プラスチック容器' },
-    { date: '2026-08-04', weekday: '第1火', label: 'かん類・びん類' },
-    { date: '2026-08-18', weekday: '第3火', label: 'かん類・びん類' },
-    { date: '2026-08-11', weekday: '第2火', label: 'ペットボトル' },
-    { date: '2026-08-25', weekday: '第4火', label: 'ペットボトル' },
-    { date: '2026-08-07', weekday: '第1金', label: '紙・布類' },
-    { date: '2026-08-21', weekday: '第3金', label: '紙・布類' },
-    { date: '2026-08-14', weekday: '第2金', label: '燃せないごみ' },
-    { date: '2026-08-28', weekday: '第4金', label: '特殊品（蛍光灯・スプレー缶・乾電池など）' },
+  // 出す日（前夜）と、その翌日に収集される種類＝タスク名に出る表記
+  const DISPOSAL_DAYS = [
+    { date: '2026-08-02', weekday: '日', collection: '月', label: '燃せるごみ' },
+    { date: '2026-08-05', weekday: '水', collection: '木', label: '燃せるごみ' },
+    { date: '2026-08-04', weekday: '火', collection: '水', label: 'トレー・プラスチック容器' },
+    { date: '2026-08-03', weekday: '月', collection: '第1火', label: 'かん類・びん類' },
+    { date: '2026-08-17', weekday: '月', collection: '第3火', label: 'かん類・びん類' },
+    { date: '2026-08-10', weekday: '月', collection: '第2火', label: 'ペットボトル' },
+    { date: '2026-08-24', weekday: '月', collection: '第4火', label: 'ペットボトル' },
+    { date: '2026-08-06', weekday: '木', collection: '第1金', label: '紙・布類' },
+    { date: '2026-08-20', weekday: '木', collection: '第3金', label: '紙・布類' },
+    { date: '2026-08-13', weekday: '木', collection: '第2金', label: '燃せないごみ' },
+    { date: '2026-08-27', weekday: '木', collection: '第4金', label: '特殊品（蛍光灯・スプレー缶・乾電池など）' },
   ];
 
-  for (const { date, weekday, label } of COLLECTION_DAYS) {
-    test(`${weekday}曜日(${date})は「${label}」のごみ捨てタスクが表示される`, async ({ page, baseURL }) => {
+  for (const { date, weekday, collection, label } of DISPOSAL_DAYS) {
+    test(`${weekday}曜日(${date})の夜は翌${collection}曜日収集の「${label}」のごみ捨てタスクが表示される`, async ({ page, baseURL }) => {
       // Arrange
       await createGarbageTaskDef(page, baseURL!);
 
@@ -71,16 +75,16 @@ test.describe('ごみ収集日ごとのごみ捨てタスク', () => {
     });
   }
 
-  // 収集が無い日
-  const NO_COLLECTION_DAYS = [
-    { date: '2026-08-08', reason: '土曜日' },
-    { date: '2026-08-09', reason: '日曜日' },
-    { date: '2026-01-01', reason: '年末年始' },
-    { date: '2026-12-31', reason: '年末年始' },
+  // 翌日に収集が無い日は出す必要がない
+  const NO_DISPOSAL_DAYS = [
+    { date: '2026-08-07', reason: '翌日が土曜日' },
+    { date: '2026-08-08', reason: '翌日が日曜日' },
+    { date: '2025-12-31', reason: '翌日が年末年始' },
+    { date: '2026-12-30', reason: '翌日が年末年始' },
   ];
 
-  for (const { date, reason } of NO_COLLECTION_DAYS) {
-    test(`${reason}(${date})はごみ捨てタスクが表示されない`, async ({ page, baseURL }) => {
+  for (const { date, reason } of NO_DISPOSAL_DAYS) {
+    test(`${reason}の日(${date})はごみ捨てタスクが表示されない`, async ({ page, baseURL }) => {
       // Arrange
       await createGarbageTaskDef(page, baseURL!);
 
@@ -95,7 +99,7 @@ test.describe('ごみ収集日ごとのごみ捨てタスク', () => {
 });
 
 test.describe('出すごみの種類の設定', () => {
-  test('種類のチェックを外すと、その種類の収集日にごみ捨てタスクが表示されなくなる', async ({ page, baseURL }) => {
+  test('種類のチェックを外すと、その種類を出す日にごみ捨てタスクが表示されなくなる', async ({ page, baseURL }) => {
     // Arrange
     await createGarbageTaskDef(page, baseURL!);
     await goToGarbageSettings(page);
@@ -104,12 +108,12 @@ test.describe('出すごみの種類の設定', () => {
     await garbageCheckbox(page, 'ペットボトル').uncheck();
 
     // Assert
-    await runScheduler('2026-08-11'); // ペットボトルの日
+    await runScheduler('2026-08-10'); // 翌8/11(火)がペットボトルの日
     await goToKanban(page);
     await expect(page.getByText(/^ゴミ捨て/)).not.toBeVisible();
   });
 
-  test('チェックを付けている種類の収集日にはごみ捨てタスクが表示される', async ({ page, baseURL }) => {
+  test('チェックを付けている種類を出す日にはごみ捨てタスクが表示される', async ({ page, baseURL }) => {
     // Arrange
     await createGarbageTaskDef(page, baseURL!);
     await goToGarbageSettings(page);
@@ -118,7 +122,7 @@ test.describe('出すごみの種類の設定', () => {
     await garbageCheckbox(page, 'ペットボトル').uncheck();
 
     // Assert
-    await runScheduler('2026-08-04'); // 同じ火曜でも、かん類・びん類の日
+    await runScheduler('2026-08-03'); // 翌8/4(火)は同じ火曜でも、かん類・びん類の日
     await goToKanban(page);
     await expect(page.getByText('ゴミ捨て（かん類・びん類）')).toBeVisible();
   });
@@ -145,6 +149,6 @@ test.describe('出すごみの種類の設定', () => {
     await goToGarbageSettings(page);
 
     // Assert
-    await expect(page.getByRole('region', { name: 'ごみ収集' }).getByText(/次回のごみ捨て/)).toBeVisible();
+    await expect(page.getByRole('region', { name: 'ごみ収集' }).getByText(/次にごみを出す日/)).toBeVisible();
   });
 });
