@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { getTodayJST, formatLocalDate, addMonths } from '@household-tasks/shared';
+import { getTodayJST, formatLocalDate, addMonths, HOLIDAYS } from '@household-tasks/shared';
 
 const DB_PATH = process.env.DB_PATH || './data/task_definitions.db';
 
@@ -339,7 +339,29 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 18,
+    up: (db) => {
+      // 祝日除外の設定と祝日マスタ。列と表の定義は scheduler 側の v18 と必ず揃えること。
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN exclude_holiday INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE task_definitions ADD COLUMN exclude_day_before_holiday INTEGER NOT NULL DEFAULT 0;
+        CREATE TABLE IF NOT EXISTS holidays (
+          date TEXT PRIMARY KEY,
+          name TEXT NOT NULL
+        );
+      `);
+      seedHolidays(db);
+    },
+  },
 ];
+
+export function seedHolidays(db: Database.Database): void {
+  const stmt = db.prepare('INSERT OR REPLACE INTO holidays (date, name) VALUES (?, ?)');
+  for (const [date, name] of HOLIDAYS) {
+    stmt.run(date, name);
+  }
+}
 
 export function runMigrations(db: Database.Database): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)');

@@ -104,6 +104,14 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
   分かりにくい壊れ方をするため。**止めたいときは `is_active` のトグル（無効化）を使う。**
   マイグレーション v16 が名前（`ゴミ捨て`/`ごみ捨て`）とカテゴリで既存定義に付与する（ID決め打ちではない）。
 
+## 祝日の除外
+
+曜日指定（毎週・N週ごと）のタスクに限り、「祝日は起票しない」「祝日の前日は起票しない」を設定できる（`task_definitions.exclude_holiday` / `exclude_day_before_holiday`）。他の頻度では設定できず、APIも 400 で拒否する。
+
+- 祝日データは内閣府の公開CSV由来で `shared/holidays.ts` に静的に持ち、マイグレーションで `holidays` テーブルへ投入する。スケジューラはオフラインのまま動く。
+- **祝日は毎年2月頃に翌年分が公開される**ため、年1回 `./scripts/update-holidays.sh` を実行して `shared/holidays.ts` を再生成し、再ビルド・再デプロイする。データが尽きると除外が効かなくなる（起票され続ける）。
+- 除外で起票をスキップした日も `next_due_date` は進める。N週ごとのタスクが翌日に前倒しで起票されるのを防ぐため。
+
 ## Key conventions
 
 - All dates use JST (Asia/Tokyo). `getTodayJST()` in shared/ returns `YYYY-MM-DD`.

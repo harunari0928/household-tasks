@@ -29,6 +29,8 @@ interface TaskInput {
   scheduled_hour?: number;
   sick_day_behavior?: string;
   absence_behavior?: string;
+  exclude_holiday?: boolean | number;
+  exclude_day_before_holiday?: boolean | number;
 }
 
 /**
@@ -147,6 +149,15 @@ function validateTaskInput(body: TaskInput): string | null {
     }
   }
 
+  // GET が返す行をそのまま PUT できるよう、真偽値と 0/1 の両方を受け付ける。
+  const holidayFlags = [body.exclude_holiday, body.exclude_day_before_holiday];
+  if (holidayFlags.some((v) => v != null && typeof v !== 'boolean' && v !== 0 && v !== 1)) {
+    return '祝日除外の指定が不正です';
+  }
+  if (ft !== 'weekly' && ft !== 'n_weeks' && holidayFlags.some((v) => v === true || v === 1)) {
+    return '祝日の除外は曜日指定の頻度でのみ設定できます';
+  }
+
   if (body.scheduled_hour !== undefined && body.scheduled_hour !== null) {
     if (typeof body.scheduled_hour !== 'number' || !Number.isInteger(body.scheduled_hour) || body.scheduled_hour < 0 || body.scheduled_hour > 23) {
       return '起票時刻は0〜23の整数で入力してください';
@@ -259,10 +270,12 @@ router.post('/', (req: Request, res: Response) => {
   const periodStartDd = body.period_start_dd ?? null;
   const periodEndMm = body.period_end_mm ?? null;
   const periodEndDd = body.period_end_dd ?? null;
+  const excludeHoliday = body.exclude_holiday ? 1 : 0;
+  const excludeDayBeforeHoliday = body.exclude_day_before_holiday ? 1 : 0;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, exclude_holiday, exclude_day_before_holiday, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -284,6 +297,8 @@ router.post('/', (req: Request, res: Response) => {
     scheduledHour,
     sickDayBehavior,
     absenceBehavior,
+    excludeHoliday,
+    excludeDayBeforeHoliday,
     now,
     now,
   );
@@ -341,13 +356,15 @@ router.put('/:id', (req: Request, res: Response) => {
   const periodStartDd = body.period_start_dd ?? null;
   const periodEndMm = body.period_end_mm ?? null;
   const periodEndDd = body.period_end_dd ?? null;
+  const excludeHoliday = body.exclude_holiday ? 1 : 0;
+  const excludeDayBeforeHoliday = body.exclude_day_before_holiday ? 1 : 0;
   const stmt = db.prepare(`
     UPDATE task_definitions
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
         days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
         period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
         next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?,
-        absence_behavior = ?, updated_at = ?
+        absence_behavior = ?, exclude_holiday = ?, exclude_day_before_holiday = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -370,6 +387,8 @@ router.put('/:id', (req: Request, res: Response) => {
     scheduledHour,
     sickDayBehavior,
     absenceBehavior,
+    excludeHoliday,
+    excludeDayBeforeHoliday,
     new Date().toISOString(),
     req.params.id,
   );

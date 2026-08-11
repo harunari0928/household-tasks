@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import {
   parseHiddenGarbageTypes,
+  HOLIDAYS,
   type GarbageTypeId,
   type AbsenceBehaviorKey,
 } from '@household-tasks/shared';
@@ -31,6 +32,8 @@ export interface TaskDefinitionRow {
   sick_day_behavior: 'normal_only' | 'always' | 'sick_only';
   special_kind: string | null;
   absence_behavior: AbsenceBehaviorKey;
+  exclude_holiday: number;
+  exclude_day_before_holiday: number;
 }
 
 type Migration = {
@@ -194,6 +197,25 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 18,
+    up: (db) => {
+      // 祝日除外の設定と祝日マスタ。列と表の定義は web 側の v18 と必ず揃えること。
+      // scheduler が web より先に起動した場合はこちらが先に作る。
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN exclude_holiday INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE task_definitions ADD COLUMN exclude_day_before_holiday INTEGER NOT NULL DEFAULT 0;
+        CREATE TABLE IF NOT EXISTS holidays (
+          date TEXT PRIMARY KEY,
+          name TEXT NOT NULL
+        );
+      `);
+      const stmt = db.prepare('INSERT OR REPLACE INTO holidays (date, name) VALUES (?, ?)');
+      for (const [date, name] of HOLIDAYS) {
+        stmt.run(date, name);
+      }
+    },
+  },
 ];
 
 function runMigrations(db: Database.Database): void {
@@ -267,6 +289,22 @@ export function findAbsenceDay(
     return row ?? null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * 祝日の集合（YYYY-MM-DD）。
+ *
+ * holidays は web 側のマイグレーションでも作られるため、scheduler が先に起動した
+ * 直後は存在しないことがある。読めない場合は「祝日なし」に倒す
+ * （＝通常どおり起票する。判定不能でタスクが黙って消えるより、余分に出る方が安全）。
+ */
+export function getHolidaySet(db: Database.Database): Set<string> {
+  try {
+    const rows = db.prepare('SELECT date FROM holidays').all() as { date: string }[];
+    return new Set(rows.map((r) => r.date));
+  } catch {
+    return new Set();
   }
 }
 

@@ -1,4 +1,5 @@
 export { getTodayJST, getCurrentHourJST, formatLocalDate, addMonths } from './date.js';
+export { HOLIDAYS } from './holidays.js';
 export {
   GARBAGE_TYPES,
   getGarbageTypeLabel,

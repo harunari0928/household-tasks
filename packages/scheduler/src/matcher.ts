@@ -101,6 +101,24 @@ function nthWeekdayOfMonth(year: number, month: number, position: number, dayOfW
   return new Date(year, month, day);
 }
 
+/**
+ * 曜日指定（毎週・N週ごと）のタスクで、祝日／祝日前日の除外設定を判定する。
+ * 曜日指定以外の頻度では設定を無視する。
+ */
+export function isExcludedByHoliday(
+  task: TaskDefinitionRow,
+  today: string,
+  holidays: Set<string>,
+): boolean {
+  if (task.frequency_type !== 'weekly' && task.frequency_type !== 'n_weeks') return false;
+
+  if (task.exclude_holiday && holidays.has(today)) return true;
+
+  if (task.exclude_day_before_holiday && holidays.has(addDays(today, 1))) return true;
+
+  return false;
+}
+
 export function shouldCreateThisHour(task: TaskDefinitionRow, currentHour: number): boolean {
   return currentHour >= task.scheduled_hour;
 }

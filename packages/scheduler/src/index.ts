@@ -18,9 +18,10 @@ import {
   createTaskInstance,
   getLastCompletedDateJST,
   getHiddenGarbageTypes,
+  getHolidaySet,
   type TaskDefinitionRow,
 } from './db.js';
-import { shouldCreateToday, shouldCreateThisHour, isWithinActivePeriod, calculateNextDueDate } from './matcher.js';
+import { shouldCreateToday, shouldCreateThisHour, isWithinActivePeriod, isExcludedByHoliday, calculateNextDueDate } from './matcher.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -77,6 +78,7 @@ async function main() {
     )
     .filter((task) => !absence || task.absence_behavior !== 'hidden');
   const hiddenGarbageTypes = getHiddenGarbageTypes(db);
+  const holidays = getHolidaySet(db);
   let created = 0;
   let skipped = 0;
   let failed = 0;
@@ -90,6 +92,18 @@ async function main() {
     if (!shouldCreateToday(task, today, lastCompletedDate)) continue;
     if (!isWithinActivePeriod(task, today)) continue;
     if (!shouldCreateThisHour(task, currentHour)) continue;
+
+    if (isExcludedByHoliday(task, today, holidays)) {
+      skipped++;
+      console.log(`  SKIP (holiday): "${task.name}"`);
+      // Consume this cycle so the next run doesn't fire immediately after the
+      // skipped day (N週ごとは元のリズムを保つ).
+      if (!dryRun && task.next_due_date) {
+        const nextDate = calculateNextDueDate(task, task.next_due_date);
+        updateNextDueDate(db, task.id, nextDate);
+      }
+      continue;
+    }
 
     // 翌日の収集が無い日／設定で非表示にした種類だけの日はごみ捨てを起票しない
     const garbage = resolveGarbageTask(task, today, hiddenGarbageTypes);
@@ -149,6 +163,7 @@ async function main() {
     for (const { task_definition_id } of failedTasks) {
       const task = tasks.find((t) => t.id === task_definition_id);
       if (!task) continue;
+      if (isExcludedByHoliday(task, today, holidays)) continue;
 
       // 再試行でも同じ判定を通す（失敗を引きずって収集の無い日に起票しないため）
       const retryGarbage = resolveGarbageTask(task, today, hiddenGarbageTypes);
