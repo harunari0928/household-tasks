@@ -53,6 +53,8 @@ async function createTaskViaUI(
     scheduled_hour?: number;
     period?: { start_mm: number; start_dd: number; end_mm: number; end_dd: number };
     absenceBehaviorLabel?: '不在でも表示' | '不在中は非表示';
+    exclude_holiday?: boolean;
+    exclude_day_before_holiday?: boolean;
   },
 ) {
   const category = options.category || 'water';
@@ -86,6 +88,12 @@ async function createTaskViaUI(
   }
   if (options.scheduled_hour != null) {
     await page.getByLabel(/起票時刻/).fill(String(options.scheduled_hour));
+  }
+  if (options.exclude_holiday) {
+    await page.getByRole('checkbox', { name: '祝日は起票しない' }).check();
+  }
+  if (options.exclude_day_before_holiday) {
+    await page.getByRole('checkbox', { name: '祝日の前日は起票しない' }).check();
   }
   if (options.period) {
     await page.getByRole('radio', { name: '期間指定する' }).check();
@@ -1094,5 +1102,129 @@ test.describe('不在日（帰省・旅行）', () => {
     // Assert
     await goToKanban(page);
     await expect(page.getByText('absence-yearly-carryover')).toBeVisible();
+  });
+});
+
+test.describe('祝日の除外', () => {
+  test('祝日を除外する曜日指定タスクは祝日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'holiday-skip',
+      category: 'water',
+      frequency_type: 'weekly',
+      days_of_week: ['wed'],
+      exclude_holiday: true,
+    });
+
+    await runScheduler('2026-02-11');
+
+    await goToKanban(page);
+    await expect(page.getByText('holiday-skip')).not.toBeVisible();
+  });
+
+  test('祝日を除外する曜日指定タスクは祝日以外の対象曜日には起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'holiday-skip-normal-day',
+      category: 'water',
+      frequency_type: 'weekly',
+      days_of_week: ['wed'],
+      exclude_holiday: true,
+    });
+
+    await runScheduler('2026-02-18');
+
+    await goToKanban(page);
+    await expect(page.getByText('holiday-skip-normal-day')).toBeVisible();
+  });
+
+  test('祝日を除外しない曜日指定タスクは祝日でも起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'holiday-no-skip',
+      category: 'water',
+      frequency_type: 'weekly',
+      days_of_week: ['wed'],
+    });
+
+    await runScheduler('2026-02-11');
+
+    await goToKanban(page);
+    await expect(page.getByText('holiday-no-skip')).toBeVisible();
+  });
+
+  test('祝日の前日を除外する曜日指定タスクは祝日の前日には起票されない', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'eve-skip',
+      category: 'water',
+      frequency_type: 'weekly',
+      days_of_week: ['tue'],
+      exclude_day_before_holiday: true,
+    });
+
+    await runScheduler('2026-02-10');
+
+    await goToKanban(page);
+    await expect(page.getByText('eve-skip')).not.toBeVisible();
+  });
+
+  test('祝日の前日を除外する曜日指定タスクは祝日の前日以外の対象曜日には起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'eve-skip-normal-day',
+      category: 'water',
+      frequency_type: 'weekly',
+      days_of_week: ['tue'],
+      exclude_day_before_holiday: true,
+    });
+
+    await runScheduler('2026-02-17');
+
+    await goToKanban(page);
+    await expect(page.getByText('eve-skip-normal-day')).toBeVisible();
+  });
+
+  test('祝日の前日を除外する曜日指定タスクは祝日当日には起票される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'eve-skip-on-holiday',
+      category: 'water',
+      frequency_type: 'weekly',
+      days_of_week: ['wed'],
+      exclude_day_before_holiday: true,
+    });
+
+    await runScheduler('2026-02-11');
+
+    await goToKanban(page);
+    await expect(page.getByText('eve-skip-on-holiday')).toBeVisible();
+  });
+
+  test('祝日の除外設定は保存後も保持される', async ({ page, baseURL }) => {
+    await createTaskViaUI(page, baseURL!, {
+      name: 'holiday-settings-persist',
+      category: 'water',
+      frequency_type: 'weekly',
+      days_of_week: ['wed'],
+      exclude_holiday: true,
+      exclude_day_before_holiday: true,
+    });
+
+    await page.goto('about:blank');
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByText('holiday-settings-persist').click();
+
+    await test.step('祝日を除外する設定が保持されている', async () => {
+      await expect(page.getByRole('checkbox', { name: '祝日は起票しない' })).toBeChecked();
+    });
+    await test.step('祝日の前日を除外する設定が保持されている', async () => {
+      await expect(page.getByRole('checkbox', { name: '祝日の前日は起票しない' })).toBeChecked();
+    });
+  });
+
+  test('曜日指定以外の頻度では祝日の除外を設定できない', async ({ page, baseURL }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('holiday-not-available');
+    await page.getByLabel('頻度').selectOption('daily');
+
+    await expect(page.getByRole('checkbox', { name: '祝日は起票しない' })).toHaveCount(0);
   });
 });

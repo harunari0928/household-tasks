@@ -77,6 +77,8 @@ export interface TaskDefinition {
   /** アプリ機能と紐付く特別なタスクの識別子（'garbage' 等）。付いていると削除できない */
   special_kind: string | null;
   absence_behavior: AbsenceBehaviorKey;
+  exclude_holiday: number;
+  exclude_day_before_holiday: number;
   created_at: string;
   updated_at: string;
 }
@@ -99,6 +101,8 @@ export interface TaskDefinitionInput {
   scheduled_hour: number;
   sick_day_behavior?: SickDayBehaviorKey;
   absence_behavior?: AbsenceBehaviorKey;
+  exclude_holiday?: boolean;
+  exclude_day_before_holiday?: boolean;
 }
 
 export interface ExecutionLog {
