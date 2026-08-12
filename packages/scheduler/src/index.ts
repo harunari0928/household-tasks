@@ -1,7 +1,7 @@
 import {
   getTodayJST,
   getCurrentHourJST,
-  getVisibleGarbageTypesForDisposalDate,
+  getVisibleGarbageTypes,
   buildGarbageTaskTitle,
   type GarbageTypeId,
 } from '@household-tasks/shared';
@@ -28,8 +28,9 @@ const dryRun = process.argv.includes('--dry-run');
 /**
  * ごみ捨てタスク（special_kind='garbage'）の起票可否とタイトルを決める。
  *
- * ごみは前夜に出すので、起票日の「翌日」に収集される種類で判定する。
- * 翌日の収集が無い日（土曜・年末年始など）と、設定で非表示にした種類しか
+ * ごみは収集日の当日朝に出すので、起票日の「当日」に収集される種類で判定する
+ * （タスク定義の scheduled_hour=6 で朝6時に起票される）。
+ * 収集が無い日（土日・年末年始など）と、設定で非表示にした種類しか
  * 収集されない日は起票しない。
  * 起票する場合はタイトルに種類を添える（例: `ゴミ捨て（燃せるごみ）`）。
  * ごみ捨て以外のタスクは常にそのまま起票する。
@@ -41,7 +42,7 @@ function resolveGarbageTask(
 ): { skip: boolean; title: string } {
   if (task.special_kind !== 'garbage') return { skip: false, title: task.name };
 
-  const types = getVisibleGarbageTypesForDisposalDate(today, hiddenTypes);
+  const types = getVisibleGarbageTypes(today, hiddenTypes);
   if (types.length === 0) return { skip: true, title: task.name };
   return { skip: false, title: buildGarbageTaskTitle(task.name, types) };
 }
@@ -105,10 +106,10 @@ async function main() {
       continue;
     }
 
-    // 翌日の収集が無い日／設定で非表示にした種類だけの日はごみ捨てを起票しない
+    // 当日の収集が無い日／設定で非表示にした種類だけの日はごみ捨てを起票しない
     const garbage = resolveGarbageTask(task, today, hiddenGarbageTypes);
     if (garbage.skip) {
-      console.log(`  SKIP (no garbage collection tomorrow): "${task.name}"`);
+      console.log(`  SKIP (no garbage collection today): "${task.name}"`);
       continue;
     }
 
@@ -168,7 +169,7 @@ async function main() {
       // 再試行でも同じ判定を通す（失敗を引きずって収集の無い日に起票しないため）
       const retryGarbage = resolveGarbageTask(task, today, hiddenGarbageTypes);
       if (retryGarbage.skip) {
-        console.log(`  RETRY SKIP (no garbage collection tomorrow): "${task.name}"`);
+        console.log(`  RETRY SKIP (no garbage collection today): "${task.name}"`);
         continue;
       }
 

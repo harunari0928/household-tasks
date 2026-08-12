@@ -1,5 +1,5 @@
 /**
- * 小田原市（足柄地区）のごみ収集カレンダー。
+ * 小田原市（芦子地区）のごみ収集カレンダー。
  *
  * 収集日は「曜日」と「第何週か」だけで決まるため、外部データを持たずに計算できる。
  * ロジックは Home Assistant 側の会話コンポーネント
@@ -63,22 +63,6 @@ function formatDate(date: Date): string {
 }
 
 /**
- * ごみを「出す日」に対応する「収集日」を返す。
- *
- * 我が家はごみを前夜に出すので、タスクを起票する日（出す日）と、
- * そのごみが実際に収集される日は1日ずれる。
- * 収集カレンダーは収集日で定義されているため、引く前に必ずこの変換を通すこと。
- *
- * @param disposalDate JST の YYYY-MM-DD（ごみを出す日＝タスク起票日）
- */
-export function getCollectionDateForDisposalDate(disposalDate: string): string {
-  const date = parseDate(disposalDate);
-  if (Number.isNaN(date.getTime())) return disposalDate;
-  date.setDate(date.getDate() + 1);
-  return formatDate(date);
-}
-
-/**
  * 指定日に収集されるごみの種類を返す。収集が無い日は空配列。
  *
  * @param dateStr JST の YYYY-MM-DD
@@ -118,21 +102,6 @@ export function getVisibleGarbageTypes(
 }
 
 /**
- * 指定日にごみを出す場合に、翌日収集される種類のうち「出す」とされているものを返す。
- *
- * ごみ捨てタスクの起票可否・タイトルはこちらを使う
- * （`getVisibleGarbageTypes` は収集日基準なので、出す日を渡すと1日ずれる）。
- *
- * @param disposalDate JST の YYYY-MM-DD（ごみを出す日＝タスク起票日）
- */
-export function getVisibleGarbageTypesForDisposalDate(
-  disposalDate: string,
-  hiddenTypes: readonly GarbageTypeId[],
-): GarbageTypeId[] {
-  return getVisibleGarbageTypes(getCollectionDateForDisposalDate(disposalDate), hiddenTypes);
-}
-
-/**
  * ごみ捨てタスクのタイトルを組み立てる。
  * 例: `ゴミ捨て（燃せるごみ）` / `ゴミ捨て（かん類・びん類、ペットボトル）`
  */
@@ -154,14 +123,14 @@ export function parseHiddenGarbageTypes(raw: string | null | undefined): Garbage
 }
 
 /**
- * 指定日以降で、実際にごみ捨てタスクが起票される最初の「出す日」を探す。
+ * 指定日以降で、実際にごみ捨てタスクが起票される最初の日（＝収集日）を探す。
  * 設定画面で「次回のごみ捨て」を出すために使う。見つからなければ null。
  *
- * 返す `date` は出す日（前夜）であって収集日ではない。
- * `types` はその翌日に収集される種類。
+ * ごみは収集日の当日朝に出すので、起票日＝出す日＝収集日。
+ * `types` はその日に収集される種類。
  *
- * @param fromDate 探索の起点。JST の YYYY-MM-DD（出す日として扱う）
- * @param taskDaysOfWeek タスク定義の days_of_week（例: ['mon','tue']）。出す日の曜日。省略時は曜日で絞らない
+ * @param fromDate 探索の起点。JST の YYYY-MM-DD
+ * @param taskDaysOfWeek タスク定義の days_of_week（例: ['mon','tue']）。省略時は曜日で絞らない
  */
 export function findNextGarbageDay(
   fromDate: string,
@@ -179,7 +148,7 @@ export function findNextGarbageDay(
     const dateStr = formatDate(cursor);
 
     if (!allowedDays || allowedDays.has(DAY_KEYS[cursor.getDay()])) {
-      const types = getVisibleGarbageTypesForDisposalDate(dateStr, hiddenTypes);
+      const types = getVisibleGarbageTypes(dateStr, hiddenTypes);
       if (types.length > 0) return { date: dateStr, types };
     }
     cursor.setDate(cursor.getDate() + 1);
