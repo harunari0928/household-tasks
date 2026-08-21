@@ -79,6 +79,16 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
   `is_active = 0`（スケジューラは起票しない）にしたうえで HA の automation `battery_low_create_task` が
   `POST /api/kanban/create-from-definition/:id` で起票する。**この定義を削除すると自動起票が壊れる。**
   対応表は `~/repos/homeassistant/CLAUDE.md` を参照。
+- **HA の音声から不定期の家事を即時完了できる。** いつ発生するか分からない家事（ゴキブリ退治など）は
+  `is_active = 0` の定義として登録しておき、「やっておいた」と言うと
+  `POST /api/kanban/complete-from-definition/:id`（body に `assignee` 必須）で**起票と完了を一度に**記録する。
+  HA 側は会話エージェントの `household_quick_done` ツール（発話名 → 定義IDの突き合わせは
+  `custom_components/claude_code_conversation/household_tasks.py`）と `rest_command.household_task_quick_done`。
+  - **冪等ではない。** 呼ぶたびに完了記録が増える（不定期の家事は1日に何度も起こりうるため）。
+    ただし未完了カードが板に残っている場合だけは、新規に作らずそのカードを完了にする（ポイントの二重計上を防ぐ）。
+  - **`execution_log` は書かない。** 書くとスケジューラの `isAlreadyCreatedToday()` が反応して、
+    有効な定期タスクの当日ぶんが黙って起票されなくなる。
+  - `days_after_completion` の家事をこれで完了にすると、次回予定はその完了日を起点に繰り下がる（意図どおり）。
 - **HA が家事レポートを議事録に埋め込む。** `~/repos/homeassistant/config/scripts/household_report.py` が
   `data/task_definitions.db` を読み取り専用で参照している。集計の意味論は `GET /api/stats/points` と
   同じ（共同タスク `ryo,yuka` は分割して両者に満額加算）。**`ht stats` は共同タスクを別枠で集計するため

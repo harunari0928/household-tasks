@@ -897,6 +897,38 @@ test.describe('完了後N日', () => {
     ).toHaveCount(1);
   });
 
+  test('起票を経ずに即時完了した場合も、その完了日が次回起票の起点になる', async ({ page, baseURL }) => {
+    // Arrange: 完了後3日のタスクを、起票せずに基準日(JST正午)に即時完了する
+    const base = '2026-03-14';
+    const task = await createTaskViaUI(page, baseURL!, {
+      name: 'after-quick-done',
+      category: 'water',
+      frequency_type: 'days_after_completion',
+      frequency_interval: 3,
+    });
+    await setServerTime(page, baseURL!, `${base}T03:00:00.000Z`);
+    await page.request.post(`${baseURL}/api/kanban/complete-from-definition/${task.id}`, {
+      data: { assignee: 'test' },
+    });
+    await setServerTime(page, baseURL!, null);
+
+    // Act & Assert
+    await test.step('完了日から2日後には再起票されない', async () => {
+      await runScheduler(addDays(base, 2));
+      await goToKanban(page);
+      await expect(
+        page.getByRole('region', { name: '未着手列' }).getByText('after-quick-done'),
+      ).toHaveCount(0);
+    });
+    await test.step('完了日から3日後には再起票される', async () => {
+      await runScheduler(addDays(base, 3));
+      await goToKanban(page);
+      await expect(
+        page.getByRole('region', { name: '未着手列' }).getByText('after-quick-done'),
+      ).toHaveCount(1);
+    });
+  });
+
   test('未完了のまま指定日数が経過しても重複起票されない', async ({ page, baseURL }) => {
     // Arrange: 完了後3日のタスクを起票する（完了させない）
     const base = '2026-03-14';
