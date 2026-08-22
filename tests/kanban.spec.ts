@@ -252,6 +252,9 @@ test.describe('ドラッグ&ドロップ', () => {
     // Act
     await dragCardToColumn(page, 'status-retry-card', '完了');
     await page.getByRole('alert').filter({ hasText: 'タスクのステータス変更に失敗しました' }).first().waitFor();
+    // カードが元の列に戻りきるまで待つ。戻る途中に押すと、押した瞬間に通知の位置が
+    // ずれてクリックを取りこぼす（フルスイート実行で実際に落ちた）
+    await page.getByRole('region', { name: '未着手列' }).getByText('status-retry-card').waitFor();
     // 再試行のステータス変更が成功裏に完了するのを待つ
     await Promise.all([
       page.waitForResponse(

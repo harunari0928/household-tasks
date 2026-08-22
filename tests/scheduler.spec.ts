@@ -465,6 +465,31 @@ test.describe('重複起票の防止', () => {
     await expect(page.getByText('cross-day-dup')).toHaveCount(1);
   });
 
+  test('起票時刻より前に即時完了しておくと、その日は起票されない', async ({ page, baseURL }) => {
+    // Arrange: 夜19時に起票されるタスクを、正午に「やった」として記録する
+    const base = '2026-03-14';
+    const task = await createTaskViaUI(page, baseURL!, {
+      name: 'quick-done-before-hour',
+      category: 'laundry',
+      frequency_type: 'daily',
+      scheduled_hour: 19,
+    });
+    await setServerTime(page, baseURL!, `${base}T03:00:00.000Z`);
+    await page.request.post(`${baseURL}/api/kanban/complete-from-definition/${task.id}`, {
+      data: { assignee: 'test' },
+    });
+    await setServerTime(page, baseURL!, null);
+
+    // Act: 起票時刻を迎える
+    await runScheduler(base, 19);
+
+    // Assert: 済ませたタスクのカードが未着手列に生えない
+    await goToKanban(page);
+    await expect(
+      page.getByRole('region', { name: '未着手列' }).getByText('quick-done-before-hour'),
+    ).toHaveCount(0);
+  });
+
   test('前日分を起票時刻より後に完了すると、当日分は再起票されない', async ({ page, baseURL }) => {
     // Arrange: 起票時刻8時のタスク。前日分を未完了のまま持ち越し、当日9時（起票時刻より後）に完了する。
     const today = getTodayJST();

@@ -141,6 +141,8 @@ export interface TaskInstance {
   completed_at: string | null;
   category: CategoryKey;
   sort_order: number;
+  /** 起票を経ずに完了として作られた（音声からの即時完了）。スケジューラの再起票抑止に使う */
+  created_as_done: number;
 }
 
 export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {

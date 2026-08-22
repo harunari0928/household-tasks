@@ -86,8 +86,13 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
   `custom_components/claude_code_conversation/household_tasks.py`）と `rest_command.household_task_quick_done`。
   - **冪等ではない。** 呼ぶたびに完了記録が増える（不定期の家事は1日に何度も起こりうるため）。
     ただし未完了カードが板に残っている場合だけは、新規に作らずそのカードを完了にする（ポイントの二重計上を防ぐ）。
-  - **`execution_log` は書かない。** 書くとスケジューラの `isAlreadyCreatedToday()` が反応して、
-    有効な定期タスクの当日ぶんが黙って起票されなくなる。
+  - **`execution_log` は書かない。** 書くとスケジューラの `isAlreadyCreatedToday()` が反応するが、
+    その分岐は `next_due_date` を進めないので、N日ごとのタスクが翌日に前倒しで起票される。
+  - 代わりに `task_instances.created_as_done = 1`（起票を経ずに完了として作られた印）を立てる。
+    スケジューラの `hasRecentInstance()` がこれを見て「今日ぶんは消化済み」と判定し、
+    **起票時刻より前に完了しても、その日にもう1枚生えない**（生えると誰もやらないカードが
+    板に残り、夜の未完了チェックにも載る）。**列の定義は web / scheduler の v19 で揃えること。**
+    前日以前に起票されたカードを朝に片付けた場合は従来どおり当日ぶんが起票される。
   - `days_after_completion` の家事をこれで完了にすると、次回予定はその完了日を起点に繰り下がる（意図どおり）。
 - **HA が家事レポートを議事録に埋め込む。** `~/repos/homeassistant/config/scripts/household_report.py` が
   `data/task_definitions.db` を読み取り専用で参照している。集計の意味論は `GET /api/stats/points` と

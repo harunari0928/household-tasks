@@ -285,8 +285,10 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
       return { id: pending.id, created: false };
     }
 
+    // created_as_done = 1 は「起票を経ずに完了として作られた」印。
+    // スケジューラがこれを見て今日ぶんを消化済みと判断する（起票時刻が来ても再起票しない）。
     const inserted = db.prepare(
-      "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order) VALUES (?, ?, 'done', ?, ?, ?, ?, ?)"
+      "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order, created_as_done) VALUES (?, ?, 'done', ?, ?, ?, ?, ?, 1)"
     ).run(taskDefId, taskDef.name, assignee, taskDef.points, now, now, sortOrder);
     return { id: Number(inserted.lastInsertRowid), created: true };
   })();
