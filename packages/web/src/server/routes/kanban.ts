@@ -244,7 +244,7 @@ router.post('/create-from-definition/:taskDefId', (req: Request, res: Response) 
 // いつ発生するか分からない家事（ゴキブリ退治など）を「やった」と言った時点で記録するためのもの。
 // Home Assistant の音声エージェントが叩く。あえて次のことはしない:
 //   - execution_log を書かない。スケジューラの isAlreadyCreatedToday() が status='created' の
-//     ログで当日の起票を抑止するため、書くと有効な定期タスクの当日ぶんが黙って消える。
+//     ログで当日の起票を抑止するため、書くと定期タスクの当日ぶんが黙って消える。
 //   - 風邪の日モード・不在日のフィルタをかけない。「今やった」という事実の記録なので抑止しない。
 //   - 重複チェックをしない。不定期タスクは1日に何回も起こりうる。
 router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response) => {
@@ -258,7 +258,16 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
     return;
   }
 
-  // is_active は見ない。スケジューラに起票させない（is_active = 0）定義こそ主な用途。
+  // 頻度が「即時（都度）」のタスクだけを対象にする。
+  // 定期タスクに使えると、起票時刻より前に記録した日にスケジューラが当日ぶんを
+  // 普通に起票して、誰もやらないカードが板と夜の未完了チェックに残る。
+  // 定期タスクの完了は板のカードに対して行うこと（PATCH /api/kanban/:id/status）。
+  if (taskDef.frequency_type !== 'on_demand') {
+    res.status(400).json({ error: '即時（都度）のタスクではありません。カンバンのカードから完了にしてください' });
+    return;
+  }
+
+  // is_active は見ない。無効にしても「やった記録」は残せるほうが自然。
   if (typeof assignee !== 'string' || assignee.trim() === '') {
     res.status(400).json({ error: '担当者が未設定です。完了にするには担当者を設定してください' });
     return;
@@ -285,10 +294,8 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
       return { id: pending.id, created: false };
     }
 
-    // created_as_done = 1 は「起票を経ずに完了として作られた」印。
-    // スケジューラがこれを見て今日ぶんを消化済みと判断する（起票時刻が来ても再起票しない）。
     const inserted = db.prepare(
-      "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order, created_as_done) VALUES (?, ?, 'done', ?, ?, ?, ?, ?, 1)"
+      "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order) VALUES (?, ?, 'done', ?, ?, ?, ?, ?)"
     ).run(taskDefId, taskDef.name, assignee, taskDef.points, now, now, sortOrder);
     return { id: Number(inserted.lastInsertRowid), created: true };
   })();

@@ -80,20 +80,21 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
   `POST /api/kanban/create-from-definition/:id` で起票する。**この定義を削除すると自動起票が壊れる。**
   対応表は `~/repos/homeassistant/CLAUDE.md` を参照。
 - **HA の音声から不定期の家事を即時完了できる。** いつ発生するか分からない家事（ゴキブリ退治など）は
-  `is_active = 0` の定義として登録しておき、「やっておいた」と言うと
+  頻度 `on_demand`（UI では「即時（都度）」）のタスク定義として登録しておき、「やっておいた」と言うと
   `POST /api/kanban/complete-from-definition/:id`（body に `assignee` 必須）で**起票と完了を一度に**記録する。
-  HA 側は会話エージェントの `household_quick_done` ツール（発話名 → 定義IDの突き合わせは
+  HA 側は会話エージェントの `household_quick_done` ツール（発話名 → 定義の突き合わせは
   `custom_components/claude_code_conversation/household_tasks.py`）と `rest_command.household_task_quick_done`。
+  - **`on_demand` 以外のタスク定義は 400 で拒否する。** 定期タスクに使えると、起票時刻より前に
+    記録した日にスケジューラが当日ぶんを普通に起票して、誰もやらないカードが板と夜の未完了チェックに残る。
+    定期タスクの完了は板のカードに対して行う（`PATCH /api/kanban/:id/status`）。
+    **HA 側の突き合わせも `on_demand` の定義だけを対象にすること**（両方を絞らないと、
+    音声からは候補に挙がるのに API に弾かれる、という分かりにくい失敗になる）。
+  - `on_demand` はスケジューラが起票しない頻度。`shouldCreateToday()` が常に false を返し、
+    `next_due_date` も持たない。起票時刻の設定も UI から消える（意味を持たないため）。
   - **冪等ではない。** 呼ぶたびに完了記録が増える（不定期の家事は1日に何度も起こりうるため）。
     ただし未完了カードが板に残っている場合だけは、新規に作らずそのカードを完了にする（ポイントの二重計上を防ぐ）。
   - **`execution_log` は書かない。** 書くとスケジューラの `isAlreadyCreatedToday()` が反応するが、
     その分岐は `next_due_date` を進めないので、N日ごとのタスクが翌日に前倒しで起票される。
-  - 代わりに `task_instances.created_as_done = 1`（起票を経ずに完了として作られた印）を立てる。
-    スケジューラの `hasRecentInstance()` がこれを見て「今日ぶんは消化済み」と判定し、
-    **起票時刻より前に完了しても、その日にもう1枚生えない**（生えると誰もやらないカードが
-    板に残り、夜の未完了チェックにも載る）。**列の定義は web / scheduler の v19 で揃えること。**
-    前日以前に起票されたカードを朝に片付けた場合は従来どおり当日ぶんが起票される。
-  - `days_after_completion` の家事をこれで完了にすると、次回予定はその完了日を起点に繰り下がる（意図どおり）。
 - **HA が家事レポートを議事録に埋め込む。** `~/repos/homeassistant/config/scripts/household_report.py` が
   `data/task_definitions.db` を読み取り専用で参照している。集計の意味論は `GET /api/stats/points` と
   同じ（共同タスク `ryo,yuka` は分割して両者に満額加算）。**`ht stats` は共同タスクを別枠で集計するため

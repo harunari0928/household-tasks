@@ -993,13 +993,13 @@ test.describe('即時完了（起票と完了を1回で行う）', () => {
   async function createTaskDef(
     page: Page,
     baseURL: string,
-    options: { name: string; points?: number },
+    options: { name: string; points?: number; frequency_type?: string },
   ): Promise<number> {
     const res = await page.request.post(`${baseURL}/api/tasks`, {
       data: {
         name: options.name,
         category: 'lifestyle',
-        frequency_type: 'daily',
+        frequency_type: options.frequency_type ?? 'on_demand',
         scheduled_hour: 6,
         points: options.points ?? 1,
       },
@@ -1101,6 +1101,23 @@ test.describe('即時完了（起票と完了を1回で行う）', () => {
     const doneColumn = page.getByRole('region', { name: '完了列' });
     await expect(doneColumn.getByText('quick-done-control-a')).toBeVisible();
     await expect(doneColumn.getByText('quick-done-no-assignee')).toHaveCount(0);
+  });
+
+  test('即時ではないタスクは即時完了できない', async ({ page, baseURL }) => {
+    // Arrange — 板が描画されたことを確かめるための対照タスクを一緒に完了させる
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    const dailyId = await createTaskDef(page, baseURL!, { name: 'quick-done-daily', frequency_type: 'daily' });
+    const controlId = await createTaskDef(page, baseURL!, { name: 'quick-done-control-c' });
+
+    // Act
+    await completeNow(page, baseURL!, dailyId, 'MTMR');
+    await completeNow(page, baseURL!, controlId, 'MTMR');
+    await goToKanban(page);
+
+    // Assert
+    const doneColumn = page.getByRole('region', { name: '完了列' });
+    await expect(doneColumn.getByText('quick-done-control-c')).toBeVisible();
+    await expect(doneColumn.getByText('quick-done-daily')).toHaveCount(0);
   });
 
   test('存在しないタスクを即時完了しようとしても記録されない', async ({ page, baseURL }) => {

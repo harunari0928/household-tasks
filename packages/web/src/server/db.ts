@@ -354,15 +354,6 @@ const migrations: Migration[] = [
       seedHolidays(db);
     },
   },
-  {
-    version: 19,
-    up: (db) => {
-      // 起票を経ずに完了として作られたインスタンス（POST /api/kanban/complete-from-definition）の印。
-      // 列の定義は scheduler 側の v19 と必ず揃えること。
-      // スケジューラはこの印を見て「今日ぶんは消化済み」と判定し、起票時刻が来ても再起票しない。
-      db.exec('ALTER TABLE task_instances ADD COLUMN created_as_done INTEGER NOT NULL DEFAULT 0');
-    },
-  },
 ];
 
 export function seedHolidays(db: Database.Database): void {

@@ -216,14 +216,6 @@ const migrations: Migration[] = [
       }
     },
   },
-  {
-    version: 19,
-    up: (db) => {
-      // 起票を経ずに完了として作られたインスタンスの印。列の定義は web 側の v19 と必ず揃えること。
-      // hasRecentInstance が「今日ぶんは消化済み」と判定するのに使う。
-      db.exec('ALTER TABLE task_instances ADD COLUMN created_as_done INTEGER NOT NULL DEFAULT 0');
-    },
-  },
 ];
 
 function runMigrations(db: Database.Database): void {
@@ -356,12 +348,8 @@ export function hasRecentInstance(
   // 再起票を抑止する条件:
   //   - 未完了インスタンスが残っている（バックログ）
   //   - 当日(JST)の起票時刻以降に完了済み = 今日の分は消化済み
-  //   - 当日に created_as_done で記録された = 今日の分は消化済み（起票時刻より前でも）
   // 当日の起票時刻より前に完了した場合（前日以前のバックログを朝に片付けた等）は、
-  // 今日の分が未消化なので再起票を許可する。ただし**起票を経ずに完了として作られたもの**
-  // （complete-from-definition。音声の「やっておいた」）は別で、今日ぶんを消化した後に
-  // 起票時刻が来てもう1枚生えるのを防ぐ。生えると誰もやらないカードが板に残り、
-  // 夜の未完了チェックにも載る。
+  // 今日の分が未消化なので再起票を許可する。
   const row = db.prepare(`
     SELECT 1 FROM task_instances
     WHERE task_definition_id = ?
@@ -369,10 +357,7 @@ export function hasRecentInstance(
         status != 'done'
         OR (
           date(completed_at, '+9 hours') = ?
-          AND (
-            CAST(strftime('%H', completed_at, '+9 hours') AS INTEGER) >= ?
-            OR created_as_done = 1
-          )
+          AND CAST(strftime('%H', completed_at, '+9 hours') AS INTEGER) >= ?
         )
       )
     LIMIT 1

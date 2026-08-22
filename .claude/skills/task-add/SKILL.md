@@ -21,7 +21,7 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
 |-----------|------|--------|
 | `--name` | タスク名 | 1〜200文字 |
 | `--category` | カテゴリ | water, kitchen, floor, entrance, laundry, trash, childcare, cooking, lifestyle |
-| `--frequency-type` | 頻度タイプ | daily, weekly, n_days, n_weeks, monthly, n_months, yearly |
+| `--frequency-type` | 頻度タイプ | daily, weekly, n_days, n_weeks, monthly, n_months, yearly, on_demand |
 
 ## 任意オプション
 
@@ -46,6 +46,11 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
 | monthly | なし | `--day-of-month` |
 | n_months | `--frequency-interval`（2以上） | `--day-of-month` |
 | yearly | なし | - |
+| on_demand | なし | - |
+
+`on_demand`（即時・都度）はスケジューラが起票しない。いつ発生するか分からない家事
+（ゴキブリ退治など）に使い、やった時点で音声から起票と完了をまとめて記録する。
+`--scheduled-hour` は意味を持たない。
 
 ## 手順
 

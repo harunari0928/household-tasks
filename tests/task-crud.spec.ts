@@ -155,6 +155,41 @@ test.describe('タスクCRUD', () => {
     await expect(page.getByText('完了後1日')).toBeVisible();
   });
 
+  test('即時タスクを作成できる', async ({ page }) => {
+    // Arrange: 生活・その他カテゴリでタスク追加フォームを開く
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活・その他/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    // Act: 頻度に即時を選んで保存する
+    await page.getByLabel('タスク名').fill('テストゴキブリ退治');
+    await page.getByLabel('頻度').selectOption('on_demand');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    // Assert: 一覧に「即時（都度）」として表示される
+    await expect(page.getByText('テストゴキブリ退治')).toBeVisible();
+    await expect(page.getByText('即時（都度）')).toBeVisible();
+  });
+
+  test('即時を選ぶと起票時刻の入力が消える', async ({ page }) => {
+    // Arrange
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活・その他/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await expect(page.getByLabel(/起票時刻/)).toBeVisible();
+
+    // Act
+    await page.getByLabel('頻度').selectOption('on_demand');
+
+    // Assert
+    await test.step('スケジュールで起票されないことが説明される', async () => {
+      await expect(page.getByText('スケジュールでは起票されません', { exact: false })).toBeVisible();
+    });
+    await test.step('起票時刻を入力できない', async () => {
+      await expect(page.getByLabel(/起票時刻/)).toBeHidden();
+    });
+  });
+
   test('タスク一覧の取得が通信エラーになると、エラーが通知される', async ({ page }) => {
     // Arrange
     await page.route('**/api/tasks', (route) =>
@@ -518,9 +553,9 @@ test.describe('マークダウン備考', () => {
     });
 
     // リンク
-    await notes.selectText();
-    await notes.press('Delete');
-    await expect(notes).toHaveValue('');
+    // 直前の挿入でツールバーがカーソル位置を復元するため、選択して消すと取りこぼす。
+    // fill('') なら値が確実に空になる
+    await notes.fill('');
     await page.getByTitle('リンク').click();
 
     await test.step('リンク', async () => {
@@ -528,9 +563,7 @@ test.describe('マークダウン備考', () => {
     });
 
     // リスト
-    await notes.selectText();
-    await notes.press('Delete');
-    await expect(notes).toHaveValue('');
+    await notes.fill('');
     await page.getByTitle('リスト').click();
 
     await test.step('リスト', async () => {
