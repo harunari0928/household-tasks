@@ -206,7 +206,7 @@ async function main() {
 
   console.log(`\nSummary: created=${created}, skipped=${skipped}, failed=${failed}`);
 
-  // Notify web server to broadcast SSE update
+  // Notify web server to broadcast the update over WebSocket
   if (created > 0 && !dryRun) {
     const webUrl = process.env.WEB_URL || 'http://localhost:3100';
     try {

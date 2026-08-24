@@ -163,7 +163,7 @@ test.describe('子ども風邪の日モード', () => {
     // Act: 別タブでモードON
     await sickModeOnButton(otherPage).click();
 
-    // Assert: 元のタブにSSEで反映される
+    // Assert: 元のタブにリアルタイム同期で反映される
     await test.step('元のタブにも緊急バナーが表示される', async () => {
       await expect(sickModeBanner(page)).toBeVisible();
     });

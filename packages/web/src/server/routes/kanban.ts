@@ -1,20 +1,11 @@
 import { Router, type Request, type Response } from 'express';
 import { getDb } from '../db.js';
 import { getNowISO } from '../test-time.js';
+import { broadcast } from '../realtime.js';
 import { isSickModeEnabled } from './sickMode.js';
 import { isAbsentToday } from './absence.js';
 
 const router: ReturnType<typeof Router> = Router();
-
-// SSE clients
-const sseClients = new Set<Response>();
-
-export function broadcast(event: object) {
-  const data = `data: ${JSON.stringify(event)}\n\n`;
-  for (const client of sseClients) {
-    client.write(data);
-  }
-}
 
 // GET /api/kanban — list task instances
 router.get('/', (req: Request, res: Response) => {
@@ -317,7 +308,7 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
   res.status(result.created ? 201 : 200).json(task);
 });
 
-// POST /api/kanban/notify — trigger SSE broadcast (called by scheduler)
+// POST /api/kanban/notify — 再描画のブロードキャストを促す（スケジューラが呼ぶ）
 router.post('/notify', (_req: Request, res: Response) => {
   broadcast({ type: 'tasks_changed' });
   res.json({ success: true });
@@ -348,22 +339,6 @@ router.delete('/', (req: Request, res: Response) => {
   const result = db.prepare('DELETE FROM task_instances WHERE status = ?').run(status);
   broadcast({ type: 'tasks_changed' });
   res.json({ success: true, deleted: result.changes });
-});
-
-// GET /api/kanban/events — SSE endpoint
-router.get('/events', (_req: Request, res: Response) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  });
-  res.write('\n');
-
-  sseClients.add(res);
-
-  res.on('close', () => {
-    sseClients.delete(res);
-  });
 });
 
 export default router;

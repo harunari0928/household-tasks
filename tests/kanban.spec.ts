@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/setup.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import type { Page } from '@playwright/test';
+import type { Page, WebSocketRoute } from '@playwright/test';
 
 const execAsync = promisify(exec);
 
@@ -68,6 +68,34 @@ async function goToKanban(page: Page) {
   await page.getByText('未着手').waitFor();
 }
 
+/**
+ * ドラッグ直後のクリックが効くようになるまで待つ。
+ *
+ * @dnd-kit はドラッグ終了から 50ms のあいだ document の capture で click を
+ * 止める（ドラッグに続いて起きるクリックを無効化するため）。実ユーザはその間に
+ * ボタンへ手を動かせないが、テストは押せてしまい、クリックが黙って消える
+ * （エラー通知の「再試行」「✕」が反応しない形で実際にflakyになった）。
+ * 抑制が解けたかは「click が document まで届くか」を実際に試せば分かる。
+ */
+async function waitForClicksAfterDrag(page: Page) {
+  await expect(async () => {
+    const clickReachedDocument = await page.evaluate(() => {
+      const probe = document.createElement('button');
+      document.body.appendChild(probe);
+      let reached = false;
+      const onClick = () => {
+        reached = true;
+      };
+      document.addEventListener('click', onClick);
+      probe.click(); // 同期的に配信される
+      document.removeEventListener('click', onClick);
+      probe.remove();
+      return reached;
+    });
+    expect(clickReachedDocument).toBe(true);
+  }).toPass();
+}
+
 async function dragCardToColumn(page: Page, cardName: string, columnTitle: string) {
   const card = page.getByText(cardName).first();
   const columnHeading = page.getByRole('heading', { name: columnTitle });
@@ -87,6 +115,7 @@ async function dragCardToColumn(page: Page, cardName: string, columnTitle: strin
   await page.mouse.move(startX + 10, startY, { steps: 2 });
   await page.mouse.move(endX, endY, { steps: 10 });
   await page.mouse.up();
+  await waitForClicksAfterDrag(page);
 }
 
 async function changeStatus(page: Page, baseURL: string, taskName: string, status: string, assignee?: string) {
@@ -686,6 +715,91 @@ test.describe('リアルタイム更新', () => {
 
     await expect(page.getByText('realtime-test')).toBeVisible({ timeout: 10000 });
   });
+
+  test('他のユーザがドラッグで完了に動かしたカードが、画面更新なしに完了列に表示される', async ({
+    page,
+    baseURL,
+  }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'realtime-move-test', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+    await page.getByRole('region', { name: '未着手列' }).getByText('realtime-move-test').waitFor();
+
+    const otherUserPage = await page.context().newPage();
+    await otherUserPage.goto('/#/');
+    await otherUserPage
+      .getByRole('region', { name: '未着手列' })
+      .getByText('realtime-move-test')
+      .waitFor();
+    await otherUserPage.getByLabel('ユーザー切替').click();
+    await otherUserPage.getByRole('button', { name: 'MTMR', exact: true }).click();
+
+    // Act
+    await dragCardToColumn(otherUserPage, 'realtime-move-test', '完了');
+
+    // Assert
+    await expect(
+      page.getByRole('region', { name: '完了列' }).getByText('realtime-move-test'),
+    ).toBeVisible();
+  });
+
+  test('同期が切れているあいだに他のユーザが動かしたカードが、再接続後に完了列に表示される', async ({
+    page,
+    baseURL,
+  }) => {
+    // Arrange
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'realtime-reconnect-test', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+
+    // リアルタイム同期を切った状態から始める。モックした接続はサーバへ繋がないので、
+    // 画面は開いているのに他のユーザの操作が届かない状況になる。
+    let connectToServer = false;
+    let onMockedConnection: (route: WebSocketRoute) => void = () => {};
+    const mockedConnection = new Promise<WebSocketRoute>((resolve) => {
+      onMockedConnection = resolve;
+    });
+    await page.routeWebSocket('**/api/kanban/ws', (ws) => {
+      if (connectToServer) {
+        ws.connectToServer();
+        return;
+      }
+      onMockedConnection(ws);
+    });
+
+    await goToKanban(page);
+    await page
+      .getByRole('region', { name: '未着手列' })
+      .getByText('realtime-reconnect-test')
+      .waitFor();
+    const disconnectedSocket = await mockedConnection;
+
+    const otherUserPage = await page.context().newPage();
+    await otherUserPage.goto('/#/');
+    await otherUserPage
+      .getByRole('region', { name: '未着手列' })
+      .getByText('realtime-reconnect-test')
+      .waitFor();
+    await otherUserPage.getByLabel('ユーザー切替').click();
+    await otherUserPage.getByRole('button', { name: 'MTMR', exact: true }).click();
+    await dragCardToColumn(otherUserPage, 'realtime-reconnect-test', '完了');
+    await otherUserPage
+      .getByRole('region', { name: '完了列' })
+      .getByText('realtime-reconnect-test')
+      .waitFor();
+
+    // Act
+    // 以降の接続はサーバに繋ぐ。いま張っている接続を切れば自動で再接続する。
+    connectToServer = true;
+    await disconnectedSocket.close();
+
+    // Assert
+    await expect(
+      page.getByRole('region', { name: '完了列' }).getByText('realtime-reconnect-test'),
+    ).toBeVisible({ timeout: 15000 });
+  });
 });
 
 test.describe('画面を再表示したときの最新化', () => {
@@ -696,8 +810,9 @@ test.describe('画面を再表示したときの最新化', () => {
     await runScheduler('2026-03-29');
     await changeStatus(page, baseURL!, 'visibility-refresh-test', 'todo', 'MTMR');
 
-    // SSE接続を遮断: 画面を閉じている間に他ユーザの操作が届かない状況を再現
-    await page.route('**/api/kanban/events', (route) => route.abort());
+    // リアルタイム同期のWebSocketをモックして遮断（サーバへは繋がない）:
+    // 画面を閉じている間に他ユーザの操作が届かない状況を再現する
+    await page.routeWebSocket('**/api/kanban/ws', () => {});
     await goToKanban(page);
     await page.getByRole('region', { name: '未着手列' }).getByText('visibility-refresh-test').waitFor();
 
@@ -746,6 +861,7 @@ test.describe('同一列内の並べ替え', () => {
     await page.mouse.move(startX + 10, startY, { steps: 2 });
     await page.mouse.move(endX, endY, { steps: 10 });
     await page.mouse.up();
+    await waitForClicksAfterDrag(page);
   }
 
   async function getColumnText(page: Page, status: string): Promise<string> {

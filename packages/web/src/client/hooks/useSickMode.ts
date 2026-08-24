@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApi } from './useApi.js';
+import { useRealtimeEvent } from './useRealtime.js';
 
 /**
  * 子ども風邪の日モードの状態管理。
  * サーバー（app_settings）に保存された共有フラグを取得し、
- * SSE経由で他の端末からの変更もリアルタイムに反映する。
+ * WebSocket経由で他の端末からの変更もリアルタイムに反映する。
  */
 export function useSickMode() {
   const { request } = useApi();
@@ -19,18 +20,11 @@ export function useSickMode() {
     fetchMode();
   }, [fetchMode]);
 
-  useEffect(() => {
-    const eventSource = new EventSource('/api/kanban/events');
-    eventSource.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === 'sick_mode_changed') setSickMode(data.enabled === true);
-      } catch {
-        // ignore malformed events
-      }
-    };
-    return () => eventSource.close();
-  }, []);
+  useRealtimeEvent((event) => {
+    if (event.type === 'sick_mode_changed') setSickMode(event.enabled === true);
+    // 切断中の変更を取りこぼしているので取り直す
+    if (event.type === 'reconnected') fetchMode();
+  });
 
   const toggleSickMode = useCallback(async () => {
     const next = !sickMode;

@@ -8,7 +8,7 @@ allowed-tools: Bash
 
 # 子ども風邪の日モード切替
 
-モードはサーバー（app_settings）に保存され、全端末にSSEでリアルタイム反映される。
+モードはサーバー（app_settings）に保存され、全端末にWebSocketでリアルタイム反映される。
 
 ```bash
 # 状態確認

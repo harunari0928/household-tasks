@@ -8,7 +8,7 @@ import {
 } from '@household-tasks/shared';
 import { getDb } from '../db.js';
 import { getNowISO } from '../test-time.js';
-import { broadcast } from './kanban.js';
+import { broadcast } from '../realtime.js';
 
 const router: ReturnType<typeof Router> = Router();
 
