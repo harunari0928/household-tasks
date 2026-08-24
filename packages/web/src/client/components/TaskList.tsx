@@ -60,8 +60,18 @@ function formatFrequency(task: TaskDefinition): string {
   }
 }
 
+// 即時（都度）はスケジューラが起票しないので、起票時刻は持たない（表示もしない）
 function formatScheduledHour(task: TaskDefinition): string {
+  if (isOnDemand(task)) return '';
   return `${task.scheduled_hour}時`;
+}
+
+/**
+ * 即時（都度）は起票のタイミングに関わる設定（風邪の日・不在時の扱い）を
+ * フォームで設定できない（常に見える側で保存される）ので、バッジも出さない。
+ */
+function isOnDemand(task: TaskDefinition): boolean {
+  return task.frequency_type === 'on_demand';
 }
 
 export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
@@ -104,18 +114,18 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
           >
             <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{task.name}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-              <span>{formatFrequency(task)} {formatScheduledHour(task)}</span>
-              {task.sick_day_behavior === 'sick_only' && (
+              <span>{[formatFrequency(task), formatScheduledHour(task)].filter(Boolean).join(' ')}</span>
+              {!isOnDemand(task) && task.sick_day_behavior === 'sick_only' && (
                 <span className="flex-shrink-0 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-full px-2 py-0.5">
                   🤒 風邪の日のみ
                 </span>
               )}
-              {task.sick_day_behavior === 'always' && (
+              {!isOnDemand(task) && task.sick_day_behavior === 'always' && (
                 <span className="flex-shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-full px-2 py-0.5">
                   常に表示
                 </span>
               )}
-              {task.absence_behavior === 'hidden' && (
+              {!isOnDemand(task) && task.absence_behavior === 'hidden' && (
                 <span className="flex-shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded-full px-2 py-0.5">
                   🧳 不在中は休み
                 </span>

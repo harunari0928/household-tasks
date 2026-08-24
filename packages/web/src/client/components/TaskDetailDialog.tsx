@@ -21,6 +21,11 @@ interface Props {
 }
 
 function formatFrequency(task: TaskDefinition): string {
+  // 即時（都度）はスケジューラが起票しないので、起票時刻を添えない
+  if (task.frequency_type === 'on_demand') {
+    return FREQUENCY_TYPES.on_demand;
+  }
+
   if (task.frequency_type === 'days_after_completion') {
     return `完了後${task.frequency_interval}日 ${task.scheduled_hour}時`;
   }

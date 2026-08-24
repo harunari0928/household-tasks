@@ -57,6 +57,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// 「即時（都度）」で設定できない項目に共通で出す理由。文言を1か所にまとめる。
+const ON_DEMAND_UNAVAILABLE = '即時（都度）のタスクはスケジューラが起票しないため設定できません';
+
+const disabledInput =
+  'disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed';
+
 const inputBase =
   'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
 
@@ -98,6 +104,17 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     task?.absence_behavior ??
       (HOME_BOUND_CATEGORIES.has(task?.category ?? defaultCategory) ? 'hidden' : 'normal'),
   );
+  // 即時（都度）はスケジューラが起票しないため、起票のタイミングに関わる設定
+  // （風邪の日／不在時の扱い・実行期間）はどれも効かない。UI では非活性にして理由を示す。
+  const isOnDemand = frequencyType === 'on_demand';
+  // 実行期間は1年ごと（日付が固定される）と即時（都度）で指定できない。
+  const periodDisabled = frequencyType === 'yearly' || isOnDemand;
+  // 非活性にした欄に中途半端な値が残ると、カンバンの絞り込み
+  // （風邪の日モード中・不在日）だけが効いて「記録したのに板に出てこない」状態になる。
+  // 表示も保存値も「常に見える」側に倒して、非活性の表示と実際の保存値を一致させる。
+  const effectiveSickDayBehavior: SickDayBehaviorKey = isOnDemand ? 'always' : sickDayBehavior;
+  const effectiveAbsenceBehavior: AbsenceBehaviorKey = isOnDemand ? 'normal' : absenceBehavior;
+
   const initialPeriodEnabled =
     task?.period_start_mm != null &&
     task?.period_start_dd != null &&
@@ -231,7 +248,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     }
 
     setPeriodError('');
-    if (periodEnabled && frequencyType !== 'yearly') {
+    if (periodEnabled && !periodDisabled) {
       const startDays = daysInMonth(periodStartMm);
       const endDays = daysInMonth(periodEndMm);
       if (periodStartDd < 1 || periodStartDd > startDays || periodEndDd < 1 || periodEndDd > endDays) {
@@ -265,8 +282,8 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       frequency_type: frequencyType,
       points: pointsValue,
       scheduled_hour: scheduledHour,
-      sick_day_behavior: sickDayBehavior,
-      absence_behavior: absenceBehavior,
+      sick_day_behavior: effectiveSickDayBehavior,
+      absence_behavior: effectiveAbsenceBehavior,
     };
 
     if (['n_days', 'n_weeks', 'n_months', 'days_after_completion'].includes(frequencyType)) {
@@ -288,7 +305,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       input.days_of_week = daysOfWeek;
       input.nth_weekday_position = nthWeekdayPosition;
     }
-    if (periodEnabled && frequencyType !== 'yearly') {
+    if (periodEnabled && !periodDisabled) {
       input.period_start_mm = periodStartMm;
       input.period_start_dd = periodStartDd;
       input.period_end_mm = periodEndMm;
@@ -428,9 +445,10 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
             </label>
             <select
               id="sick-day-behavior"
-              value={sickDayBehavior}
+              value={effectiveSickDayBehavior}
               onChange={(e) => setSickDayBehavior(e.target.value as SickDayBehaviorKey)}
-              className={inputBase}
+              disabled={isOnDemand}
+              className={`${inputBase} ${disabledInput}`}
             >
               {(Object.entries(SICK_DAY_BEHAVIORS) as [SickDayBehaviorKey, string][]).map(([key, label]) => (
                 <option key={key} value={key}>
@@ -439,7 +457,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
               ))}
             </select>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              子ども風邪の日モード中にこのタスクをどう扱うか
+              {isOnDemand ? ON_DEMAND_UNAVAILABLE : '子ども風邪の日モード中にこのタスクをどう扱うか'}
             </p>
           </div>
 
@@ -449,9 +467,10 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
             </label>
             <select
               id="absence-behavior"
-              value={absenceBehavior}
+              value={effectiveAbsenceBehavior}
               onChange={(e) => setAbsenceBehavior(e.target.value as AbsenceBehaviorKey)}
-              className={inputBase}
+              disabled={isOnDemand}
+              className={`${inputBase} ${disabledInput}`}
             >
               {(Object.entries(ABSENCE_BEHAVIORS) as [AbsenceBehaviorKey, string][]).map(([key, label]) => (
                 <option key={key} value={key}>
@@ -460,8 +479,9 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
               ))}
             </select>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              帰省・旅行などで家を空ける日（家族カレンダー由来）の扱い。
-              「不在中は非表示」にすると、その日は起票されません
+              {isOnDemand
+                ? ON_DEMAND_UNAVAILABLE
+                : '帰省・旅行などで家を空ける日（家族カレンダー由来）の扱い。「不在中は非表示」にすると、その日は起票されません'}
             </p>
           </div>
 
@@ -518,35 +538,37 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
               error={frequencyError}
             />
 
-            <fieldset ref={periodErrorRef} className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700" disabled={frequencyType === 'yearly'}>
+            <fieldset ref={periodErrorRef} className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700" disabled={periodDisabled}>
               <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">実行期間</legend>
               <div className="flex flex-wrap gap-4" role="radiogroup" aria-label="実行期間">
-                <label className={`inline-flex items-center gap-2 text-sm ${frequencyType === 'yearly' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                <label className={`inline-flex items-center gap-2 text-sm ${periodDisabled ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
                   <input
                     type="radio"
                     name="period-enabled"
-                    checked={!periodEnabled || frequencyType === 'yearly'}
+                    checked={!periodEnabled || periodDisabled}
                     onChange={() => { setPeriodEnabled(false); setPeriodError(''); }}
                     className="w-4 h-4"
                   />
                   期間指定しない
                 </label>
-                <label className={`inline-flex items-center gap-2 text-sm ${frequencyType === 'yearly' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                <label className={`inline-flex items-center gap-2 text-sm ${periodDisabled ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
                   <input
                     type="radio"
                     name="period-enabled"
-                    checked={periodEnabled && frequencyType !== 'yearly'}
+                    checked={periodEnabled && !periodDisabled}
                     onChange={() => setPeriodEnabled(true)}
                     className="w-4 h-4"
                   />
                   期間指定する
                 </label>
               </div>
-              {frequencyType === 'yearly' && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">1年毎の頻度では実行期間を指定できません</p>
+              {periodDisabled && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {isOnDemand ? ON_DEMAND_UNAVAILABLE : '1年毎の頻度では実行期間を指定できません'}
+                </p>
               )}
 
-              {periodEnabled && frequencyType !== 'yearly' && (
+              {periodEnabled && !periodDisabled && (
                 <div className="space-y-2 pl-1">
                   <div>
                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">開始</div>

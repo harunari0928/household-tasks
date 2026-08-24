@@ -1219,6 +1219,119 @@ test.describe('1年ごとタスクの月日指定', () => {
   });
 });
 
+test.describe('即時（都度）タスクの設定制限', () => {
+  test('一覧では頻度だけが表示され、起票時刻も扱いのバッジも表示されない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テストおむつ替え');
+    await page.getByLabel('頻度').selectOption('on_demand');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テストおむつ替え').waitFor();
+
+    await test.step('起票時刻を伴わず「即時（都度）」とだけ表示される', async () => {
+      await expect(page.getByText('即時（都度）', { exact: true })).toBeVisible();
+    });
+    await test.step('風邪の日の扱いのバッジが表示されない', async () => {
+      await expect(page.getByText('常に表示')).not.toBeVisible();
+    });
+  });
+
+  test('風邪の日の扱いは選べず理由が表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('頻度').selectOption('on_demand');
+
+    await test.step('風邪の日の扱いが非活性になる', async () => {
+      await expect(page.getByLabel('風邪の日の扱い')).toBeDisabled();
+    });
+    await test.step('設定できない理由が表示される', async () => {
+      await expect(
+        page.getByText('即時（都度）のタスクはスケジューラが起票しないため設定できません').first(),
+      ).toBeVisible();
+    });
+  });
+
+  test('不在時の扱いは選べない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('頻度').selectOption('on_demand');
+
+    await expect(page.getByLabel('不在時の扱い')).toBeDisabled();
+  });
+
+  test('実行期間は選べない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('頻度').selectOption('on_demand');
+
+    await test.step('期間指定のラジオが非活性になる', async () => {
+      await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeDisabled();
+      await expect(page.getByRole('radio', { name: '期間指定する' })).toBeDisabled();
+    });
+    await test.step('期間指定しないが選ばれた状態になる', async () => {
+      await expect(page.getByRole('radio', { name: '期間指定しない' })).toBeChecked();
+    });
+  });
+
+  test('即時（都度）に切り替えると設定済みの実行期間の入力が非表示になる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByRole('radio', { name: '期間指定する' }).check();
+    await page.getByLabel('開始月').waitFor();
+
+    await page.getByLabel('頻度').selectOption('on_demand');
+
+    await expect(page.getByLabel('開始月')).not.toBeVisible();
+  });
+
+  test('即時（都度）から他の頻度に戻すと再び設定できる', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('頻度').selectOption('on_demand');
+    await expect(page.getByLabel('風邪の日の扱い')).toBeDisabled();
+
+    await page.getByLabel('頻度').selectOption('daily');
+
+    await test.step('風邪の日の扱いが選べる', async () => {
+      await expect(page.getByLabel('風邪の日の扱い')).toBeEnabled();
+    });
+    await test.step('不在時の扱いが選べる', async () => {
+      await expect(page.getByLabel('不在時の扱い')).toBeEnabled();
+    });
+    await test.step('実行期間が選べる', async () => {
+      await expect(page.getByRole('radio', { name: '期間指定する' })).toBeEnabled();
+    });
+  });
+
+  /**
+   * 不在中は非表示のまま即時（都度）にすると、記録したのにカンバンから消える。
+   * 非活性の表示（不在でも表示）どおりに保存されることを守る。
+   */
+  test('不在中は非表示が既定のカテゴリでも即時（都度）なら不在でも表示で保存される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /水回り/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト水はね拭き');
+    await page.getByLabel('頻度').selectOption('on_demand');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テスト水はね拭き').waitFor();
+
+    await test.step('一覧にお休みのバッジが表示されない', async () => {
+      await expect(page.getByText('不在中は休み')).not.toBeVisible();
+    });
+
+    await page.getByText('テスト水はね拭き').click();
+
+    await test.step('編集フォームでも不在でも表示になっている', async () => {
+      await expect(page.getByLabel('不在時の扱い')).toHaveValue('normal');
+    });
+  });
+});
+
 test.describe('不在時の扱い', () => {
   test('「不在中は非表示」で作成すると一覧にお休みのバッジが表示される', async ({ page }) => {
     await page.goto('/#/tasks');
