@@ -94,6 +94,12 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
     `next_due_date` も持たない。起票時刻の設定も UI から消える（意味を持たないため）。
   - **冪等ではない。** 呼ぶたびに完了記録が増える（不定期の家事は1日に何度も起こりうるため）。
     ただし未完了カードが板に残っている場合だけは、新規に作らずそのカードを完了にする（ポイントの二重計上を防ぐ）。
+  - **記録の取り消しは `DELETE /api/kanban/:id`**（専用エンドポイントは無い）。
+    `PATCH /api/kanban/:id/status` で todo に戻すと、スケジューラが触らない即時タスクの
+    カードが板に永久に残るので、**戻すのではなく消す**。
+  - 一覧は `GET /api/tasks?frequency_type=on_demand`。HA がシステムプロンプトに
+    毎ターン載せるので、**軽く保つこと**（フィルタ無しは81件・約51KB）。
+    綴り間違いは 400 で落とす（空配列を返すと「1件も登録されていない」と案内されてしまう）。
   - **`execution_log` は書かない。** 書くとスケジューラの `isAlreadyCreatedToday()` が反応するが、
     その分岐は `next_due_date` を進めないので、N日ごとのタスクが翌日に前倒しで起票される。
 - **HA が家事レポートを議事録に埋め込む。** `~/repos/homeassistant/config/scripts/household_report.py` が

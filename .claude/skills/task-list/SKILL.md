@@ -2,7 +2,7 @@
 name: task-list
 description: タスク定義の一覧を取得する。カテゴリでフィルタ可能。タスクの追加・編集前の確認にも使う。
 user-invokable: true
-argument-hint: [--category CATEGORY] [--json] e.g. "--category floor", "--json"
+argument-hint: [--category CATEGORY] [--frequency-type TYPE] [--json] e.g. "--category floor", "--frequency-type on_demand"
 allowed-tools: Bash
 ---
 
@@ -17,6 +17,7 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list
 ## オプション
 
 - `--category <category>` — カテゴリでフィルタ
+- `--frequency-type <type>` — 頻度でフィルタ（例: `on_demand` = 声で即時完了できるタスク）
   - 有効値: `water`, `kitchen`, `floor`, `entrance`, `laundry`, `trash`, `childcare`, `cooking`, `lifestyle`
 - `--json` — JSON形式で出力（プログラムから解析する場合に使用）
 
@@ -28,6 +29,7 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list
 
 # 床掃除カテゴリのみ
 WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list --category floor
+WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list --frequency-type on_demand
 
 # JSON出力
 WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list --json
