@@ -15,6 +15,8 @@ export default defineConfig({
       '/api': {
         target: `http://localhost:${apiPort}`,
         changeOrigin: true,
+        // リアルタイム同期の WebSocket（/api/kanban/ws）も同じ prefix なので中継する
+        ws: true,
       },
     },
   },

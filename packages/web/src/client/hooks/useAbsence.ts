@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApi } from './useApi.js';
+import { useRealtimeEvent } from './useRealtime.js';
 
 export type AbsenceDay = {
   date: string;
@@ -21,15 +22,10 @@ type AbsenceResponse = {
  * 不在日そのものは Home Assistant の家族カレンダー同期が入れてくるので、
  * ここから作ることはしない（キーワード編集と、間違いの取り消しだけ）。
  *
- * **既定では SSE を開かない。**
- * ブラウザの同時接続上限（HTTP/1.1 で 1オリジン約6本）に、既存の
- * KanbanBoard と useSickMode の EventSource と合わせて到達してしまい、
- * **他のタブの SSE が繋がらなくなる**（風邪の日モードの即時反映が
- * 別タブで壊れる実バグを踏んだ）。購読が要る画面だけ
- * `useAbsence({ subscribe: true })` で明示的に有効化する。
+ * リアルタイム更新はタブ内で1本の WebSocket を共有する（`lib/realtime.ts`）ため、
+ * どの画面から使っても接続は増えない。
  */
-export function useAbsence(options: { subscribe?: boolean } = {}) {
-  const { subscribe = false } = options;
+export function useAbsence() {
   const { request } = useApi();
   const [keywords, setKeywords] = useState<string[]>([]);
   const [defaultKeywords, setDefaultKeywords] = useState<string[]>([]);
@@ -54,20 +50,11 @@ export function useAbsence(options: { subscribe?: boolean } = {}) {
     fetchAbsence();
   }, [fetchAbsence]);
 
-  // 同期で今日の不在状態が変わったら追随する（購読を有効にした画面だけ）
-  useEffect(() => {
-    if (!subscribe) return;
-    const es = new EventSource('/api/kanban/events');
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === 'absence_changed') fetchAbsence();
-      } catch {
-        // 不正なイベントは無視する
-      }
-    };
-    return () => es.close();
-  }, [subscribe, fetchAbsence]);
+  // 同期で今日の不在状態が変わったら追随する。
+  // 再接続時は切断中の同期を取りこぼしているので取り直す。
+  useRealtimeEvent((event) => {
+    if (event.type === 'absence_changed' || event.type === 'reconnected') fetchAbsence();
+  });
 
   const saveKeywords = useCallback(
     async (next: string[]) => {

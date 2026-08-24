@@ -11,7 +11,8 @@ React 19 + Vite SPA frontend with Express.js API backend, sharing a single packa
 - `src/server/` — Express API (tsc builds to `dist/server/`)
   - `index.ts` — Server entry, config routes, test reset endpoint, static file serving
   - `db.ts` — SQLite connection (WAL mode), migrations (task_definitions, execution_log, task_instances, attachments, app_settings)
-  - `routes/kanban.ts` — Kanban API: list/status/assignee CRUD + SSE events
+  - `routes/kanban.ts` — Kanban API: list/status/assignee CRUD
+  - `realtime.ts` — WebSocket server (`/api/kanban/ws`) と `broadcast()`。ルータから呼ばれる
   - `routes/tasks.ts` — Task definition CRUD, toggle, import with upsert logic
   - `routes/stats.ts` — Points aggregation from task_instances
 
@@ -25,7 +26,7 @@ React 19 + Vite SPA frontend with Express.js API backend, sharing a single packa
 - `PATCH /api/kanban/:id/status` — Change status (with optional assignee)
 - `PATCH /api/kanban/:id/assignee` — Change assignee
 - `GET/PUT /api/kanban/assignees` — Manage registered assignees
-- `GET /api/kanban/events` — SSE endpoint for real-time updates
+- `GET /api/kanban/ws` — WebSocket endpoint for real-time updates (upgrade only)
 - `GET /api/stats/points` — Points aggregation from completed task_instances
 - `GET/PUT /api/settings` — App settings (key-value store)
 - `GET /api/logs` — Execution log with pagination
@@ -40,9 +41,10 @@ pnpm --filter web build      # Runs: vite build && tsc -p tsconfig.server.json
 
 ## Key details
 
-- `vite.config.ts` proxies `/api` to Express using `API_PORT` env var (default 3100).
+- `vite.config.ts` proxies `/api` to Express using `API_PORT` env var (default 3100)。WebSocket も通すため `ws: true` が必要。
 - Production mode serves static files only if `dist/client/index.html` exists (prevents crash in dev).
 - Frequency validation: `days_of_week` required for weekly/n_weeks; `day_of_month` required for monthly/n_months; `frequency_interval` required for n_days/n_weeks/n_months.
 - `calculateNextDueDate()` returns null for fixed-schedule types (daily/weekly/monthly), computes from today for interval types.
 - Kanban board uses @dnd-kit for drag-and-drop. Requires assignee selection for done when unassigned.
-- SSE broadcasts task updates to all connected clients for real-time sync.
+- `broadcast()` (`src/server/realtime.ts`) pushes task updates to all connected WebSocket clients for real-time sync.
+  クライアントは `src/client/lib/realtime.ts` の共有接続（タブ内1本）で受け取る。

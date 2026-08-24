@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getDb, getUploadsDir } from './db.js';
+import { attachRealtime } from './realtime.js';
 import { setTestNow } from './test-time.js';
 import tasksRouter from './routes/tasks.js';
 import attachmentsRouter from './routes/attachments.js';
@@ -108,8 +109,11 @@ if (fs.existsSync(indexHtml)) {
   });
 }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// クライアント間のリアルタイム同期（WebSocket）を同じポートに載せる
+attachRealtime(server);
 
 export default app;

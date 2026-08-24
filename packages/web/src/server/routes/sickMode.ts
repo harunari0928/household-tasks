@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import type Database from 'better-sqlite3';
 import { getDb } from '../db.js';
 import { getNowISO } from '../test-time.js';
-import { broadcast } from './kanban.js';
+import { broadcast } from '../realtime.js';
 
 const router: ReturnType<typeof Router> = Router();
 

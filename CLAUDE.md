@@ -141,13 +141,26 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
 - SQLite timestamps use `new Date().toISOString()` (millisecond precision), not SQLite's `datetime('now')`.
 - Express `app` and `router` require explicit type annotations to avoid TS2742 errors with pnpm's strict module resolution.
 - `package.json` `pnpm.onlyBuiltDependencies` must include `better-sqlite3`, `esbuild`, `sqlite3` — otherwise Docker builds fail with missing native modules.
-- Kanban board uses SSE (`/api/kanban/events`) for real-time updates between users.
-  - **ブラウザの同時接続上限（HTTP/1.1 で 1オリジン約6本）に注意。** 1タブで
-    KanbanBoard と useSickMode が常時 EventSource を張っているので、
-    新しいフックが無条件に SSE を開くと**2タブ目の SSE が繋がらなくなる**
-    （風邪の日モードの別タブ即時反映が壊れる形で実際に踏んだ）。
-    購読は `useAbsence({ subscribe: true })` のように**必要な画面だけ opt-in** にする。
+- Kanban board uses WebSocket (`/api/kanban/ws`) for real-time updates between users
+  （2026-08-24 に SSE から移行）。サーバ側は `packages/web/src/server/realtime.ts` の
+  `broadcast()`、クライアント側は `packages/web/src/client/lib/realtime.ts`。
+  更新は従来どおり REST で行い、WebSocket は再描画のきっかけを配る一方向の通知だけに使う。
+  - **クライアントの接続はタブ内で1本に共有する。** 画面ごとに接続を張らず
+    `useRealtimeEvent()` / `useRealtimeStatus()` で購読する（`lib/realtime.ts` のモジュール状態）。
+    SSE時代は KanbanBoard・useSickMode・useAbsence が各自 EventSource を張り、
+    **ブラウザの同時接続上限（HTTP/1.1 で 1オリジン約6本）に達して2タブ目が繋がらない**
+    バグを踏んだ（風邪の日モードの別タブ即時反映が壊れた）。接続を共有していれば
+    購読を増やしても接続は増えないので、画面ごとの opt-in は不要。
+  - **再接続時は `{ type: 'reconnected' }` を配る。** 切断中の変更は届いていないので、
+    購読側はこれを見て取り直す（KanbanBoard はタスク一覧、useSickMode / useAbsence は自分の状態）。
+  - サーバは 30 秒ごとの ping/pong で死んだ接続を切る（スマホのスリープや NAT で
+    close が飛んでこない接続が溜まるため）。
+  - Vite dev の proxy は `/api` に `ws: true` が必要（無いと開発時だけ繋がらない）。
 - `@dnd-kit` for drag-and-drop on the Kanban board.
+  - **ドラッグ終了から 50ms は @dnd-kit が document の capture で click を止める。**
+    実ユーザは影響しないが、テストはその間にボタンを押せてしまい**クリックが黙って消える**
+    （エラー通知の「再試行」「✕」が反応せずflakyになった）。ドラッグ後にクリックする
+    テストは `waitForClicksAfterDrag()`（`tests/kanban.spec.ts`）で抑制が解けるのを待つ。
 - **不在日（帰省・旅行）**: `absence_days` テーブルの日付は
   Home Assistant の `config/scripts/absence_sync.py` が家族カレンダーから同期する
   （判定キーワードはアプリ側 `app_settings.absence_keywords`、設定画面で編集可）。

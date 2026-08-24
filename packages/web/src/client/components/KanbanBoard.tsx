@@ -22,6 +22,7 @@ import KanbanFilters from './KanbanFilters.js';
 import TaskDetailDialog from './TaskDetailDialog.js';
 import { useAssignees } from '../hooks/useAssignees.js';
 import { useApi } from '../hooks/useApi.js';
+import { useRealtimeEvent, useRealtimeStatus } from '../hooks/useRealtime.js';
 import { useToast } from '../contexts/ToastContext.js';
 
 type KanbanBoardProps = {
@@ -43,7 +44,6 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<TaskInstance | null>(null);
   const prevTasksRef = useRef<TaskInstance[]>([]);
   const localMovedRef = useRef<Set<number>>(new Set());
-  const sseDisconnectedRef = useRef(false);
   const [recentlyMovedIds, setRecentlyMovedIds] = useState<Set<number>>(new Set());
 
   const sensors = useSensors(
@@ -59,7 +59,7 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     if (!result.ok) return;
     const data = result.data;
 
-    // Detect tasks moved by other users (SSE) — exclude self-initiated moves
+    // Detect tasks moved by other users (realtime) — exclude self-initiated moves
     if (prevTasksRef.current.length > 0) {
       const prevMap = new Map(prevTasksRef.current.map((t) => [t.id, t.status]));
       const movedIds = data
@@ -84,24 +84,17 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     fetchAssignees();
   }, [fetchTasks, fetchAssignees]);
 
-  // SSE for real-time updates
-  useEffect(() => {
-    const eventSource = new EventSource('/api/kanban/events');
-    eventSource.onopen = () => {
-      sseDisconnectedRef.current = false;
-    };
-    eventSource.onmessage = () => {
-      fetchTasks();
-    };
-    eventSource.onerror = () => {
-      // EventSource auto-reconnects; notify once per disconnection to avoid spam.
-      if (!sseDisconnectedRef.current) {
-        sseDisconnectedRef.current = true;
-        showInfo('リアルタイム更新が一時的に切断されました。自動的に再接続します。');
-      }
-    };
-    return () => eventSource.close();
-  }, [fetchTasks, showInfo]);
+  // WebSocket for real-time updates. 再接続時は `reconnected` が届くので、
+  // 切断中に他の端末が動かしたカードもここで追いつく。
+  useRealtimeEvent(() => {
+    fetchTasks();
+  });
+
+  // 自動で再接続するので、切断を1回知らせるだけにする
+  // （状態が変わったときだけ呼ばれるので、切断中に通知が積み上がることはない）。
+  useRealtimeStatus((connected) => {
+    if (!connected) showInfo('リアルタイム更新が一時的に切断されました。自動的に再接続します。');
+  });
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -122,7 +115,7 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     assignee: string | null | undefined,
     snapshot: TaskInstance[],
   ) => {
-    // Mark as local so the SSE echo won't highlight our own move.
+    // Mark as local so the realtime echo won't highlight our own move.
     localMovedRef.current.add(task.id);
     setTimeout(() => localMovedRef.current.delete(task.id), 3000);
 

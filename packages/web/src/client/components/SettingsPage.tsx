@@ -82,11 +82,7 @@ function GarbageSection() {
  * ここでは判定キーワードの編集と、誤検知の取り消しだけを提供する。
  */
 function AbsenceSection() {
-  // 設定画面は開いたまま同期が走ることがあるので購読する
-  // （カンバン側は App のバナーが読み込み時に取得するだけで足りる）
-  const { keywords, today, days, hiddenTaskCount, loading, saveKeywords, removeDay } = useAbsence({
-    subscribe: true,
-  });
+  const { keywords, today, days, hiddenTaskCount, loading, saveKeywords, removeDay } = useAbsence();
   const [newKeyword, setNewKeyword] = useState('');
 
   if (loading) return null;
