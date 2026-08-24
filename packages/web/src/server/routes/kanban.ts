@@ -267,7 +267,13 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
     return;
   }
 
-  // is_active は見ない。無効にしても「やった記録」は残せるほうが自然。
+  // 無効にしたタスクは受け付けない。is_active はタスクを止めるスイッチなので、
+  // 止めたはずのものが音声から記録できると辻褄が合わない。
+  if (!taskDef.is_active) {
+    res.status(400).json({ error: '無効になっているタスクです。記録するには有効にしてください' });
+    return;
+  }
+
   if (typeof assignee !== 'string' || assignee.trim() === '') {
     res.status(400).json({ error: '担当者が未設定です。完了にするには担当者を設定してください' });
     return;

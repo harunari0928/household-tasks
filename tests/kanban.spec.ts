@@ -1015,6 +1015,32 @@ test.describe('即時完了（起票と完了を1回で行う）', () => {
     });
   }
 
+  /** 完了列のカード。カードごとに削除ボタンが1つある */
+  function doneCards(page: Page) {
+    return page
+      .getByRole('region', { name: '完了列' })
+      .getByRole('button', { name: 'タスクを削除', exact: true });
+  }
+
+  /**
+   * カンバンを開き、タスクの取得が終わるまで待つ。
+   * 列は取得前から描画されるので、「記録されていない」を確かめるテストは
+   * これで待たないと、取得が終わる前に空を見て素通りする。
+   */
+  async function goToKanbanAfterFetch(page: Page) {
+    await page.goto('about:blank');
+    await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/kanban' &&
+          res.request().method() === 'GET' &&
+          res.ok(),
+      ),
+      page.goto('/#/'),
+    ]);
+    await page.getByText('未着手').waitFor();
+  }
+
   test('未着手のカードが無いタスクを即時完了すると、完了列に担当者付きで現れる', async ({ page, baseURL }) => {
     // Arrange
     await setupAssignees(page, baseURL!, ['MTMR', 'こばゆか']);
@@ -1072,7 +1098,7 @@ test.describe('即時完了（起票と完了を1回で行う）', () => {
     });
   });
 
-  test('無効にして自動起票されないタスクでも即時完了できる', async ({ page, baseURL }) => {
+  test('無効にしたタスクは即時完了できない', async ({ page, baseURL }) => {
     // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     const defId = await createTaskDef(page, baseURL!, { name: 'quick-done-inactive' });
@@ -1080,61 +1106,47 @@ test.describe('即時完了（起票と完了を1回で行う）', () => {
 
     // Act
     await completeNow(page, baseURL!, defId, 'MTMR');
-    await goToKanban(page);
+    await goToKanbanAfterFetch(page);
 
     // Assert
-    await expect(page.getByRole('region', { name: '完了列' }).getByText('quick-done-inactive')).toBeVisible();
+    await expect(doneCards(page)).toHaveCount(0);
   });
 
   test('担当者を指定せずに即時完了しようとしても記録されない', async ({ page, baseURL }) => {
-    // Arrange — 板が描画されたことを確かめるための対照タスクを一緒に完了させる
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     const defId = await createTaskDef(page, baseURL!, { name: 'quick-done-no-assignee' });
-    const controlId = await createTaskDef(page, baseURL!, { name: 'quick-done-control-a' });
 
     // Act
     await completeNow(page, baseURL!, defId);
-    await completeNow(page, baseURL!, controlId, 'MTMR');
-    await goToKanban(page);
+    await goToKanbanAfterFetch(page);
 
     // Assert
-    const doneColumn = page.getByRole('region', { name: '完了列' });
-    await expect(doneColumn.getByText('quick-done-control-a')).toBeVisible();
-    await expect(doneColumn.getByText('quick-done-no-assignee')).toHaveCount(0);
+    await expect(doneCards(page)).toHaveCount(0);
   });
 
   test('即時ではないタスクは即時完了できない', async ({ page, baseURL }) => {
-    // Arrange — 板が描画されたことを確かめるための対照タスクを一緒に完了させる
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
     const dailyId = await createTaskDef(page, baseURL!, { name: 'quick-done-daily', frequency_type: 'daily' });
-    const controlId = await createTaskDef(page, baseURL!, { name: 'quick-done-control-c' });
 
     // Act
     await completeNow(page, baseURL!, dailyId, 'MTMR');
-    await completeNow(page, baseURL!, controlId, 'MTMR');
-    await goToKanban(page);
+    await goToKanbanAfterFetch(page);
 
     // Assert
-    const doneColumn = page.getByRole('region', { name: '完了列' });
-    await expect(doneColumn.getByText('quick-done-control-c')).toBeVisible();
-    await expect(doneColumn.getByText('quick-done-daily')).toHaveCount(0);
+    await expect(doneCards(page)).toHaveCount(0);
   });
 
-  test('削除されたタスクを即時完了しようとしても記録されない', async ({ page, baseURL }) => {
-    // Arrange — 削除済みのタスクと、板が描画されたことを確かめるための対照タスク
+  test('存在しないタスクを即時完了しようとしても記録されない', async ({ page, baseURL }) => {
+    // Arrange
     await setupAssignees(page, baseURL!, ['MTMR']);
-    const deletedId = await createTaskDef(page, baseURL!, { name: 'quick-done-deleted' });
-    await page.request.delete(`${baseURL}/api/tasks/${deletedId}`);
-    const controlId = await createTaskDef(page, baseURL!, { name: 'quick-done-control-b' });
 
     // Act
-    await completeNow(page, baseURL!, deletedId, 'MTMR');
-    await completeNow(page, baseURL!, controlId, 'MTMR');
-    await goToKanban(page);
+    await completeNow(page, baseURL!, 999999, 'MTMR');
+    await goToKanbanAfterFetch(page);
 
     // Assert
-    const doneColumn = page.getByRole('region', { name: '完了列' });
-    await expect(doneColumn.getByText('quick-done-control-b')).toBeVisible();
-    await expect(doneColumn.getByText('quick-done-deleted')).toHaveCount(0);
+    await expect(doneCards(page)).toHaveCount(0);
   });
 });

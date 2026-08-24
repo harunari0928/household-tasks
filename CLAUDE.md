@@ -84,10 +84,11 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
   `POST /api/kanban/complete-from-definition/:id`（body に `assignee` 必須）で**起票と完了を一度に**記録する。
   HA 側は会話エージェントの `household_quick_done` ツール（発話名 → 定義の突き合わせは
   `custom_components/claude_code_conversation/household_tasks.py`）と `rest_command.household_task_quick_done`。
-  - **`on_demand` 以外のタスク定義は 400 で拒否する。** 定期タスクに使えると、起票時刻より前に
+  - **`on_demand` 以外のタスク定義と、無効（`is_active = 0`）のタスク定義は 400 で拒否する。** 定期タスクに使えると、起票時刻より前に
     記録した日にスケジューラが当日ぶんを普通に起票して、誰もやらないカードが板と夜の未完了チェックに残る。
     定期タスクの完了は板のカードに対して行う（`PATCH /api/kanban/:id/status`）。
-    **HA 側の突き合わせも `on_demand` の定義だけを対象にすること**（両方を絞らないと、
+    無効化はタスクを止めるスイッチなので、止めたはずのものが音声から記録できると辻褄が合わない。
+    **HA 側の突き合わせも同じ条件（`on_demand` かつ有効）で絞ること**（両方を絞らないと、
     音声からは候補に挙がるのに API に弾かれる、という分かりにくい失敗になる）。
   - `on_demand` はスケジューラが起票しない頻度。`shouldCreateToday()` が常に false を返し、
     `next_due_date` も持たない。起票時刻の設定も UI から消える（意味を持たないため）。
