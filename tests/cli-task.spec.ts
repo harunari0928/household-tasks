@@ -74,6 +74,38 @@ test.describe('ht task list（タスク定義一覧）', () => {
     });
   });
 
+  test('--active-only で無効にしたタスクが表示されなくなる', async () => {
+    // Arrange — 音声から記録できる家事の一覧に、止めてある家事が混ざらないこと
+    await runCli('task add --name cli-active-on --category lifestyle --frequency-type on_demand');
+    const off = await runCli('task add --name cli-active-off --category lifestyle --frequency-type on_demand');
+    const offId = off.stdout.match(/\d+/)?.[0];
+    await runCli(`task toggle ${offId}`);
+
+    // Act
+    const result = await runCli('task list --frequency-type on_demand --active-only');
+
+    // Assert
+    await test.step('有効なタスクは表示される', async () => {
+      expect(result.stdout).toContain('cli-active-on');
+    });
+    await test.step('無効にしたタスクは表示されない', async () => {
+      expect(result.stdout).not.toContain('cli-active-off');
+    });
+  });
+
+  test('--active-only を付けなければ無効にしたタスクも表示される', async () => {
+    // Arrange — 一覧は止めたタスクを探して再開する場所でもある
+    const off = await runCli('task add --name cli-active-both --category lifestyle --frequency-type on_demand');
+    const offId = off.stdout.match(/\d+/)?.[0];
+    await runCli(`task toggle ${offId}`);
+
+    // Act
+    const result = await runCli('task list --frequency-type on_demand');
+
+    // Assert
+    expect(result.stdout).toContain('cli-active-both');
+  });
+
   test('--frequency-type に無い頻度を指定するとエラー終了する', async () => {
     // Arrange
     await runCli('task add --name cli-freq-typo --category lifestyle --frequency-type on_demand');

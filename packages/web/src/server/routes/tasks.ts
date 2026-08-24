@@ -218,6 +218,7 @@ router.get('/', (_req: Request, res: Response) => {
   const db = getDb();
   const category = _req.query.category as string | undefined;
   const frequencyType = _req.query.frequency_type as string | undefined;
+  const isActive = _req.query.is_active as string | undefined;
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -234,6 +235,16 @@ router.get('/', (_req: Request, res: Response) => {
     }
     conditions.push('frequency_type = ?');
     params.push(frequencyType);
+  }
+  if (isActive !== undefined) {
+    // 頻度フィルタに is_active の意味を混ぜない（一覧は無効なタスクも見せる場所で、
+    // 止めたタスクを探して再開する用途がある）。絞りたい側が明示的に指定する。
+    if (isActive !== '0' && isActive !== '1') {
+      res.status(400).json({ error: 'is_active は 0 か 1 を指定してください' });
+      return;
+    }
+    conditions.push('is_active = ?');
+    params.push(Number(isActive));
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
