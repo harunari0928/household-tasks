@@ -18,6 +18,7 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list
 
 - `--category <category>` — カテゴリでフィルタ
 - `--frequency-type <type>` — 頻度でフィルタ（例: `on_demand` = 声で即時完了できるタスク）
+- `--active-only` — 有効なタスクだけ表示（付けないと無効にしたタスクも出る）
   - 有効値: `water`, `kitchen`, `floor`, `entrance`, `laundry`, `trash`, `childcare`, `cooking`, `lifestyle`
 - `--json` — JSON形式で出力（プログラムから解析する場合に使用）
 
