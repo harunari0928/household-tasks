@@ -217,12 +217,27 @@ function calculateNextDueDate(ft: string, interval: number | null, today: string
 router.get('/', (_req: Request, res: Response) => {
   const db = getDb();
   const category = _req.query.category as string | undefined;
-  let tasks;
+  const frequencyType = _req.query.frequency_type as string | undefined;
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
   if (category) {
-    tasks = db.prepare('SELECT * FROM task_definitions WHERE category = ? ORDER BY id').all(category);
-  } else {
-    tasks = db.prepare('SELECT * FROM task_definitions ORDER BY id').all();
+    conditions.push('category = ?');
+    params.push(category);
   }
+  if (frequencyType) {
+    // 綴り間違いは 400 で落とす。空配列を返すと、これを使う側（音声の
+    // 「記録できる家事」一覧）が「1件も登録されていない」と案内してしまう。
+    if (!VALID_FREQUENCY_TYPES.includes(frequencyType)) {
+      res.status(400).json({ error: '無効な頻度タイプです' });
+      return;
+    }
+    conditions.push('frequency_type = ?');
+    params.push(frequencyType);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const tasks = db.prepare(`SELECT * FROM task_definitions ${where} ORDER BY id`).all(...params);
   res.json(tasks);
 });
 

@@ -391,10 +391,14 @@ task
   .command('list')
   .description('List task definitions')
   .option('--category <category>', 'Filter by category')
+  .option('--frequency-type <type>', 'Filter by frequency type (e.g. on_demand)')
   .option('--json', 'Output as JSON')
-  .action(async (opts: { category?: string; json?: boolean }) => {
+  .action(async (opts: { category?: string; frequencyType?: string; json?: boolean }) => {
     try {
-      const query = opts.category ? `?category=${encodeURIComponent(opts.category)}` : '';
+      const params = new URLSearchParams();
+      if (opts.category) params.set('category', opts.category);
+      if (opts.frequencyType) params.set('frequency_type', opts.frequencyType);
+      const query = params.toString() ? `?${params}` : '';
       const tasks = await apiFetch('GET', `/api/tasks${query}`) as TaskDef[];
 
       if (opts.json) {

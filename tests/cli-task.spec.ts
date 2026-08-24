@@ -57,6 +57,39 @@ test.describe('ht task list（タスク定義一覧）', () => {
     });
   });
 
+  test('--frequency-type で指定した頻度のタスクだけ表示される', async () => {
+    // Arrange
+    await runCli('task add --name cli-freq-ondemand --category lifestyle --frequency-type on_demand');
+    await runCli('task add --name cli-freq-daily --category lifestyle --frequency-type daily');
+
+    // Act
+    const result = await runCli('task list --frequency-type on_demand');
+
+    // Assert
+    await test.step('指定した頻度のタスクが表示される', async () => {
+      expect(result.stdout).toContain('cli-freq-ondemand');
+    });
+    await test.step('他の頻度のタスクは表示されない', async () => {
+      expect(result.stdout).not.toContain('cli-freq-daily');
+    });
+  });
+
+  test('--frequency-type に無い頻度を指定するとエラー終了する', async () => {
+    // Arrange
+    await runCli('task add --name cli-freq-typo --category lifestyle --frequency-type on_demand');
+
+    // Act
+    const result = await runCli('task list --frequency-type on-demand');
+
+    // Assert — 空一覧を返すと「1件も登録されていない」と誤って案内されるため
+    await test.step('エラー終了する', async () => {
+      expect(result.exitCode).toBe(1);
+    });
+    await test.step('無効な頻度だと分かるメッセージが出る', async () => {
+      expect(result.stderr).toContain('無効な頻度タイプです');
+    });
+  });
+
   test('--json でJSON形式の配列が出力される', async () => {
     // Arrange
     await runCli('task add --name cli-json-test --category water --frequency-type daily');
