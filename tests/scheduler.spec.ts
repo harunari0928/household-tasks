@@ -1030,6 +1030,11 @@ test.describe('不在日（帰省・旅行）', () => {
    */
   const AWAY_DAY = '2026-08-14';
   const AWAY_DAY_OF_MONTH = 14;
+  // 「不在日ではない日」を表す日付。**実行日と重ならない過去の固定日にすること。**
+  // カンバンの不在判定（isAbsentToday）はテスト用の時計ではなく実時刻の今日を見るので、
+  // ここに実際の今日が入ると「不在中は非表示」のタスクが板から隠れて落ちる
+  // （AWAY_DAY の10日後を使っていて、2026-08-24 になった日に落ちた）。
+  const NOT_AWAY_DAY = '2026-08-04';
 
   for (const { label, frequency, extra } of [
     { label: '毎週', frequency: 'weekly', extra: { days_of_week: ['fri'] } },
@@ -1078,7 +1083,7 @@ test.describe('不在日（帰省・旅行）', () => {
       name: 'absence-other-day', category: 'water', frequency_type: 'monthly',
       day_of_month: AWAY_DAY_OF_MONTH, absenceBehaviorLabel: '不在中は非表示',
     });
-    await setAbsenceDays(page, baseURL!, [addDays(AWAY_DAY, 10)]);
+    await setAbsenceDays(page, baseURL!, [NOT_AWAY_DAY]);
 
     // Act
     await runScheduler(AWAY_DAY);

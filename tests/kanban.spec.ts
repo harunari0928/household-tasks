@@ -1120,19 +1120,21 @@ test.describe('即時完了（起票と完了を1回で行う）', () => {
     await expect(doneColumn.getByText('quick-done-daily')).toHaveCount(0);
   });
 
-  test('存在しないタスクを即時完了しようとしても記録されない', async ({ page, baseURL }) => {
-    // Arrange — 板が描画されたことを確かめるための対照タスクを一緒に完了させる
+  test('削除されたタスクを即時完了しようとしても記録されない', async ({ page, baseURL }) => {
+    // Arrange — 削除済みのタスクと、板が描画されたことを確かめるための対照タスク
     await setupAssignees(page, baseURL!, ['MTMR']);
+    const deletedId = await createTaskDef(page, baseURL!, { name: 'quick-done-deleted' });
+    await page.request.delete(`${baseURL}/api/tasks/${deletedId}`);
     const controlId = await createTaskDef(page, baseURL!, { name: 'quick-done-control-b' });
 
     // Act
-    await completeNow(page, baseURL!, 999999, 'MTMR');
+    await completeNow(page, baseURL!, deletedId, 'MTMR');
     await completeNow(page, baseURL!, controlId, 'MTMR');
     await goToKanban(page);
 
     // Assert
     const doneColumn = page.getByRole('region', { name: '完了列' });
     await expect(doneColumn.getByText('quick-done-control-b')).toBeVisible();
-    await expect(doneColumn.getByRole('button', { name: 'タスクを削除', exact: true })).toHaveCount(1);
+    await expect(doneColumn.getByText('quick-done-deleted')).toHaveCount(0);
   });
 });
