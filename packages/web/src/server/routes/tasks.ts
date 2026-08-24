@@ -7,7 +7,7 @@ import { getTodayJST, formatLocalDate, addMonths } from '@household-tasks/shared
 const router: ReturnType<typeof Router> = Router();
 
 const VALID_CATEGORIES = ['water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash', 'childcare', 'cooking', 'lifestyle'];
-const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month', 'days_after_completion'];
+const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month', 'days_after_completion', 'on_demand'];
 const VALID_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const VALID_SICK_DAY_BEHAVIORS = ['normal_only', 'always', 'sick_only'];
 const VALID_ABSENCE_BEHAVIORS = ['normal', 'hidden'];
@@ -180,7 +180,7 @@ function validateTaskInput(body: TaskInput): string | null {
 }
 
 function calculateNextDueDate(ft: string, interval: number | null, today: string, monthOfYear?: number | null, dayOfMonth?: number | null): string | null {
-  if (['daily', 'weekly', 'monthly', 'nth_weekday_of_month', 'days_after_completion'].includes(ft)) {
+  if (['daily', 'weekly', 'monthly', 'nth_weekday_of_month', 'days_after_completion', 'on_demand'].includes(ft)) {
     return null;
   }
 

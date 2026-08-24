@@ -524,6 +524,42 @@ test.describe('重複起票の防止', () => {
   });
 });
 
+test.describe('即時（都度）', () => {
+  test('即時のタスクはスケジューラが起票しない', async ({ page, baseURL }) => {
+    // Arrange
+    await createTaskViaUI(page, baseURL!, {
+      name: 'on-demand-not-scheduled',
+      category: 'lifestyle',
+      frequency_type: 'on_demand',
+    });
+
+    // Act
+    await runScheduler('2026-03-14');
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('on-demand-not-scheduled')).toHaveCount(0);
+  });
+
+  test('即時のタスクは翌日以降もスケジューラが起票しない', async ({ page, baseURL }) => {
+    // Arrange
+    await createTaskViaUI(page, baseURL!, {
+      name: 'on-demand-never',
+      category: 'lifestyle',
+      frequency_type: 'on_demand',
+    });
+
+    // Act
+    await runScheduler('2026-03-14');
+    await runScheduler('2026-03-15');
+    await runScheduler('2026-04-01');
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('on-demand-never')).toHaveCount(0);
+  });
+});
+
 test.describe('活性・非活性', () => {
   test('非活性タスクは起票されない', async ({ page, baseURL }) => {
     await createTaskViaUI(page, baseURL!, { name: 'inactive-test', category: 'water', frequency_type: 'daily' });
@@ -994,6 +1030,11 @@ test.describe('不在日（帰省・旅行）', () => {
    */
   const AWAY_DAY = '2026-08-14';
   const AWAY_DAY_OF_MONTH = 14;
+  // 「不在日ではない日」を表す日付。**実行日と重ならない過去の固定日にすること。**
+  // カンバンの不在判定（isAbsentToday）はテスト用の時計ではなく実時刻の今日を見るので、
+  // ここに実際の今日が入ると「不在中は非表示」のタスクが板から隠れて落ちる
+  // （AWAY_DAY の10日後を使っていて、2026-08-24 になった日に落ちた）。
+  const NOT_AWAY_DAY = '2026-08-04';
 
   for (const { label, frequency, extra } of [
     { label: '毎週', frequency: 'weekly', extra: { days_of_week: ['fri'] } },
@@ -1042,7 +1083,7 @@ test.describe('不在日（帰省・旅行）', () => {
       name: 'absence-other-day', category: 'water', frequency_type: 'monthly',
       day_of_month: AWAY_DAY_OF_MONTH, absenceBehaviorLabel: '不在中は非表示',
     });
-    await setAbsenceDays(page, baseURL!, [addDays(AWAY_DAY, 10)]);
+    await setAbsenceDays(page, baseURL!, [NOT_AWAY_DAY]);
 
     // Act
     await runScheduler(AWAY_DAY);

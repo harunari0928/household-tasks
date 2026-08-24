@@ -240,6 +240,83 @@ router.post('/create-from-definition/:taskDefId', (req: Request, res: Response) 
   res.status(201).json(created);
 });
 
+// POST /api/kanban/complete-from-definition/:taskDefId — 起票と完了を1回で行う
+// いつ発生するか分からない家事（ゴキブリ退治など）を「やった」と言った時点で記録するためのもの。
+// Home Assistant の音声エージェントが叩く。あえて次のことはしない:
+//   - execution_log を書かない。スケジューラの isAlreadyCreatedToday() が status='created' の
+//     ログで当日の起票を抑止するため、書くと定期タスクの当日ぶんが黙って消える。
+//   - 風邪の日モード・不在日のフィルタをかけない。「今やった」という事実の記録なので抑止しない。
+//   - 重複チェックをしない。不定期タスクは1日に何回も起こりうる。
+router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response) => {
+  const db = getDb();
+  const taskDefId = Number(req.params.taskDefId);
+  const { assignee } = req.body ?? {};
+
+  const taskDef = db.prepare('SELECT * FROM task_definitions WHERE id = ?').get(taskDefId) as any;
+  if (!taskDef) {
+    res.status(404).json({ error: 'タスク定義が見つかりません' });
+    return;
+  }
+
+  // 頻度が「即時（都度）」のタスクだけを対象にする。
+  // 定期タスクに使えると、起票時刻より前に記録した日にスケジューラが当日ぶんを
+  // 普通に起票して、誰もやらないカードが板と夜の未完了チェックに残る。
+  // 定期タスクの完了は板のカードに対して行うこと（PATCH /api/kanban/:id/status）。
+  if (taskDef.frequency_type !== 'on_demand') {
+    res.status(400).json({ error: '即時（都度）のタスクではありません。カンバンのカードから完了にしてください' });
+    return;
+  }
+
+  // 無効にしたタスクは受け付けない。is_active はタスクを止めるスイッチなので、
+  // 止めたはずのものが音声から記録できると辻褄が合わない。
+  if (!taskDef.is_active) {
+    res.status(400).json({ error: '無効になっているタスクです。記録するには有効にしてください' });
+    return;
+  }
+
+  if (typeof assignee !== 'string' || assignee.trim() === '') {
+    res.status(400).json({ error: '担当者が未設定です。完了にするには担当者を設定してください' });
+    return;
+  }
+
+  const now = getNowISO();
+
+  const result = db.transaction(() => {
+    const maxRow = db.prepare(
+      "SELECT COALESCE(MAX(sort_order), -1) as max_order FROM task_instances WHERE status = 'done'"
+    ).get() as { max_order: number };
+    const sortOrder = maxRow.max_order + 1;
+
+    // 未完了のカードが板に残っているなら、それを完了にする。
+    // 新しい完了記録を別に作るとカードが残ったままポイントが二重計上される。
+    const pending = db.prepare(
+      "SELECT id FROM task_instances WHERE task_definition_id = ? AND status != 'done' ORDER BY id LIMIT 1"
+    ).get(taskDefId) as { id: number } | undefined;
+
+    if (pending) {
+      db.prepare(
+        "UPDATE task_instances SET status = 'done', assignee = ?, completed_at = ?, sort_order = ? WHERE id = ?"
+      ).run(assignee, now, sortOrder, pending.id);
+      return { id: pending.id, created: false };
+    }
+
+    const inserted = db.prepare(
+      "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order) VALUES (?, ?, 'done', ?, ?, ?, ?, ?)"
+    ).run(taskDefId, taskDef.name, assignee, taskDef.points, now, now, sortOrder);
+    return { id: Number(inserted.lastInsertRowid), created: true };
+  })();
+
+  const task = db.prepare(`
+    SELECT ti.*, td.category
+    FROM task_instances ti
+    JOIN task_definitions td ON ti.task_definition_id = td.id
+    WHERE ti.id = ?
+  `).get(result.id);
+
+  broadcast({ type: 'tasks_changed' });
+  res.status(result.created ? 201 : 200).json(task);
+});
+
 // POST /api/kanban/notify — trigger SSE broadcast (called by scheduler)
 router.post('/notify', (_req: Request, res: Response) => {
   broadcast({ type: 'tasks_changed' });

@@ -22,6 +22,7 @@ export const FREQUENCY_TYPES = {
   yearly: '1年ごと',
   nth_weekday_of_month: '第N曜日(毎月)',
   days_after_completion: '完了後N日',
+  on_demand: '即時（都度）',
 } as const;
 
 export type FrequencyTypeKey = keyof typeof FREQUENCY_TYPES;
@@ -153,4 +154,5 @@ export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
   yearly: ['month_of_year', 'day_of_month'],
   nth_weekday_of_month: ['nth_weekday_position', 'days_of_week'],
   days_after_completion: ['frequency_interval'],
+  on_demand: [],
 };

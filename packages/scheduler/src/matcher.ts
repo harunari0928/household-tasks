@@ -86,6 +86,11 @@ export function shouldCreateToday(
       return addDays(lastCompletedDate, interval) <= today;
     }
 
+    case 'on_demand':
+      // 即時（都度）: いつ発生するか分からない家事。スケジューラは起票しない。
+      // 「やった」と言われた時点で complete-from-definition が起票と完了をまとめて行う。
+      return false;
+
     default:
       return false;
   }
