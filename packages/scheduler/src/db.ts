@@ -34,6 +34,7 @@ export interface TaskDefinitionRow {
   absence_behavior: AbsenceBehaviorKey;
   exclude_holiday: number;
   exclude_day_before_holiday: number;
+  is_priority: number;
 }
 
 type Migration = {
@@ -214,6 +215,14 @@ const migrations: Migration[] = [
       for (const [date, name] of HOLIDAYS) {
         stmt.run(date, name);
       }
+    },
+  },
+  {
+    version: 19,
+    up: (db) => {
+      // 優先タスク。列定義は web 側の v19 と必ず揃えること。
+      // scheduler が web より先に起動した場合はこちらが先に作る。scheduler 自身は読まない。
+      db.exec('ALTER TABLE task_definitions ADD COLUMN is_priority INTEGER NOT NULL DEFAULT 0');
     },
   },
 ];

@@ -43,11 +43,11 @@ router.get('/', (req: Request, res: Response) => {
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const rows = db.prepare(`
-    SELECT ti.*, td.category
+    SELECT ti.*, td.category, td.is_priority
     FROM task_instances ti
     JOIN task_definitions td ON ti.task_definition_id = td.id
     ${where}
-    ORDER BY ti.sort_order ASC, ti.created_at DESC
+    ORDER BY td.is_priority DESC, ti.sort_order ASC, ti.created_at DESC
   `).all(...params);
 
   res.json(rows);
@@ -124,7 +124,7 @@ router.patch('/:id/status', (req: Request, res: Response) => {
   }
 
   const updated = db.prepare(`
-    SELECT ti.*, td.category
+    SELECT ti.*, td.category, td.is_priority
     FROM task_instances ti
     JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?
@@ -148,7 +148,7 @@ router.patch('/:id/assignee', (req: Request, res: Response) => {
   db.prepare('UPDATE task_instances SET assignee = ? WHERE id = ?').run(assignee ?? null, req.params.id);
 
   const updated = db.prepare(`
-    SELECT ti.*, td.category
+    SELECT ti.*, td.category, td.is_priority
     FROM task_instances ti
     JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?
@@ -221,7 +221,7 @@ router.post('/create-from-definition/:taskDefId', (req: Request, res: Response) 
   ).run(taskDefId, taskDef.name, taskDef.points, new Date().toISOString(), sortOrder);
 
   const created = db.prepare(`
-    SELECT ti.*, td.category
+    SELECT ti.*, td.category, td.is_priority
     FROM task_instances ti
     JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?
@@ -298,7 +298,7 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
   })();
 
   const task = db.prepare(`
-    SELECT ti.*, td.category
+    SELECT ti.*, td.category, td.is_priority
     FROM task_instances ti
     JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?

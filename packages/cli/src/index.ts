@@ -45,6 +45,17 @@ interface TaskDef {
   scheduled_hour: number;
   sick_day_behavior: string;
   absence_behavior: string;
+  month_of_year: number | null;
+  nth_weekday_position: number | null;
+  period_start_mm: number | null;
+  period_start_dd: number | null;
+  period_end_mm: number | null;
+  period_end_dd: number | null;
+  exclude_holiday: number;
+  exclude_day_before_holiday: number;
+  special_kind: string | null;
+  /** 優先タスク（今日必ずやる）。カンバンの未着手列で先頭に並ぶ */
+  is_priority: number;
   created_at: string;
   updated_at: string;
 }
@@ -413,13 +424,14 @@ task
         return;
       }
 
-      const headers = ['ID', 'Name', 'Category', 'Frequency', 'Points', 'SickDay', 'Active'];
+      const headers = ['ID', 'Name', 'Category', 'Frequency', 'Points', 'Priority', 'SickDay', 'Active'];
       const rows = tasks.map(t => [
         String(t.id),
         t.name,
         t.category,
         t.frequency_interval ? `${t.frequency_type}(${t.frequency_interval})` : t.frequency_type,
         String(t.points),
+        t.is_priority ? 'yes' : '-',
         t.sick_day_behavior,
         t.is_active ? 'yes' : 'no',
       ]);
@@ -454,6 +466,7 @@ task
         `Day of month:   ${t.day_of_month ?? '-'}`,
         `Next due date:  ${t.next_due_date || '-'}`,
         `Points:         ${t.points}`,
+        `Priority:       ${t.is_priority ? 'yes' : 'no'}`,
         `Scheduled hour: ${t.scheduled_hour}`,
         `Sick day:       ${t.sick_day_behavior}`,
         `Absence:        ${t.absence_behavior}`,
@@ -482,6 +495,7 @@ task
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
   .option('--sick-day-behavior <behavior>', 'Sick child day behavior (normal_only,always,sick_only)')
   .option('--absence-behavior <behavior>', 'Absence (帰省・旅行) behavior (normal,hidden)')
+  .option('--priority', 'Mark as a priority task (今日必ずやる; shown first in the kanban todo column)')
   .action(async (opts: {
     name: string;
     category: string;
@@ -494,6 +508,7 @@ task
     scheduledHour?: number;
     sickDayBehavior?: string;
     absenceBehavior?: string;
+    priority?: boolean;
   }) => {
     try {
       const body: Record<string, unknown> = {
@@ -509,6 +524,7 @@ task
       if (opts.scheduledHour !== undefined) body.scheduled_hour = opts.scheduledHour;
       if (opts.sickDayBehavior !== undefined) body.sick_day_behavior = opts.sickDayBehavior;
       if (opts.absenceBehavior !== undefined) body.absence_behavior = opts.absenceBehavior;
+      if (opts.priority) body.is_priority = true;
 
       const task = await apiFetch('POST', '/api/tasks', body) as TaskDef;
       console.log(JSON.stringify(task, null, 2));
@@ -534,6 +550,8 @@ task
   .option('--scheduled-hour <hour>', 'Scheduled hour (0-23)', parseInt)
   .option('--sick-day-behavior <behavior>', 'Sick child day behavior (normal_only,always,sick_only)')
   .option('--absence-behavior <behavior>', 'Absence (帰省・旅行) behavior (normal,hidden)')
+  .option('--priority', 'Mark as a priority task (今日必ずやる)')
+  .option('--no-priority', 'Clear the priority flag')
   .action(async (idStr: string, opts: {
     name?: string;
     category?: string;
@@ -546,13 +564,21 @@ task
     scheduledHour?: number;
     sickDayBehavior?: string;
     absenceBehavior?: string;
+    priority?: boolean;
   }) => {
     try {
       // Fetch current definition
       const current = await apiFetch('GET', `/api/tasks/${idStr}`) as TaskDef;
 
-      // Build body: merge current values with provided overrides
+      // PUT は全置換なので、GET した行を丸ごと土台にして指定オプションだけ上書きする。
+      // 列を足すたびにここへ書き足す方式だと、書き忘れた列（実行期間・祝日除外など）が
+      // 編集のたびに黙って消える。サーバは GET の行（0/1 や null）をそのまま受け付ける。
+      const {
+        id: _id, created_at: _c, updated_at: _u, next_due_date: _n, is_active: _a, special_kind: _s,
+        ...base
+      } = current;
       const body: Record<string, unknown> = {
+        ...base,
         name: opts.name ?? current.name,
         category: opts.category ?? current.category,
         frequency_type: opts.frequencyType ?? current.frequency_type,
@@ -561,22 +587,24 @@ task
       // frequency_interval
       if (opts.frequencyInterval !== undefined) {
         body.frequency_interval = opts.frequencyInterval;
-      } else if (current.frequency_interval !== null) {
-        body.frequency_interval = current.frequency_interval;
+      } else if (current.frequency_interval === null) {
+        delete body.frequency_interval;
       }
 
-      // days_of_week
+      // days_of_week（API は配列で受ける。GET は "mon,tue" の文字列なので変換する）
       if (opts.daysOfWeek !== undefined) {
         body.days_of_week = opts.daysOfWeek.split(',');
       } else if (current.days_of_week) {
         body.days_of_week = current.days_of_week.split(',');
+      } else {
+        delete body.days_of_week;
       }
 
       // day_of_month
       if (opts.dayOfMonth !== undefined) {
         body.day_of_month = opts.dayOfMonth;
-      } else if (current.day_of_month !== null) {
-        body.day_of_month = current.day_of_month;
+      } else if (current.day_of_month === null) {
+        delete body.day_of_month;
       }
 
       body.notes = opts.notes ?? current.notes ?? undefined;
@@ -584,6 +612,15 @@ task
       body.scheduled_hour = opts.scheduledHour ?? current.scheduled_hour;
       body.sick_day_behavior = opts.sickDayBehavior ?? current.sick_day_behavior;
       body.absence_behavior = opts.absenceBehavior ?? current.absence_behavior;
+      // --priority / --no-priority のどちらも無ければ undefined（現状維持）
+      body.is_priority = opts.priority ?? !!current.is_priority;
+
+      // 祝日除外は曜日指定の頻度でしか持てない。頻度を変えたときに残っていると API に弾かれるので落とす。
+      const ft = body.frequency_type as string;
+      if (ft !== 'weekly' && ft !== 'n_weeks') {
+        body.exclude_holiday = false;
+        body.exclude_day_before_holiday = false;
+      }
 
       const updated = await apiFetch('PUT', `/api/tasks/${idStr}`, body) as TaskDef;
       console.log(JSON.stringify(updated, null, 2));

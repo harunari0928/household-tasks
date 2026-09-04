@@ -31,6 +31,7 @@ interface TaskInput {
   absence_behavior?: string;
   exclude_holiday?: boolean | number;
   exclude_day_before_holiday?: boolean | number;
+  is_priority?: boolean | number;
 }
 
 /**
@@ -156,6 +157,15 @@ function validateTaskInput(body: TaskInput): string | null {
   }
   if (ft !== 'weekly' && ft !== 'n_weeks' && holidayFlags.some((v) => v === true || v === 1)) {
     return '祝日の除外は曜日指定の頻度でのみ設定できます';
+  }
+
+  // 優先タスク（今日必ずやる）。真偽値と 0/1 の両方を受け付ける。
+  if (body.is_priority != null && typeof body.is_priority !== 'boolean' && body.is_priority !== 0 && body.is_priority !== 1) {
+    return '優先タスクの指定が不正です';
+  }
+  // 即時（都度）はカンバンに起票されないので、先頭に並べる意味がない。
+  if (ft === 'on_demand' && (body.is_priority === true || body.is_priority === 1)) {
+    return '即時（都度）のタスクは優先タスクにできません';
   }
 
   if (body.scheduled_hour !== undefined && body.scheduled_hour !== null) {
@@ -298,10 +308,11 @@ router.post('/', (req: Request, res: Response) => {
   const periodEndDd = body.period_end_dd ?? null;
   const excludeHoliday = body.exclude_holiday ? 1 : 0;
   const excludeDayBeforeHoliday = body.exclude_day_before_holiday ? 1 : 0;
+  const isPriority = body.is_priority ? 1 : 0;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, exclude_holiday, exclude_day_before_holiday, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, exclude_holiday, exclude_day_before_holiday, is_priority, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -325,6 +336,7 @@ router.post('/', (req: Request, res: Response) => {
     absenceBehavior,
     excludeHoliday,
     excludeDayBeforeHoliday,
+    isPriority,
     now,
     now,
   );
@@ -384,13 +396,14 @@ router.put('/:id', (req: Request, res: Response) => {
   const periodEndDd = body.period_end_dd ?? null;
   const excludeHoliday = body.exclude_holiday ? 1 : 0;
   const excludeDayBeforeHoliday = body.exclude_day_before_holiday ? 1 : 0;
+  const isPriority = body.is_priority ? 1 : 0;
   const stmt = db.prepare(`
     UPDATE task_definitions
     SET name = ?, category = ?, frequency_type = ?, frequency_interval = ?,
         days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
         period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
         next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?,
-        absence_behavior = ?, exclude_holiday = ?, exclude_day_before_holiday = ?, updated_at = ?
+        absence_behavior = ?, exclude_holiday = ?, exclude_day_before_holiday = ?, is_priority = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -415,6 +428,7 @@ router.put('/:id', (req: Request, res: Response) => {
     absenceBehavior,
     excludeHoliday,
     excludeDayBeforeHoliday,
+    isPriority,
     new Date().toISOString(),
     req.params.id,
   );
@@ -494,8 +508,8 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, is_priority)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const findStmt = db.prepare(
@@ -521,7 +535,7 @@ router.post('/import', (req: Request, res: Response) => {
               days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
               period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
               next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?,
-              absence_behavior = ?, updated_at = created_at
+              absence_behavior = ?, is_priority = ?, updated_at = created_at
           WHERE id = ?
         `).run(
           task.category, task.frequency_type, interval,
@@ -529,7 +543,8 @@ router.post('/import', (req: Request, res: Response) => {
           task.period_start_mm ?? null, task.period_start_dd ?? null, task.period_end_mm ?? null, task.period_end_dd ?? null,
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
           task.sick_day_behavior ?? existing.sick_day_behavior,
-          task.absence_behavior ?? existing.absence_behavior, existing.id,
+          task.absence_behavior ?? existing.absence_behavior,
+          task.is_priority ? 1 : 0, existing.id,
         );
         inserted.push(existing.id);
       } else {
@@ -544,6 +559,7 @@ router.post('/import', (req: Request, res: Response) => {
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
           task.sick_day_behavior ?? 'normal_only',
           task.absence_behavior ?? defaultAbsenceBehavior(task.category),
+          task.is_priority ? 1 : 0,
         );
         inserted.push(Number(result.lastInsertRowid));
       }

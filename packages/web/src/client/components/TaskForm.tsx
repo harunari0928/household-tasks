@@ -94,6 +94,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     !!task?.exclude_day_before_holiday,
   );
   const [points, setPoints] = useState<string>(String(task?.points ?? 1));
+  const [isPriority, setIsPriority] = useState<boolean>(!!task?.is_priority);
   const [sickDayBehavior, setSickDayBehavior] = useState<SickDayBehaviorKey>(
     task?.sick_day_behavior ?? 'normal_only',
   );
@@ -114,6 +115,8 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
   // 表示も保存値も「常に見える」側に倒して、非活性の表示と実際の保存値を一致させる。
   const effectiveSickDayBehavior: SickDayBehaviorKey = isOnDemand ? 'always' : sickDayBehavior;
   const effectiveAbsenceBehavior: AbsenceBehaviorKey = isOnDemand ? 'normal' : absenceBehavior;
+  // 優先タスクはカンバンに起票されるものが前提。即時（都度）は起票されないので外す（API も 400 で拒否する）。
+  const effectiveIsPriority = isOnDemand ? false : isPriority;
 
   const initialPeriodEnabled =
     task?.period_start_mm != null &&
@@ -284,6 +287,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       scheduled_hour: scheduledHour,
       sick_day_behavior: effectiveSickDayBehavior,
       absence_behavior: effectiveAbsenceBehavior,
+      is_priority: effectiveIsPriority,
     };
 
     if (['n_days', 'n_weeks', 'n_months', 'days_after_completion'].includes(frequencyType)) {
@@ -506,6 +510,24 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
               />
               <span className="text-sm text-gray-600 dark:text-gray-400">pt</span>
             </div>
+          </div>
+
+          <div>
+            <label className={`flex items-center gap-2 min-h-[44px] text-sm text-gray-700 dark:text-gray-300 ${isOnDemand ? 'cursor-not-allowed text-gray-400 dark:text-gray-500' : 'cursor-pointer'}`}>
+              <input
+                type="checkbox"
+                checked={effectiveIsPriority}
+                disabled={isOnDemand}
+                onChange={(e) => setIsPriority(e.target.checked)}
+                className="w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed"
+              />
+              優先タスク
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {isOnDemand
+                ? ON_DEMAND_UNAVAILABLE
+                : '今日必ずやるタスク（保育園前の準備・寝かしつけの必須作業など）。カンバンでは未着手列の先頭にまとまり、カードに目印が付きます'}
+            </p>
           </div>
         </Section>
 

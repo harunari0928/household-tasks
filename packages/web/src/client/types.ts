@@ -80,6 +80,8 @@ export interface TaskDefinition {
   absence_behavior: AbsenceBehaviorKey;
   exclude_holiday: number;
   exclude_day_before_holiday: number;
+  /** 優先タスク（今日必ずやる）。カンバンの未着手列で先頭にまとまり、カードに目印が付く */
+  is_priority: number;
   created_at: string;
   updated_at: string;
 }
@@ -104,6 +106,7 @@ export interface TaskDefinitionInput {
   absence_behavior?: AbsenceBehaviorKey;
   exclude_holiday?: boolean;
   exclude_day_before_holiday?: boolean;
+  is_priority?: boolean;
 }
 
 export interface ExecutionLog {
@@ -142,6 +145,8 @@ export interface TaskInstance {
   completed_at: string | null;
   category: CategoryKey;
   sort_order: number;
+  /** 定義側の値をカンバン取得時に join したもの（category と同様、インスタンスには保存しない） */
+  is_priority: number;
 }
 
 export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
