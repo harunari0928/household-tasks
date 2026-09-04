@@ -198,6 +198,14 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     if (!result.ok) setTasks(snapshot);
   };
 
+  /**
+   * 未着手列の並び: 優先タスクを上に、その中では利用者が並べた順（sort_order）。
+   * 並べ替え（/reorder）は表示順の index を sort_order に書き戻すので、この比較関数で
+   * 並べた配列を渡せば、優先グループが常に小さい sort_order を持つ状態が保たれる。
+   */
+  const compareTodoOrder = (a: TaskInstance, b: TaskInstance): number =>
+    (b.is_priority ? 1 : 0) - (a.is_priority ? 1 : 0) || a.sort_order - b.sort_order;
+
   const handleDragStart = (event: DragStartEvent) => {
     const task = event.active.data.current?.task as TaskInstance | undefined;
     setActiveTask(task ?? null);
@@ -265,11 +273,22 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
 
       const columnItems = tasks
         .filter((t) => t.status === targetStatus)
-        .sort((a, b) => a.sort_order - b.sort_order);
+        .sort(compareTodoOrder);
 
       const oldIndex = columnItems.findIndex((t) => t.id === task.id);
-      const newIndex = columnItems.findIndex((t) => t.id === overTaskId);
-      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+      const overIndex = columnItems.findIndex((t) => t.id === overTaskId);
+      if (oldIndex === -1 || overIndex === -1 || oldIndex === overIndex) return;
+
+      // 優先タスクは常に通常タスクの上に並ぶ。境界をまたぐドロップは自分のグループの端に寄せる
+      // （通常カードを優先グループへ → 通常グループの先頭、優先カードを通常グループへ → 優先グループの末尾）。
+      // 完了列のように無効化すると「一番上まで動かす」操作が空振りになるので、意図に近い位置へ丸める。
+      const isPriority = (t: TaskInstance) => !!t.is_priority;
+      let newIndex = overIndex;
+      if (isPriority(columnItems[overIndex]) !== isPriority(task)) {
+        const firstNormal = columnItems.findIndex((t) => !isPriority(t));
+        newIndex = isPriority(task) ? firstNormal - 1 : firstNormal;
+      }
+      if (newIndex === oldIndex) return;
 
       const reordered = arrayMove(columnItems, oldIndex, newIndex);
       performReorder(targetStatus, reordered, snapshot);
@@ -344,13 +363,14 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     status,
     title: KANBAN_COLUMNS[status],
     // The done column is always sorted by completion time (newest first) and cannot be
-    // manually reordered; other columns honor the user-defined sort_order.
+    // manually reordered; other columns put priority tasks first, then honor the
+    // user-defined sort_order (see compareTodoOrder).
     items: filtered
       .filter((t) => t.status === status)
       .sort((a, b) =>
         status === 'done'
           ? new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime()
-          : a.sort_order - b.sort_order,
+          : compareTodoOrder(a, b),
       ),
   }));
 

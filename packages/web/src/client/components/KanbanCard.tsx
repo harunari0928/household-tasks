@@ -70,6 +70,8 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
   const assignees = parseAssignees(task.assignee);
   // 未着手のまま繰り越されたタスクだけ起票日バッジを出す
   const carryOver = task.status === 'todo' ? getCarryOverBadge(task.created_at) : null;
+  // 優先は定義の性質なので、完了列でも出す（持ち越しは未着手だけ）。
+  const isPriority = !!task.is_priority;
 
   // Split listeners: onMouseDown for card (desktop), onTouchStart for handle (mobile)
   const { mouseListeners, touchListeners } = useMemo(() => {
@@ -118,15 +120,31 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
         </button>
       )}
 
-      {carryOver && (
-        <div className="mb-1 pl-3">
-          <span
-            className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${carryOver.className}`}
-            aria-label={`${carryOver.label}に起票（繰り越し）`}
-          >
-            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            {carryOver.label}
-          </span>
+      {/* 優先タスクの目印（左端のストライプ）。border-l だとタイトル位置がずれるので絶対配置にする */}
+      {isPriority && (
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 rounded-l-lg bg-violet-400 dark:bg-violet-500" />
+      )}
+
+      {(isPriority || carryOver) && (
+        <div className="mb-1 pl-3 flex flex-wrap items-center gap-1">
+          {isPriority && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+              aria-label="優先タスク（今日必ずやる）"
+            >
+              <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              優先
+            </span>
+          )}
+          {carryOver && (
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${carryOver.className}`}
+              aria-label={`${carryOver.label}に起票（繰り越し）`}
+            >
+              <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              {carryOver.label}
+            </span>
+          )}
         </div>
       )}
       <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2 pr-6 pl-3">

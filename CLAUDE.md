@@ -152,6 +152,23 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
 - **祝日は毎年2月頃に翌年分が公開される**ため、年1回 `./scripts/update-holidays.sh` を実行して `shared/holidays.ts` を再生成し、再ビルド・再デプロイする。データが尽きると除外が効かなくなる（起票され続ける）。
 - 除外で起票をスキップした日も `next_due_date` は進める。N週ごとのタスクが翌日に前倒しで起票されるのを防ぐため。
 
+## 優先タスク
+
+「今日必ずやる」タスク（保育園に行く前の日焼け止め・保湿・虫よけ・保育園準備、寝かしつけの必須作業など）を
+`task_definitions.is_priority` で印付けする。カンバンでは**未着手列の先頭にまとまり、カードに「優先」バッジと左端の紫ストライプ**が付く。
+
+- **定義の性質なので `task_instances` にはコピーせず、カンバン取得時に `task_definitions` を join して読む**（`category` と同じ）。
+  フラグを切り替えると起票済みのカードにも即反映される。`GET /api/kanban` の `ORDER BY` も優先を先にしている。
+- **即時（都度・`on_demand`）には設定できない**（カンバンに起票されないので先頭に並べる意味がない）。
+  フォームは非活性にして理由を出し、保存値も false に倒す。API は `on_demand` で `is_priority=true` なら 400。
+- 未着手列の並びは `(is_priority desc, sort_order asc)`（`KanbanBoard.tsx` の `compareTodoOrder`）。
+  ドラッグ並び替えは各グループ内でだけ効き、**境界をまたぐドロップは自分のグループの端に寄せる**
+  （通常カードを優先の上へ → 通常グループの先頭、優先カードを通常の下へ → 優先グループの末尾）。
+  完了列のように無効化すると「一番上まで動かす」操作が空振りになるため。完了列の並び（完了日時順）には影響しない。
+- マイグレーション v19 は **web と scheduler に同一定義**で持つ（先に起動した側が適用する）。名前による初期付与はしていない。
+- CLI は `ht task add --priority` / `ht task edit --priority | --no-priority`。
+  `ht task edit` は **GET した行を丸ごと土台にして PUT する**（PUT が全置換のため。以前は書き忘れた列——実行期間・祝日除外など——が編集のたびに消えていた）。
+
 ## Key conventions
 
 - All dates use JST (Asia/Tokyo). `getTodayJST()` in shared/ returns `YYYY-MM-DD`.

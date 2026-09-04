@@ -113,6 +113,15 @@ export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
                 </span>
               </div>
 
+              {!!taskDef.is_priority && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-16">優先</span>
+                  <span className="text-sm font-medium text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded">
+                    今日必ずやる
+                  </span>
+                </div>
+              )}
+
               {taskDef.next_due_date && (
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-16">次回予定</span>

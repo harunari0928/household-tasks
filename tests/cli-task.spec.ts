@@ -193,6 +193,31 @@ test.describe('ht task add（タスク定義追加）', () => {
     await expect(page.getByText('cli-add-ui-check')).toBeVisible();
   });
 
+  test('--priority を付けて追加したタスクは task get で優先タスクと表示される', async () => {
+    // Arrange
+    const addResult = await runCli('task add --name cli-add-priority --category childcare --frequency-type daily --priority');
+    const task = JSON.parse(addResult.stdout);
+
+    // Act
+    const result = await runCli(`task get ${task.id}`);
+
+    // Assert
+    expect(result.stdout).toMatch(/Priority:\s+yes/);
+  });
+
+  test('即時（都度）のタスクに --priority を付けるとエラー終了する', async () => {
+    // Act
+    const result = await runCli('task add --name cli-add-priority-on-demand --category lifestyle --frequency-type on_demand --priority');
+
+    // Assert
+    await test.step('エラー終了する', async () => {
+      expect(result.exitCode).not.toBe(0);
+    });
+    await test.step('優先タスクにできない旨が表示される', async () => {
+      expect(result.stderr).toContain('即時（都度）のタスクは優先タスクにできません');
+    });
+  });
+
   test('CLIの出力に追加されたタスクのIDと名前が含まれる', async () => {
     // Act
     const result = await runCli('task add --name cli-add-output --category floor --frequency-type daily');
@@ -230,6 +255,69 @@ test.describe('ht task edit（タスク定義編集）', () => {
     // Assert
     const updated = JSON.parse(result.stdout);
     expect(updated.points).toBe(8);
+  });
+
+  test('--priority で優先タスクにできる', async () => {
+    // Arrange
+    const addResult = await runCli('task add --name cli-edit-priority-on --category childcare --frequency-type daily');
+    const task = JSON.parse(addResult.stdout);
+
+    // Act
+    await runCli(`task edit ${task.id} --priority`);
+
+    // Assert
+    const result = await runCli(`task get ${task.id}`);
+    expect(result.stdout).toMatch(/Priority:\s+yes/);
+  });
+
+  test('--no-priority で優先タスクを解除できる', async () => {
+    // Arrange
+    const addResult = await runCli('task add --name cli-edit-priority-off --category childcare --frequency-type daily --priority');
+    const task = JSON.parse(addResult.stdout);
+
+    // Act
+    await runCli(`task edit ${task.id} --no-priority`);
+
+    // Assert
+    const result = await runCli(`task get ${task.id}`);
+    expect(result.stdout).toMatch(/Priority:\s+no/);
+  });
+
+  test('ポイントだけを編集しても優先タスクの設定は消えない', async () => {
+    // Arrange
+    const addResult = await runCli('task add --name cli-edit-keep-priority --category childcare --frequency-type daily --priority');
+    const task = JSON.parse(addResult.stdout);
+
+    // Act
+    await runCli(`task edit ${task.id} --points 3`);
+
+    // Assert
+    const result = await runCli(`task get ${task.id}`);
+    expect(result.stdout).toMatch(/Priority:\s+yes/);
+  });
+
+  test('ポイントだけを編集しても祝日の除外の設定は消えない', async ({ page }) => {
+    // Arrange — 祝日除外は UI からしか設定できないのでフォームで作る
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: new RegExp(CATEGORY_MAP.water) }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('cli-edit-keep-holiday');
+    await page.getByLabel('頻度').selectOption('weekly');
+    await page.getByRole('group', { name: '曜日' }).getByText('月').click();
+    await page.getByRole('checkbox', { name: '祝日は起票しない' }).check();
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('cli-edit-keep-holiday').waitFor();
+    const listResult = await runCli('task list --json');
+    const task = JSON.parse(listResult.stdout).find((t: { name: string }) => t.name === 'cli-edit-keep-holiday');
+
+    // Act
+    await runCli(`task edit ${task.id} --points 3`);
+
+    // Assert — フォームを開き直してもチェックが残っている
+    await page.reload();
+    await page.getByRole('button', { name: new RegExp(CATEGORY_MAP.water) }).click();
+    await page.getByText('cli-edit-keep-holiday').click();
+    await expect(page.getByRole('checkbox', { name: '祝日は起票しない' })).toBeChecked();
   });
 });
 

@@ -354,6 +354,15 @@ const migrations: Migration[] = [
       seedHolidays(db);
     },
   },
+  {
+    version: 19,
+    up: (db) => {
+      // 優先タスク（保育園前の準備・寝かしつけの必須作業など、その日のうちに必ずやるもの）。
+      // カンバンは task_definitions を live join して読むので task_instances には持たせない。
+      // 列定義は scheduler 側の v19 と必ず揃えること。名前による初期付与はしない。
+      db.exec('ALTER TABLE task_definitions ADD COLUMN is_priority INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 export function seedHolidays(db: Database.Database): void {

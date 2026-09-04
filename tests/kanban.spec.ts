@@ -18,6 +18,7 @@ async function createTaskViaUI(
     category?: string;
     frequency_type: string;
     points?: number;
+    priority?: boolean;
   },
 ) {
   const category = options.category || 'water';
@@ -28,6 +29,7 @@ async function createTaskViaUI(
   if (options.category) await page.getByLabel('カテゴリ').selectOption(options.category);
   await page.getByLabel('頻度').selectOption(options.frequency_type);
   if (options.points) await page.getByLabel('ポイント').fill(String(options.points));
+  if (options.priority) await page.getByRole('checkbox', { name: '優先タスク' }).check();
   await page.getByRole('button', { name: '保存' }).click();
   await page.getByText(options.name).waitFor();
 }
@@ -841,34 +843,57 @@ test.describe('画面を再表示したときの最新化', () => {
   });
 });
 
+/** カードを目的カードの少し上へドロップする（目的カードが列の先頭のときに安定する上方向ドラッグ用）。 */
+async function dragCardWithinColumn(page: Page, cardName: string, targetCardName: string) {
+  const card = page.getByText(cardName).first();
+  const target = page.getByText(targetCardName).first();
+
+  const cardBox = await card.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!cardBox || !targetBox) throw new Error('Could not get bounding boxes');
+
+  // Drag handle is at the left edge of the card
+  const startX = cardBox.x + 10;
+  const startY = cardBox.y + cardBox.height / 2;
+  const endX = targetBox.x + targetBox.width / 2;
+  const endY = targetBox.y - 5;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 10, startY, { steps: 2 });
+  await page.mouse.move(endX, endY, { steps: 10 });
+  await page.mouse.up();
+  await waitForClicksAfterDrag(page);
+}
+
+/** カードを目的カードの中央へドロップする（下方向のドラッグでも目的カードの位置に落ちる）。 */
+async function dragCardOnto(page: Page, cardName: string, targetCardName: string) {
+  const card = page.getByText(cardName).first();
+  const target = page.getByText(targetCardName).first();
+
+  const cardBox = await card.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!cardBox || !targetBox) throw new Error('Could not get bounding boxes');
+
+  const startX = cardBox.x + 10;
+  const startY = cardBox.y + cardBox.height / 2;
+  const endX = targetBox.x + targetBox.width / 2;
+  const endY = targetBox.y + targetBox.height / 2;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 10, startY, { steps: 2 });
+  await page.mouse.move(endX, endY, { steps: 10 });
+  await page.mouse.up();
+  await waitForClicksAfterDrag(page);
+}
+
+async function getColumnText(page: Page, status: string): Promise<string> {
+  const columnName = status === 'done' ? '完了列' : '未着手列';
+  return page.getByRole('region', { name: columnName }).innerText();
+}
+
 test.describe('同一列内の並べ替え', () => {
-  async function dragCardWithinColumn(page: Page, cardName: string, targetCardName: string) {
-    const card = page.getByText(cardName).first();
-    const target = page.getByText(targetCardName).first();
-
-    const cardBox = await card.boundingBox();
-    const targetBox = await target.boundingBox();
-    if (!cardBox || !targetBox) throw new Error('Could not get bounding boxes');
-
-    // Drag handle is at the left edge of the card
-    const startX = cardBox.x + 10;
-    const startY = cardBox.y + cardBox.height / 2;
-    const endX = targetBox.x + targetBox.width / 2;
-    const endY = targetBox.y - 5;
-
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(startX + 10, startY, { steps: 2 });
-    await page.mouse.move(endX, endY, { steps: 10 });
-    await page.mouse.up();
-    await waitForClicksAfterDrag(page);
-  }
-
-  async function getColumnText(page: Page, status: string): Promise<string> {
-    const columnName = status === 'done' ? '完了列' : '未着手列';
-    return page.getByRole('region', { name: columnName }).innerText();
-  }
-
   test('カードを上にドラッグして並び順が変わる', async ({ page }) => {
     await createTaskViaUI(page, { name: 'reorder-a', frequency_type: 'daily' });
     await createTaskViaUI(page, { name: 'reorder-b', frequency_type: 'daily' });
@@ -1264,5 +1289,184 @@ test.describe('即時完了（起票と完了を1回で行う）', () => {
 
     // Assert
     await expect(doneCards(page)).toHaveCount(0);
+  });
+});
+
+test.describe('優先タスクの並び順とバッジ', () => {
+  test('優先タスクのカードには「優先」バッジが表示される', async ({ page }) => {
+    // Arrange
+    await createTaskViaUI(page, { name: 'prio-badge-on', frequency_type: 'daily', priority: true });
+    await runScheduler('2026-03-29');
+
+    // Act
+    await goToKanban(page);
+
+    // Assert
+    const card = page.getByText('prio-badge-on').locator('..');
+    await expect(card.getByText('優先', { exact: true })).toBeVisible();
+  });
+
+  test('優先でないタスクのカードには「優先」バッジが表示されない', async ({ page }) => {
+    // Arrange
+    await createTaskViaUI(page, { name: 'prio-badge-off', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+
+    // Act
+    await goToKanban(page);
+
+    // Assert
+    const card = page.getByText('prio-badge-off').locator('..');
+    await expect(card).toBeVisible();
+    await expect(card.getByText('優先', { exact: true })).toHaveCount(0);
+  });
+
+  test('後から起票された優先タスクが、先に起票された通常タスクより上に表示される', async ({ page }) => {
+    // Arrange — 通常タスクを先に、優先タスクを後に作る（起票順もこの順）
+    await createTaskViaUI(page, { name: 'prio-order-normal', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'prio-order-priority', frequency_type: 'daily', priority: true });
+    await runScheduler('2026-03-29');
+
+    // Act
+    await goToKanban(page);
+
+    // Assert
+    const text = await getColumnText(page, 'todo');
+    expect(text.indexOf('prio-order-priority')).toBeLessThan(text.indexOf('prio-order-normal'));
+  });
+
+  test('優先タスク同士はドラッグで並び替えられる', async ({ page }) => {
+    // Arrange
+    await createTaskViaUI(page, { name: 'prio-swap-1', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-swap-2', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-swap-normal', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+
+    // Act
+    await dragCardWithinColumn(page, 'prio-swap-2', 'prio-swap-1');
+
+    // Assert
+    await test.step('prio-swap-2 が prio-swap-1 より上に表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-swap-2')).toBeLessThan(text.indexOf('prio-swap-1'));
+    });
+    await test.step('優先タスクはどちらも通常タスクより上に表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-swap-1')).toBeLessThan(text.indexOf('prio-swap-normal'));
+    });
+  });
+
+  test('通常タスクを優先タスクの上にドラッグしても優先タスクより上には並ばず、通常タスクの先頭に置かれる', async ({ page }) => {
+    // Arrange — 優先1枚、通常2枚
+    await createTaskViaUI(page, { name: 'prio-clamp-p', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-clamp-n1', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'prio-clamp-n2', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+
+    // Act — 一番下の通常カードを優先カードの上へ
+    await dragCardWithinColumn(page, 'prio-clamp-n2', 'prio-clamp-p');
+
+    // Assert
+    await test.step('優先タスクは通常タスクより上のまま表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-clamp-p')).toBeLessThan(text.indexOf('prio-clamp-n2'));
+    });
+    await test.step('動かした通常タスクが通常タスクの先頭に表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-clamp-n2')).toBeLessThan(text.indexOf('prio-clamp-n1'));
+    });
+  });
+
+  test('優先タスクを通常タスクの下にドラッグしても通常タスクより下には並ばず、優先タスクの末尾に置かれる', async ({ page }) => {
+    // Arrange — 優先2枚、通常1枚
+    await createTaskViaUI(page, { name: 'prio-tail-p1', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-tail-p2', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-tail-n', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+
+    // Act — 一番上の優先カードを通常カードの上へ落とす
+    await dragCardOnto(page, 'prio-tail-p1', 'prio-tail-n');
+
+    // Assert
+    await test.step('動かした優先タスクが優先タスクの末尾に表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-tail-p2')).toBeLessThan(text.indexOf('prio-tail-p1'));
+    });
+    await test.step('優先タスクは通常タスクより上のまま表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-tail-p1')).toBeLessThan(text.indexOf('prio-tail-n'));
+    });
+  });
+
+  test('優先タスクの並び替えはリロード後も維持され、通常タスクより上のまま表示される', async ({ page }) => {
+    // Arrange
+    await createTaskViaUI(page, { name: 'prio-persist-1', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-persist-2', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-persist-normal', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+    await dragCardWithinColumn(page, 'prio-persist-2', 'prio-persist-1');
+
+    // Act
+    await page.reload();
+    await page.getByText('未着手').waitFor();
+
+    // Assert
+    await test.step('リロード後も prio-persist-2 が prio-persist-1 より上に表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-persist-2')).toBeLessThan(text.indexOf('prio-persist-1'));
+    });
+    await test.step('リロード後も優先タスクは通常タスクより上に表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-persist-1')).toBeLessThan(text.indexOf('prio-persist-normal'));
+    });
+  });
+
+  test('完了列では優先タスクも完了日時の新しい順に並ぶ', async ({ page, baseURL }) => {
+    // Arrange — 優先タスクを先に、通常タスクを後に完了させる
+    await setupAssignees(page, baseURL!, ['MTMR']);
+    await createTaskViaUI(page, { name: 'prio-done-p', frequency_type: 'daily', priority: true });
+    await createTaskViaUI(page, { name: 'prio-done-n', frequency_type: 'daily' });
+    await runScheduler('2026-03-29');
+    await changeStatus(page, baseURL!, 'prio-done-p', 'done', 'MTMR');
+    await changeStatus(page, baseURL!, 'prio-done-n', 'done', 'MTMR');
+
+    // Act
+    await goToKanban(page);
+
+    // Assert — 後に完了した通常タスクが上
+    const text = await getColumnText(page, 'done');
+    expect(text.indexOf('prio-done-n')).toBeLessThan(text.indexOf('prio-done-p'));
+  });
+
+  test('「優先タスク」のチェックを外すと、起票済みのカードからバッジが消え通常の並びに戻る', async ({ page }) => {
+    // Arrange — 通常タスクを先に、優先タスクを後に起票し、優先が上に出ている状態にする
+    await createTaskViaUI(page, { name: 'prio-unset-normal', frequency_type: 'daily' });
+    await createTaskViaUI(page, { name: 'prio-unset-target', frequency_type: 'daily', priority: true });
+    await runScheduler('2026-03-29');
+    await goToKanban(page);
+    await page.getByText('prio-unset-target').locator('..').getByText('優先', { exact: true }).waitFor();
+
+    // Act — タスク定義を開いてチェックを外す
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: new RegExp(CATEGORY_MAP.water) }).click();
+    await page.getByText('prio-unset-target').click();
+    await page.getByRole('checkbox', { name: '優先タスク' }).uncheck();
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByRole('checkbox', { name: '優先タスク' }).waitFor({ state: 'hidden' });
+    await goToKanban(page);
+
+    // Assert
+    await test.step('カードから「優先」バッジが消える', async () => {
+      const card = page.getByText('prio-unset-target').locator('..');
+      await expect(card).toBeVisible();
+      await expect(card.getByText('優先', { exact: true })).toHaveCount(0);
+    });
+    await test.step('先に起票された通常タスクが上に表示される', async () => {
+      const text = await getColumnText(page, 'todo');
+      expect(text.indexOf('prio-unset-normal')).toBeLessThan(text.indexOf('prio-unset-target'));
+    });
   });
 });

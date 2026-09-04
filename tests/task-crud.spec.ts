@@ -1262,6 +1262,36 @@ test.describe('即時（都度）タスクの設定制限', () => {
     await expect(page.getByLabel('不在時の扱い')).toBeDisabled();
   });
 
+  test('優先タスクは選べず理由が表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('頻度').selectOption('on_demand');
+
+    await test.step('優先タスクのチェックボックスが非活性になる', async () => {
+      await expect(page.getByRole('checkbox', { name: '優先タスク' })).toBeDisabled();
+    });
+    await test.step('設定できない理由が表示される', async () => {
+      await expect(
+        page.getByText('即時（都度）のタスクはスケジューラが起票しないため設定できません').first(),
+      ).toBeVisible();
+    });
+  });
+
+  test('優先タスクにチェックしてから即時（都度）に切り替えて保存すると、一覧に「優先」バッジが付かない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト即時優先');
+    await page.getByRole('checkbox', { name: '優先タスク' }).check();
+
+    await page.getByLabel('頻度').selectOption('on_demand');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テスト即時優先').waitFor();
+
+    await expect(page.getByText('⭐ 優先')).toHaveCount(0);
+  });
+
   test('実行期間は選べない', async ({ page }) => {
     await page.goto('/#/tasks');
     await page.getByRole('button', { name: /タスクを追加/ }).click();
@@ -1427,4 +1457,66 @@ test.describe('不在時の扱い', () => {
       await expect(page.getByLabel('不在時の扱い')).toHaveValue('normal');
     });
   }
+});
+
+test.describe('優先タスク', () => {
+  test('「優先タスク」にチェックして保存すると、再度開いたときもチェックされている', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /育児/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト日焼け止め');
+    await page.getByLabel('カテゴリ').selectOption('childcare');
+    await page.getByRole('checkbox', { name: '優先タスク' }).check();
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テスト日焼け止め').waitFor();
+
+    await page.reload();
+    await page.getByRole('button', { name: /育児/ }).click();
+    await page.getByText('テスト日焼け止め').click();
+
+    await expect(page.getByRole('checkbox', { name: '優先タスク' })).toBeChecked();
+  });
+
+  test('優先タスクは一覧に「優先」バッジが表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /育児/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト保育園準備');
+    await page.getByLabel('カテゴリ').selectOption('childcare');
+    await page.getByRole('checkbox', { name: '優先タスク' }).check();
+    await page.getByRole('button', { name: '保存' }).click();
+
+    const row = page.getByText('テスト保育園準備').locator('..');
+    await expect(row.getByText('⭐ 優先')).toBeVisible();
+  });
+
+  test('優先タスクでないタスクには一覧に「優先」バッジが表示されない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /育児/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト爪切り');
+    await page.getByLabel('カテゴリ').selectOption('childcare');
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テスト爪切り').waitFor();
+
+    await expect(page.getByText('⭐ 優先')).toHaveCount(0);
+  });
+
+  test('編集で「優先タスク」のチェックを外すと一覧のバッジが消える', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /育児/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト虫よけ');
+    await page.getByLabel('カテゴリ').selectOption('childcare');
+    await page.getByRole('checkbox', { name: '優先タスク' }).check();
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('⭐ 優先').waitFor();
+
+    await page.getByText('テスト虫よけ').click();
+    await page.getByRole('checkbox', { name: '優先タスク' }).uncheck();
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByRole('checkbox', { name: '優先タスク' }).waitFor({ state: 'hidden' });
+
+    await expect(page.getByText('⭐ 優先')).toHaveCount(0);
+  });
 });
