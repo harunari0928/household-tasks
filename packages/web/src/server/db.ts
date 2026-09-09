@@ -363,6 +363,45 @@ const migrations: Migration[] = [
       db.exec('ALTER TABLE task_definitions ADD COLUMN is_priority INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    version: 20,
+    up: (db) => {
+      // 個人タスクは定義を持たない単発のカード。通常のカードと同じ列・並び順を
+      // 共有するため task_instances に保存するが、スケジューラからは参照されない。
+      // SQLite は NOT NULL 制約を外せないため、表を作り直して task_definition_id を
+      // NULL 許可にする。列定義は scheduler 側の v20 と必ず揃えること。
+      db.exec(`
+        CREATE TABLE task_instances_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_definition_id INTEGER DEFAULT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'done')),
+          assignee TEXT DEFAULT NULL,
+          points INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          completed_at TEXT DEFAULT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_personal INTEGER NOT NULL DEFAULT 0 CHECK(is_personal IN (0, 1)),
+          personal_owner TEXT DEFAULT NULL,
+          CHECK(
+            is_personal = 0
+            OR (task_definition_id IS NULL AND personal_owner IS NOT NULL AND points = 0)
+          ),
+          FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
+        );
+        INSERT INTO task_instances_new
+          (id, task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order)
+          SELECT id, task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order
+          FROM task_instances;
+        DROP TABLE task_instances;
+        ALTER TABLE task_instances_new RENAME TO task_instances;
+        CREATE INDEX idx_task_instances_status ON task_instances(status);
+        CREATE INDEX idx_task_instances_task_def ON task_instances(task_definition_id);
+        CREATE INDEX idx_task_instances_completed ON task_instances(completed_at);
+        CREATE INDEX idx_task_instances_personal_owner ON task_instances(personal_owner);
+      `);
+    },
+  },
 ];
 
 export function seedHolidays(db: Database.Database): void {
