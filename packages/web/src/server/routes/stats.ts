@@ -35,6 +35,7 @@ router.get('/points', (req: Request, res: Response) => {
       SELECT ti.title AS task_name, ti.points, ti.completed_at AS done_at, ti.assignee
       FROM task_instances ti
       WHERE ti.status = 'done'
+        AND ti.is_personal = 0
         AND ti.completed_at >= ?
         AND ti.completed_at <= ?
     `).all(start.toISOString(), end.toISOString()) as PointDetail[];
