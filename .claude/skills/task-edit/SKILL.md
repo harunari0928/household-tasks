@@ -12,7 +12,7 @@ allowed-tools: Bash
 内部的に現在値を GET してからマージして PUT するため、変更したいフィールドだけ指定すればよい。
 
 ```bash
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task edit <id> [options]
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task edit <id> [options]
 ```
 
 ## オプション（すべて任意、指定したもののみ更新）
@@ -50,12 +50,12 @@ frequency-type を変更する場合、新しいタイプに必要なオプシ�
 
 ```bash
 # ポイントだけ変更
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task edit 42 --points 5
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task edit 42 --points 5
 
 # メモを追加
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task edit 42 --notes "ルンバ起動後に確認"
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task edit 42 --notes "ルンバ起動後に確認"
 
 # 頻度を毎日から週次に変更（days-of-weekも必須）
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task edit 42 \
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task edit 42 \
   --frequency-type weekly --days-of-week mon,wed,fri
 ```

@@ -11,7 +11,7 @@ allowed-tools: Bash
 is_active フラグをトグルする。無効（inactive）にしたタスクはスケジューラがタスクインスタンスを作成しなくなる。
 
 ```bash
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task toggle <id>
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task toggle <id>
 ```
 
 ## 手順

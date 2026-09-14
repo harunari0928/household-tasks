@@ -11,7 +11,7 @@ allowed-tools: Bash
 タスク定義とその関連データ（添付ファイル、実行ログ）を物理削除する。この操作は元に戻せない。
 
 ```bash
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task delete <id>
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task delete <id>
 ```
 
 ## 手順

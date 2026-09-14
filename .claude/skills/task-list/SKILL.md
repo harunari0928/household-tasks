@@ -11,7 +11,7 @@ allowed-tools: Bash
 Web API 経由でタスク定義の一覧を取得する。
 
 ```bash
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task list
 ```
 
 ## オプション
@@ -26,14 +26,14 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list
 
 ```bash
 # 全タスク定義を表示
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task list
 
 # 床掃除カテゴリのみ
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list --category floor
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list --frequency-type on_demand
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task list --category floor
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task list --frequency-type on_demand
 
 # JSON出力
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task list --json
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task list --json
 ```
 
 $ARGUMENTS に基づいて適切なフラグを付与して実行する。結果を読みやすく整形して報告する。

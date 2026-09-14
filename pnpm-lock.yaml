@@ -21,22 +21,6 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  packages/cli:
-    dependencies:
-      better-sqlite3:
-        specifier: ^11.0.0
-        version: 11.10.0
-      commander:
-        specifier: ^13.0.0
-        version: 13.1.0
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.0
-        version: 7.6.13
-      typescript:
-        specifier: ^5.8.0
-        version: 5.9.3
-
   packages/scheduler:
     dependencies:
       '@household-tasks/shared':
@@ -1139,10 +1123,6 @@ packages:
 
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
-
-  commander@13.1.0:
-    resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
-    engines: {node: '>=18'}
 
   concat-stream@1.6.2:
     resolution: {integrity: sha512-27HBghJxjiZtIk3Ycvn/4kbJk/1uZuJFfuPEns6LaEvpvG1f0hTea8lilrouyo9mVc2GWdcEZ8OLoGmSADlrCw==}
@@ -3243,8 +3223,6 @@ snapshots:
   color-name@1.1.4: {}
 
   comma-separated-tokens@2.0.3: {}
-
-  commander@13.1.0: {}
 
   concat-stream@1.6.2:
     dependencies:

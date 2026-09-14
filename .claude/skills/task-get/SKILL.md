@@ -11,7 +11,7 @@ allowed-tools: Bash
 指定IDのタスク定義の全フィールドを表示する。
 
 ```bash
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task get <id>
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task get <id>
 ```
 
 ## オプション
