@@ -11,7 +11,7 @@ allowed-tools: Bash
 Web API 経由で新しいタスク定義を作成する。結果はJSON形式で出力される。
 
 ```bash
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task add \
   --name <name> --category <category> --frequency-type <type> [options]
 ```
 
@@ -63,21 +63,21 @@ WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
 
 ```bash
 # 毎日のタスク
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task add \
   --name "食器洗い" --category kitchen --frequency-type daily --points 2
 
 # 週次（月・金）のタスク
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task add \
   --name "掃除機がけ" --category floor --frequency-type weekly \
   --days-of-week mon,fri --points 3
 
 # 3日ごとのタスク
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task add \
   --name "排水口掃除" --category water --frequency-type n_days \
   --frequency-interval 3 --points 5
 
 # 毎月15日のタスク
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js task add \
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht task add \
   --name "エアコンフィルター" --category lifestyle --frequency-type monthly \
   --day-of-month 15 --points 4
 ```

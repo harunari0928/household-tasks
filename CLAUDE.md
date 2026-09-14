@@ -7,8 +7,10 @@ pnpm monorepo that manages ~77 household cleaning/childcare/lifestyle tasks with
 - `shared/` — Shared utilities (date helpers). Published as `@household-tasks/shared`.
 - `packages/web/` — React 19 + Vite frontend (Kanban board + task management), Express.js backend, SQLite (better-sqlite3).
 - `packages/scheduler/` — Node.js cron job that creates task instances in SQLite daily at 06:00 JST.
-- `packages/cli/` — CLI tool for AI-driven task management.
 - `tests/` — Playwright E2E tests covering kanban board, task CRUD, scheduler logic, and stats.
+- **CLI はこのリポジトリに無い**（`packages/cli` は 2026-09-14 に削除）。`ht` コマンドの実体は
+  `~/repos/homeassistant/config/scripts/ht_shim/ht`（Python 標準ライブラリのみ、Web API へ委譲）で、
+  Home Assistant の音声アシスタントも `.claude/skills/*` もこれを使う。DB を直接触る消費者を増やさない。
 - `scripts/` — Setup and seed scripts.
 
 ## Development
@@ -166,7 +168,7 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
   （通常カードを優先の上へ → 通常グループの先頭、優先カードを通常の下へ → 優先グループの末尾）。
   完了列のように無効化すると「一番上まで動かす」操作が空振りになるため。完了列の並び（完了日時順）には影響しない。
 - マイグレーション v19 は **web と scheduler に同一定義**で持つ（先に起動した側が適用する）。名前による初期付与はしていない。
-- CLI は `ht task add --priority` / `ht task edit --priority | --no-priority`。
+- `ht`（HA 側の REST シム `~/repos/homeassistant/config/scripts/ht_shim/ht`）は `ht task add --priority` / `ht task edit --priority | --no-priority`。
   `ht task edit` は **GET した行を丸ごと土台にして PUT する**（PUT が全置換のため。以前は書き忘れた列——実行期間・祝日除外など——が編集のたびに消えていた）。
 
 ## カレンダー連動（来客・シッターの受け入れ準備）

@@ -12,14 +12,14 @@ allowed-tools: Bash
 
 ```bash
 # 状態確認
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js sick-mode
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht sick-mode
 
 # ON（sick_only タスクのうち起票時刻が到来しているものを当日分として即時起票。
 #     起票時刻前のタスクは毎時のスケジューラが時刻到来後に起票する。二重起票はされない）
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js sick-mode on
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht sick-mode on
 
 # OFF（通常タスクが再表示され、病児タスクは非表示になる。データは消えない）
-WEB_URL=http://localhost:3100 node packages/cli/dist/index.js sick-mode off
+/home/ryoya/repos/homeassistant/config/scripts/ht_shim/ht sick-mode off
 ```
 
 ## 手順

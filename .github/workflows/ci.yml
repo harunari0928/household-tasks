@@ -30,9 +30,6 @@ jobs:
       - name: Build scheduler
         run: pnpm --filter scheduler build
 
-      - name: Build CLI
-        run: pnpm --filter cli build
-
   e2e:
     runs-on: ubuntu-latest
     needs: build
@@ -56,9 +53,6 @@ jobs:
 
       - name: Build scheduler
         run: pnpm --filter scheduler build
-
-      - name: Build CLI
-        run: pnpm --filter cli build
 
       - name: Create data directory
         run: mkdir -p data
