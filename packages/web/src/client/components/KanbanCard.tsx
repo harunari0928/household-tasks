@@ -72,6 +72,7 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
   const carryOver = task.status === 'todo' ? getCarryOverBadge(task.created_at) : null;
   // 優先は定義の性質なので、完了列でも出す（持ち越しは未着手だけ）。
   const isPriority = !!task.is_priority;
+  const isPersonal = !!task.is_personal;
 
   // Split listeners: onMouseDown for card (desktop), onTouchStart for handle (mobile)
   const { mouseListeners, touchListeners } = useMemo(() => {
@@ -125,8 +126,16 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
         <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 rounded-l-lg bg-violet-400 dark:bg-violet-500" />
       )}
 
-      {(isPriority || carryOver) && (
+      {(isPersonal || isPriority || carryOver) && (
         <div className="mb-1 pl-3 flex flex-wrap items-center gap-1">
+          {isPersonal && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+              aria-label="個人タスク"
+            >
+              個人
+            </span>
+          )}
           {isPriority && (
             <span
               className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
@@ -152,7 +161,9 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
       </div>
       <div className="flex items-center justify-between pl-3">
         <div className="flex items-center gap-2">
-          {assignees.length > 0 ? (
+          {isPersonal ? (
+            <span className="text-xs text-gray-500 dark:text-gray-400">自分専用</span>
+          ) : assignees.length > 0 ? (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -181,9 +192,11 @@ export default function KanbanCard({ task, isRecentlyMoved, onAssigneeClick, onD
             </button>
           )}
         </div>
-        <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
-          {task.points}
-        </span>
+        {!isPersonal && (
+          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+            {task.points}
+          </span>
+        )}
       </div>
     </div>
   );

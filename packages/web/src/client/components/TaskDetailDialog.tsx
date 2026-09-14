@@ -58,6 +58,11 @@ export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
       setAttachments([]);
       return;
     }
+    if (taskInstance.is_personal || taskInstance.task_definition_id == null) {
+      setTaskDef(null);
+      setAttachments([]);
+      return;
+    }
     const defId = taskInstance.task_definition_id;
     request<TaskDefinition>(`/api/tasks/${defId}`, undefined, {
       errorMessage: 'タスク詳細の取得に失敗しました',
@@ -90,7 +95,17 @@ export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
             </button>
           </div>
 
-          {taskDef && (
+          {taskInstance.is_personal ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-16">種類</span>
+                <span className="text-sm text-gray-900 dark:text-gray-100">個人タスク</span>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                このタスクは {taskInstance.personal_owner} 専用です。ポイントは加算されません。
+              </p>
+            </div>
+          ) : taskDef && (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-16">カテゴリ</span>

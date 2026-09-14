@@ -219,7 +219,7 @@ async function arrangeSkippedAndDeletedNDaysTask(
   await page.getByText(name).hover();
   await page.getByRole('button', { name: 'タスクを削除', exact: true }).click();
   const deleteResponse = page.waitForResponse(
-    (r) => r.request().method() === 'DELETE' && /\/api\/kanban\/\d+$/.test(r.url()),
+    (r) => r.request().method() === 'DELETE' && new URL(r.url()).pathname.match(/^\/api\/kanban\/\d+$/) !== null,
   );
   await page.getByRole('button', { name: '削除する' }).click();
   await deleteResponse;

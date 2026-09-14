@@ -136,17 +136,22 @@ export const KANBAN_COLUMNS = {
 
 export interface TaskInstance {
   id: number;
-  task_definition_id: number;
+  /** 個人タスクはスケジュール定義を持たない */
+  task_definition_id: number | null;
   title: string;
   status: TaskInstanceStatus;
   assignee: string | null;
   points: number;
   created_at: string;
   completed_at: string | null;
-  category: CategoryKey;
+  category: CategoryKey | null;
   sort_order: number;
   /** 定義側の値をカンバン取得時に join したもの（category と同様、インスタンスには保存しない） */
   is_priority: number;
+  /** 個人タスクなら 1。points は常に 0 で、ポイント集計には含まれない */
+  is_personal: number;
+  /** 個人タスクを表示・操作できるユーザー名 */
+  personal_owner: string | null;
 }
 
 export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {

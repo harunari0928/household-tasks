@@ -279,6 +279,7 @@ program
         `SELECT assignee, SUM(points) as total_points, COUNT(*) as task_count
          FROM task_instances
          WHERE status = 'done'
+           AND is_personal = 0
            AND completed_at >= ?
            AND completed_at < date(?, '+1 day')
          GROUP BY assignee

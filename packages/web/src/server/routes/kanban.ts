@@ -12,6 +12,9 @@ router.get('/', (req: Request, res: Response) => {
   const db = getDb();
   const conditions: string[] = [];
   const params: unknown[] = [];
+  const currentUser = typeof req.query.user === 'string' && req.query.user.trim()
+    ? req.query.user.trim()
+    : null;
 
   if (req.query.status) {
     conditions.push('ti.status = ?');
@@ -26,28 +29,37 @@ router.get('/', (req: Request, res: Response) => {
     params.push(req.query.category);
   }
 
+  // user を指定した場合だけ、そのユーザーの個人タスクを返す。指定無しの
+  // API 利用者（CLI や外部連携を含む）には共有タスクだけを見せる。
+  if (currentUser) {
+    conditions.push('(ti.is_personal = 0 OR ti.personal_owner = ?)');
+    params.push(currentUser);
+  } else {
+    conditions.push('ti.is_personal = 0');
+  }
+
   // 子ども風邪の日モード: ON中は通常時のみタスクを非表示、OFF中は風邪の日専用タスクを非表示
   if (isSickModeEnabled(db)) {
-    conditions.push("td.sick_day_behavior != 'normal_only'");
+    conditions.push("(ti.is_personal = 1 OR td.sick_day_behavior != 'normal_only')");
   } else {
-    conditions.push("td.sick_day_behavior != 'sick_only'");
+    conditions.push("(ti.is_personal = 1 OR td.sick_day_behavior != 'sick_only')");
   }
 
   // 不在日（帰省・旅行）: 在宅が前提のタスクを隠す。
   // スケジューラが不在日に起票しないので通常は該当インスタンスが無いが、
   // 不在日の直前に起票済みのぶんや、旅行の予定が後から入った場合はここで隠れる。
   if (isAbsentToday(db)) {
-    conditions.push("td.absence_behavior != 'hidden'");
+    conditions.push("(ti.is_personal = 1 OR td.absence_behavior != 'hidden')");
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const rows = db.prepare(`
-    SELECT ti.*, td.category, td.is_priority
+    SELECT ti.*, td.category, COALESCE(td.is_priority, 0) AS is_priority
     FROM task_instances ti
-    JOIN task_definitions td ON ti.task_definition_id = td.id
+    LEFT JOIN task_definitions td ON ti.task_definition_id = td.id
     ${where}
-    ORDER BY td.is_priority DESC, ti.sort_order ASC, ti.created_at DESC
+    ORDER BY COALESCE(td.is_priority, 0) DESC, ti.sort_order ASC, ti.created_at DESC
   `).all(...params);
 
   res.json(rows);
@@ -56,7 +68,7 @@ router.get('/', (req: Request, res: Response) => {
 // PATCH /api/kanban/reorder — reorder tasks within a column
 router.patch('/reorder', (req: Request, res: Response) => {
   const db = getDb();
-  const { status, sortedIds } = req.body;
+  const { status, sortedIds, user } = req.body;
   const validStatuses = ['todo', 'done'];
 
   if (!status || !validStatuses.includes(status)) {
@@ -68,10 +80,19 @@ router.patch('/reorder', (req: Request, res: Response) => {
     return;
   }
 
-  const updateStmt = db.prepare('UPDATE task_instances SET sort_order = ? WHERE id = ? AND status = ?');
+  const personalCondition = typeof user === 'string' && user.trim()
+    ? '(is_personal = 0 OR personal_owner = ?)'
+    : 'is_personal = 0';
+  const updateStmt = db.prepare(
+    `UPDATE task_instances SET sort_order = ? WHERE id = ? AND status = ? AND ${personalCondition}`,
+  );
   const reorder = db.transaction(() => {
     for (let i = 0; i < sortedIds.length; i++) {
-      updateStmt.run(i, sortedIds[i], status);
+      if (typeof user === 'string' && user.trim()) {
+        updateStmt.run(i, sortedIds[i], status, user.trim());
+      } else {
+        updateStmt.run(i, sortedIds[i], status);
+      }
     }
   });
   reorder();
@@ -83,7 +104,7 @@ router.patch('/reorder', (req: Request, res: Response) => {
 // PATCH /api/kanban/:id/status — update status
 router.patch('/:id/status', (req: Request, res: Response) => {
   const db = getDb();
-  const { status, assignee } = req.body;
+  const { status, assignee, user } = req.body;
   const validStatuses = ['todo', 'done'];
 
   if (!status || !validStatuses.includes(status)) {
@@ -95,6 +116,17 @@ router.patch('/:id/status', (req: Request, res: Response) => {
   if (!existing) {
     res.status(404).json({ error: 'Task instance not found' });
     return;
+  }
+
+  if (existing.is_personal) {
+    if (typeof user !== 'string' || user.trim() !== existing.personal_owner) {
+      res.status(403).json({ error: '個人タスクを操作できるのは所有者だけです' });
+      return;
+    }
+    if (assignee !== undefined && assignee !== existing.personal_owner) {
+      res.status(400).json({ error: '個人タスクの担当者は変更できません' });
+      return;
+    }
   }
 
   if (status === 'done') {
@@ -124,9 +156,9 @@ router.patch('/:id/status', (req: Request, res: Response) => {
   }
 
   const updated = db.prepare(`
-    SELECT ti.*, td.category, td.is_priority
+    SELECT ti.*, td.category, COALESCE(td.is_priority, 0) AS is_priority
     FROM task_instances ti
-    JOIN task_definitions td ON ti.task_definition_id = td.id
+    LEFT JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?
   `).get(req.params.id);
 
@@ -137,7 +169,7 @@ router.patch('/:id/status', (req: Request, res: Response) => {
 // PATCH /api/kanban/:id/assignee — update assignee
 router.patch('/:id/assignee', (req: Request, res: Response) => {
   const db = getDb();
-  const { assignee } = req.body;
+  const { assignee, user } = req.body;
 
   const existing = db.prepare('SELECT * FROM task_instances WHERE id = ?').get(req.params.id) as any;
   if (!existing) {
@@ -145,12 +177,21 @@ router.patch('/:id/assignee', (req: Request, res: Response) => {
     return;
   }
 
+  if (existing.is_personal) {
+    if (typeof user !== 'string' || user.trim() !== existing.personal_owner) {
+      res.status(403).json({ error: '個人タスクを操作できるのは所有者だけです' });
+      return;
+    }
+    res.status(400).json({ error: '個人タスクの担当者は変更できません' });
+    return;
+  }
+
   db.prepare('UPDATE task_instances SET assignee = ? WHERE id = ?').run(assignee ?? null, req.params.id);
 
   const updated = db.prepare(`
-    SELECT ti.*, td.category, td.is_priority
+    SELECT ti.*, td.category, COALESCE(td.is_priority, 0) AS is_priority
     FROM task_instances ti
-    JOIN task_definitions td ON ti.task_definition_id = td.id
+    LEFT JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?
   `).get(req.params.id);
 
@@ -175,6 +216,26 @@ router.put('/assignees', (req: Request, res: Response) => {
     return;
   }
 
+  // 所有者が消えると個人タスクを再表示・操作する手段が無くなる。暗黙にカードを
+  // 消すのではなく、先に個人タスクを片付けてもらう。
+  const existingNames = db.prepare('SELECT name FROM users').all() as { name: string }[];
+  const removedNames = existingNames
+    .map((row) => row.name)
+    .filter((name) => !assignees.includes(name));
+  if (removedNames.length > 0) {
+    const placeholders = removedNames.map(() => '?').join(',');
+    const personalTask = db.prepare(
+      `SELECT personal_owner FROM task_instances
+       WHERE is_personal = 1 AND personal_owner IN (${placeholders}) LIMIT 1`,
+    ).get(...removedNames) as { personal_owner: string } | undefined;
+    if (personalTask) {
+      res.status(409).json({
+        error: `個人タスクが残っているため「${personalTask.personal_owner}」は削除できません。先に個人タスクを削除してください。`,
+      });
+      return;
+    }
+  }
+
   const syncAssignees = db.transaction(() => {
     if (assignees.length > 0) {
       const placeholders = assignees.map(() => '?').join(',');
@@ -190,6 +251,47 @@ router.put('/assignees', (req: Request, res: Response) => {
   syncAssignees();
 
   res.json({ success: true });
+});
+
+// POST /api/kanban/personal-tasks — 選択中ユーザー専用の単発タスクを起票する
+router.post('/personal-tasks', (req: Request, res: Response) => {
+  const db = getDb();
+  const { title, user } = req.body ?? {};
+
+  if (typeof title !== 'string' || title.trim().length < 1 || title.trim().length > 200) {
+    res.status(400).json({ error: 'タスク名は1〜200文字で入力してください' });
+    return;
+  }
+  if (typeof user !== 'string' || user.trim() === '') {
+    res.status(400).json({ error: '個人タスクの所有者を指定してください' });
+    return;
+  }
+
+  const owner = user.trim();
+  const registered = db.prepare('SELECT 1 FROM users WHERE name = ?').get(owner);
+  if (!registered) {
+    res.status(400).json({ error: '登録されていないユーザーです' });
+    return;
+  }
+
+  const maxRow = db.prepare(
+    "SELECT COALESCE(MAX(sort_order), -1) as max_order FROM task_instances WHERE status = 'todo'"
+  ).get() as { max_order: number };
+  const now = getNowISO();
+  const result = db.prepare(`
+    INSERT INTO task_instances
+      (task_definition_id, title, status, assignee, points, created_at, sort_order, is_personal, personal_owner)
+    VALUES (NULL, ?, 'todo', ?, 0, ?, ?, 1, ?)
+  `).run(title.trim(), owner, now, maxRow.max_order + 1, owner);
+
+  const created = db.prepare(`
+    SELECT ti.*, NULL AS category, 0 AS is_priority
+    FROM task_instances ti
+    WHERE ti.id = ?
+  `).get(result.lastInsertRowid);
+
+  broadcast({ type: 'tasks_changed' });
+  res.status(201).json(created);
 });
 
 // POST /api/kanban/create-from-definition/:taskDefId — manually create a task instance
@@ -221,9 +323,9 @@ router.post('/create-from-definition/:taskDefId', (req: Request, res: Response) 
   ).run(taskDefId, taskDef.name, taskDef.points, new Date().toISOString(), sortOrder);
 
   const created = db.prepare(`
-    SELECT ti.*, td.category, td.is_priority
+    SELECT ti.*, td.category, COALESCE(td.is_priority, 0) AS is_priority
     FROM task_instances ti
-    JOIN task_definitions td ON ti.task_definition_id = td.id
+    LEFT JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?
   `).get(result.lastInsertRowid);
 
@@ -298,9 +400,9 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
   })();
 
   const task = db.prepare(`
-    SELECT ti.*, td.category, td.is_priority
+    SELECT ti.*, td.category, COALESCE(td.is_priority, 0) AS is_priority
     FROM task_instances ti
-    JOIN task_definitions td ON ti.task_definition_id = td.id
+    LEFT JOIN task_definitions td ON ti.task_definition_id = td.id
     WHERE ti.id = ?
   `).get(result.id);
 
@@ -322,6 +424,13 @@ router.delete('/:id', (req: Request, res: Response) => {
     res.status(404).json({ error: 'Task instance not found' });
     return;
   }
+  if (existing.is_personal) {
+    const user = typeof req.query.user === 'string' ? req.query.user.trim() : '';
+    if (user !== existing.personal_owner) {
+      res.status(403).json({ error: '個人タスクを操作できるのは所有者だけです' });
+      return;
+    }
+  }
   db.prepare('DELETE FROM task_instances WHERE id = ?').run(req.params.id);
   broadcast({ type: 'task_deleted', taskId: Number(req.params.id) });
   res.json({ success: true });
@@ -331,12 +440,19 @@ router.delete('/:id', (req: Request, res: Response) => {
 router.delete('/', (req: Request, res: Response) => {
   const db = getDb();
   const status = req.query.status as string;
+  const user = typeof req.query.user === 'string' && req.query.user.trim()
+    ? req.query.user.trim()
+    : null;
   const validStatuses = ['todo', 'done'];
   if (!status || !validStatuses.includes(status)) {
     res.status(400).json({ error: 'status query parameter required (todo, done)' });
     return;
   }
-  const result = db.prepare('DELETE FROM task_instances WHERE status = ?').run(status);
+  const result = user
+    ? db.prepare(
+      'DELETE FROM task_instances WHERE status = ? AND (is_personal = 0 OR personal_owner = ?)',
+    ).run(status, user)
+    : db.prepare('DELETE FROM task_instances WHERE status = ? AND is_personal = 0').run(status);
   broadcast({ type: 'tasks_changed' });
   res.json({ success: true, deleted: result.changes });
 });
