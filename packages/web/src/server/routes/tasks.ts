@@ -2,15 +2,17 @@ import { Router, type Request, type Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { getDb, getUploadsDir } from '../db.js';
-import { getTodayJST, formatLocalDate, addMonths } from '@household-tasks/shared';
+import { getTodayJST, formatLocalDate, addMonths, normalizeKeywordList } from '@household-tasks/shared';
 
 const router: ReturnType<typeof Router> = Router();
 
 const VALID_CATEGORIES = ['water', 'kitchen', 'floor', 'entrance', 'laundry', 'trash', 'childcare', 'cooking', 'lifestyle'];
-const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month', 'days_after_completion', 'on_demand'];
+const VALID_FREQUENCY_TYPES = ['daily', 'weekly', 'n_days', 'n_weeks', 'monthly', 'n_months', 'yearly', 'nth_weekday_of_month', 'days_after_completion', 'on_demand', 'calendar'];
 const VALID_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const VALID_SICK_DAY_BEHAVIORS = ['normal_only', 'always', 'sick_only'];
 const VALID_ABSENCE_BEHAVIORS = ['normal', 'hidden'];
+/** カレンダー連動で「予定の何日前に起票するか」の上限（前日〜1週間前） */
+const MAX_CALENDAR_OFFSET_DAYS = 7;
 interface TaskInput {
   name: string;
   category: string;
@@ -32,6 +34,8 @@ interface TaskInput {
   exclude_holiday?: boolean | number;
   exclude_day_before_holiday?: boolean | number;
   is_priority?: boolean | number;
+  calendar_keywords?: string[] | string | null;
+  calendar_offset_days?: number | null;
 }
 
 /**
@@ -42,6 +46,27 @@ const HOME_BOUND_CATEGORIES = new Set(['water', 'kitchen', 'floor', 'entrance', 
 
 function defaultAbsenceBehavior(category: string): string {
   return HOME_BOUND_CATEGORIES.has(category) ? 'hidden' : 'normal';
+}
+
+/**
+ * カレンダー連動のキーワード。API は配列で受けるが、GET が返す行（CSV 文字列）を
+ * そのまま PUT できるよう文字列も受け付ける。空白・空要素・重複は落とす。
+ */
+function calendarKeywordsFromInput(value: TaskInput['calendar_keywords']): string[] {
+  if (value === undefined || value === null) return [];
+  const list = Array.isArray(value) ? value : String(value).split(',');
+  return normalizeKeywordList(list);
+}
+
+/** DB に保存する形（CSV）。カレンダー連動以外の頻度では持たない */
+function calendarKeywordsForDb(body: TaskInput): string | null {
+  if (body.frequency_type !== 'calendar') return null;
+  const keywords = calendarKeywordsFromInput(body.calendar_keywords);
+  return keywords.length > 0 ? keywords.join(',') : null;
+}
+
+function calendarOffsetForDb(body: TaskInput): number {
+  return body.frequency_type === 'calendar' ? (body.calendar_offset_days ?? 0) : 0;
 }
 
 function isValidMonthDay(mm: number, dd: number): boolean {
@@ -86,6 +111,20 @@ function validateTaskInput(body: TaskInput): string | null {
       body.frequency_interval < 1
     ) {
       return '完了後の日数は1以上の整数で入力してください';
+    }
+  }
+
+  if (ft === 'calendar') {
+    const keywords = calendarKeywordsFromInput(body.calendar_keywords);
+    if (keywords.length === 0) {
+      return 'カレンダー連動は予定名のキーワードを1つ以上入力してください';
+    }
+    if (keywords.some((k) => k.length > 50)) {
+      return 'キーワードは1つ50文字以内で入力してください';
+    }
+    const offset = body.calendar_offset_days ?? 0;
+    if (!Number.isInteger(offset) || offset < 0 || offset > MAX_CALENDAR_OFFSET_DAYS) {
+      return `起票日は当日〜${MAX_CALENDAR_OFFSET_DAYS}日前の範囲で指定してください`;
     }
   }
 
@@ -190,7 +229,7 @@ function validateTaskInput(body: TaskInput): string | null {
 }
 
 function calculateNextDueDate(ft: string, interval: number | null, today: string, monthOfYear?: number | null, dayOfMonth?: number | null): string | null {
-  if (['daily', 'weekly', 'monthly', 'nth_weekday_of_month', 'days_after_completion', 'on_demand'].includes(ft)) {
+  if (['daily', 'weekly', 'monthly', 'nth_weekday_of_month', 'days_after_completion', 'on_demand', 'calendar'].includes(ft)) {
     return null;
   }
 
@@ -311,8 +350,8 @@ router.post('/', (req: Request, res: Response) => {
   const isPriority = body.is_priority ? 1 : 0;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, exclude_holiday, exclude_day_before_holiday, is_priority, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, exclude_holiday, exclude_day_before_holiday, is_priority, calendar_keywords, calendar_offset_days, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -337,6 +376,8 @@ router.post('/', (req: Request, res: Response) => {
     excludeHoliday,
     excludeDayBeforeHoliday,
     isPriority,
+    calendarKeywordsForDb(body),
+    calendarOffsetForDb(body),
     now,
     now,
   );
@@ -403,7 +444,8 @@ router.put('/:id', (req: Request, res: Response) => {
         days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
         period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
         next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?,
-        absence_behavior = ?, exclude_holiday = ?, exclude_day_before_holiday = ?, is_priority = ?, updated_at = ?
+        absence_behavior = ?, exclude_holiday = ?, exclude_day_before_holiday = ?, is_priority = ?,
+        calendar_keywords = ?, calendar_offset_days = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -429,6 +471,8 @@ router.put('/:id', (req: Request, res: Response) => {
     excludeHoliday,
     excludeDayBeforeHoliday,
     isPriority,
+    calendarKeywordsForDb(body),
+    calendarOffsetForDb(body),
     new Date().toISOString(),
     req.params.id,
   );
@@ -508,8 +552,8 @@ router.post('/import', (req: Request, res: Response) => {
   const skipped: string[] = [];
 
   const insertStmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, is_priority)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, is_priority, calendar_keywords, calendar_offset_days)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const findStmt = db.prepare(
@@ -535,7 +579,7 @@ router.post('/import', (req: Request, res: Response) => {
               days_of_week = ?, day_of_month = ?, month_of_year = ?, nth_weekday_position = ?,
               period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
               next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?,
-              absence_behavior = ?, is_priority = ?, updated_at = created_at
+              absence_behavior = ?, is_priority = ?, calendar_keywords = ?, calendar_offset_days = ?, updated_at = created_at
           WHERE id = ?
         `).run(
           task.category, task.frequency_type, interval,
@@ -544,7 +588,7 @@ router.post('/import', (req: Request, res: Response) => {
           nextDueDate, task.notes || null, task.points ?? 1, task.scheduled_hour ?? 0,
           task.sick_day_behavior ?? existing.sick_day_behavior,
           task.absence_behavior ?? existing.absence_behavior,
-          task.is_priority ? 1 : 0, existing.id,
+          task.is_priority ? 1 : 0, calendarKeywordsForDb(task), calendarOffsetForDb(task), existing.id,
         );
         inserted.push(existing.id);
       } else {
@@ -560,6 +604,7 @@ router.post('/import', (req: Request, res: Response) => {
           task.sick_day_behavior ?? 'normal_only',
           task.absence_behavior ?? defaultAbsenceBehavior(task.category),
           task.is_priority ? 1 : 0,
+          calendarKeywordsForDb(task), calendarOffsetForDb(task),
         );
         inserted.push(Number(result.lastInsertRowid));
       }

@@ -14,6 +14,7 @@ import kanbanRouter from './routes/kanban.js';
 import sickModeRouter from './routes/sickMode.js';
 import garbageRouter from './routes/garbage.js';
 import absenceRouter from './routes/absence.js';
+import calendarDaysRouter from './routes/calendarDays.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +39,7 @@ app.use('/api/kanban', kanbanRouter);
 app.use('/api/sick-mode', sickModeRouter);
 app.use('/api/garbage', garbageRouter);
 app.use('/api/absence', absenceRouter);
+app.use('/api/calendar-days', calendarDaysRouter);
 
 // Test-only: reset DB
 app.post('/api/test/reset', (_req, res) => {
@@ -49,6 +51,7 @@ app.post('/api/test/reset', (_req, res) => {
   db.exec('DELETE FROM app_settings');
   db.exec('DELETE FROM users');
   db.exec('DELETE FROM absence_days');
+  db.exec('DELETE FROM calendar_days');
   setTestNow(null);
   // Clean uploads directory
   const uploadsDir = getUploadsDir();

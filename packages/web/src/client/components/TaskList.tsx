@@ -1,4 +1,4 @@
-import { FREQUENCY_TYPES, DAYS_OF_WEEK, type TaskDefinition, type DayOfWeek, type FrequencyTypeKey } from '../types.js';
+import { FREQUENCY_TYPES, DAYS_OF_WEEK, CALENDAR_OFFSET_DAYS, type TaskDefinition, type DayOfWeek, type FrequencyTypeKey } from '../types.js';
 
 interface Props {
   tasks: TaskDefinition[];
@@ -26,6 +26,12 @@ function formatFrequency(task: TaskDefinition): string {
       return `完了後${task.frequency_interval}日`;
     case 'on_demand':
       return '即時（都度）';
+    case 'calendar': {
+      const offsetLabel =
+        CALENDAR_OFFSET_DAYS[task.calendar_offset_days as keyof typeof CALENDAR_OFFSET_DAYS] ??
+        `${task.calendar_offset_days}日前`;
+      return `カレンダー連動(${task.calendar_keywords ?? ''}・${offsetLabel})`;
+    }
     case 'n_weeks': {
       const days = task.days_of_week
         ?.split(',')

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAssignees } from '../hooks/useAssignees.js';
 import { useGarbageSettings } from '../hooks/useGarbageSettings.js';
 import { useAbsence } from '../hooks/useAbsence.js';
+import { useCalendarDays } from '../hooks/useCalendarDays.js';
 
 const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -71,6 +72,41 @@ function GarbageSection() {
           <span className="text-gray-400 dark:text-gray-500">当分ありません</span>
         )}
       </p>
+    </section>
+  );
+}
+
+function formatSyncedAt(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAY_JA[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * 家族カレンダーの同期状況。予定を編集する画面ではなく、
+ * 「カレンダー連動」タスクの材料が届いているかを確かめるための表示。
+ */
+function CalendarSyncSection() {
+  const { days, lastSyncedAt, loading } = useCalendarDays();
+
+  if (loading) return null;
+
+  return (
+    <section className="mt-10" aria-label="カレンダー同期">
+      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">カレンダー同期</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        頻度「カレンダー連動」のタスクは、家族カレンダーの予定名にキーワードが含まれる日に起票されます。
+        予定は Home Assistant が1日3回同期します。
+      </p>
+      {lastSyncedAt ? (
+        <p className="text-sm text-gray-700 dark:text-gray-300" data-testid="calendar-sync-status">
+          最終同期 {formatSyncedAt(lastSyncedAt)}・今日以降の予定 {days.length} 件
+        </p>
+      ) : (
+        <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="calendar-sync-status">
+          まだ同期されていません（カレンダー連動のタスクは起票されません）
+        </p>
+      )}
     </section>
   );
 }
@@ -264,6 +300,7 @@ export default function SettingsPage() {
 
       <GarbageSection />
       <AbsenceSection />
+      <CalendarSyncSection />
     </div>
   );
 }

@@ -55,6 +55,10 @@ async function createTaskViaUI(
     absenceBehaviorLabel?: '不在でも表示' | '不在中は非表示';
     exclude_holiday?: boolean;
     exclude_day_before_holiday?: boolean;
+    /** カレンダー連動: 予定名のキーワード（カンマ区切りで入力欄にそのまま打つ） */
+    calendar_keywords?: string;
+    /** カレンダー連動: 起票日のセレクト表示 */
+    calendarOffsetLabel?: '当日' | '前日' | '2日前' | '3日前';
   },
 ) {
   const category = options.category || 'water';
@@ -94,6 +98,12 @@ async function createTaskViaUI(
   }
   if (options.exclude_day_before_holiday) {
     await page.getByRole('checkbox', { name: '祝日の前日は起票しない' }).check();
+  }
+  if (options.calendar_keywords != null) {
+    await page.getByLabel('予定名のキーワード（カンマ区切り）').fill(options.calendar_keywords);
+  }
+  if (options.calendarOffsetLabel) {
+    await page.getByLabel('起票日').selectOption({ label: options.calendarOffsetLabel });
   }
   if (options.period) {
     await page.getByRole('radio', { name: '期間指定する' }).check();
@@ -1267,5 +1277,108 @@ test.describe('祝日の除外', () => {
     await page.getByLabel('頻度').selectOption('daily');
 
     await expect(page.getByRole('checkbox', { name: '祝日は起票しない' })).toHaveCount(0);
+  });
+});
+
+test.describe('カレンダー連動（来客・シッター）', () => {
+  /** 家族カレンダーの予定が同期されてきた状態にする（日付展開は Home Assistant 側が済ませている） */
+  async function setCalendarDays(page: Page, baseURL: string, days: Array<{ date: string; summary: string }>) {
+    await page.request.post(`${baseURL}/api/calendar-days`, { data: { days } });
+  }
+
+  // 予定の日として使う固定日。実行日と重ならない未来の日にしてある
+  // （不在日テストと同じ理由。今日に当たると別経路で起票されて判定できない）。
+  const GUEST_DAY = '2027-03-10';
+  const DAY_BEFORE = '2027-03-09';
+
+  async function createGuestPrepTask(
+    page: Page,
+    baseURL: string,
+    name: string,
+    offsetLabel: '当日' | '前日' = '当日',
+  ) {
+    await createTaskViaUI(page, baseURL, {
+      name, category: 'lifestyle', frequency_type: 'calendar',
+      calendar_keywords: '来客,シッター', calendarOffsetLabel: offsetLabel,
+    });
+  }
+
+  test('予定名にキーワードを含む日に起票される', async ({ page, baseURL }) => {
+    // Arrange
+    await createGuestPrepTask(page, baseURL!, 'calendar-slippers');
+    await setCalendarDays(page, baseURL!, [{ date: GUEST_DAY, summary: 'シッター 10:00-15:00' }]);
+
+    // Act
+    await runScheduler(GUEST_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('calendar-slippers')).toBeVisible();
+  });
+
+  test('半角カナの予定名でもキーワードに当たって起票される', async ({ page, baseURL }) => {
+    // Arrange
+    await createGuestPrepTask(page, baseURL!, 'calendar-halfwidth');
+    await setCalendarDays(page, baseURL!, [{ date: GUEST_DAY, summary: 'ｼｯﾀｰ' }]);
+
+    // Act
+    await runScheduler(GUEST_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('calendar-halfwidth')).toBeVisible();
+  });
+
+  test('「前日」に設定したタスクは予定の前日に起票される', async ({ page, baseURL }) => {
+    // Arrange
+    await createGuestPrepTask(page, baseURL!, 'calendar-eve', '前日');
+    await setCalendarDays(page, baseURL!, [{ date: GUEST_DAY, summary: '来客' }]);
+
+    // Act
+    await runScheduler(DAY_BEFORE);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('calendar-eve')).toBeVisible();
+  });
+
+  test('「前日」に設定したタスクは予定の当日には起票されない', async ({ page, baseURL }) => {
+    // Arrange
+    await createGuestPrepTask(page, baseURL!, 'calendar-eve-not-today', '前日');
+    await setCalendarDays(page, baseURL!, [{ date: GUEST_DAY, summary: '来客' }]);
+
+    // Act
+    await runScheduler(GUEST_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('calendar-eve-not-today')).not.toBeVisible();
+  });
+
+  test('キーワードに合わない予定しか無い日は起票されない', async ({ page, baseURL }) => {
+    // Arrange
+    await createGuestPrepTask(page, baseURL!, 'calendar-unrelated');
+    await setCalendarDays(page, baseURL!, [{ date: GUEST_DAY, summary: '歯医者' }]);
+
+    // Act
+    await runScheduler(GUEST_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('calendar-unrelated')).not.toBeVisible();
+  });
+
+  test('予定がカレンダーから消えた後は起票されない', async ({ page, baseURL }) => {
+    // Arrange: 一度は同期で届いた予定が、次の同期で消えている
+    await createGuestPrepTask(page, baseURL!, 'calendar-cancelled');
+    await setCalendarDays(page, baseURL!, [{ date: GUEST_DAY, summary: 'シッター' }]);
+    await setCalendarDays(page, baseURL!, []);
+
+    // Act
+    await runScheduler(GUEST_DAY);
+
+    // Assert
+    await goToKanban(page);
+    await expect(page.getByText('calendar-cancelled')).not.toBeVisible();
   });
 });

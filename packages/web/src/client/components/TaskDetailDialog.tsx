@@ -29,6 +29,10 @@ function formatFrequency(task: TaskDefinition): string {
   if (task.frequency_type === 'days_after_completion') {
     return `完了後${task.frequency_interval}日 ${task.scheduled_hour}時`;
   }
+  if (task.frequency_type === 'calendar') {
+    const offset = task.calendar_offset_days === 0 ? '当日' : `${task.calendar_offset_days}日前`;
+    return `カレンダー連動(${task.calendar_keywords ?? ''}・${offset}) ${task.scheduled_hour}時`;
+  }
 
   const type = FREQUENCY_TYPES[task.frequency_type as FrequencyTypeKey] || task.frequency_type;
   const parts = [type];
