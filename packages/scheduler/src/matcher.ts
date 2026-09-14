@@ -18,7 +18,7 @@ function getTodayDayOfWeek(today: string): string {
   return DAY_REVERSE[d.getDay()];
 }
 
-function addDays(dateStr: string, days: number): string {
+export function addDays(dateStr: string, days: number): string {
   const d = parseDate(dateStr);
   d.setDate(d.getDate() + days);
   return formatLocalDate(d);
@@ -89,6 +89,11 @@ export function shouldCreateToday(
     case 'on_demand':
       // 即時（都度）: いつ発生するか分からない家事。スケジューラは起票しない。
       // 「やった」と言われた時点で complete-from-definition が起票と完了をまとめて行う。
+      return false;
+
+    case 'calendar':
+      // カレンダー連動: 判定に DB（calendar_days）が要るので index.ts 側で
+      // matchesCalendarSummary() を通す。ここに来るのは呼び分けの漏れなので起票しない。
       return false;
 
     default:
@@ -175,4 +180,28 @@ export function calculateNextDueDate(task: TaskDefinitionRow, currentDueDate: st
   }
 
   return formatLocalDate(d);
+}
+
+/**
+ * カレンダー連動タスクの判定。対象日の予定名のどれかに定義のキーワード（CSV）が
+ * 含まれていれば、当たった予定名を返す。無ければ null。
+ *
+ * 比較は NFKC 正規化 + 小文字化した部分一致（HA 側 absence_sync.py の match_keyword と同じ規則。
+ * 全角/半角の揺れ「ｼｯﾀｰ」と「シッター」を同一視する）。
+ */
+export function matchesCalendarSummary(task: TaskDefinitionRow, summaries: readonly string[]): string | null {
+  const keywords = (task.calendar_keywords ?? '')
+    .split(',')
+    .map((k) => normalizeForMatch(k))
+    .filter((k) => k.length > 0);
+  if (keywords.length === 0) return null;
+  for (const summary of summaries) {
+    const hay = normalizeForMatch(summary);
+    if (keywords.some((k) => hay.includes(k))) return summary;
+  }
+  return null;
+}
+
+function normalizeForMatch(s: string): string {
+  return s.normalize('NFKC').trim().toLowerCase();
 }

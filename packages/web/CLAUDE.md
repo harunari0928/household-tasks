@@ -45,6 +45,7 @@ pnpm --filter web build      # Runs: vite build && tsc -p tsconfig.server.json
 - `vite.config.ts` proxies `/api` to Express using `API_PORT` env var (default 3100)。WebSocket も通すため `ws: true` が必要。
 - Production mode serves static files only if `dist/client/index.html` exists (prevents crash in dev).
 - Frequency validation: `days_of_week` required for weekly/n_weeks; `day_of_month` required for monthly/n_months; `frequency_interval` required for n_days/n_weeks/n_months.
+  `calendar`（カレンダー連動）は `calendar_keywords`（配列、1件以上・各50文字以内）必須、`calendar_offset_days` は 0〜7。予定の材料は `routes/calendarDays.ts`（HA が全置換で入れる）。
 - `calculateNextDueDate()` returns null for fixed-schedule types (daily/weekly/monthly), computes from today for interval types.
 - Kanban board uses @dnd-kit for drag-and-drop. Requires assignee selection for done when unassigned.
 - `broadcast()` (`src/server/realtime.ts`) pushes task updates to all connected WebSocket clients for real-time sync.

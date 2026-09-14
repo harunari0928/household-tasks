@@ -402,6 +402,29 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 21,
+    up: (db) => {
+      // カレンダー連動（frequency_type='calendar'）。家族カレンダーの予定名に
+      // calendar_keywords のいずれかを含む日（の calendar_offset_days 日前）に起票する。
+      // 列と表の定義は scheduler 側の v21 と必ず揃えること。
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN calendar_keywords TEXT DEFAULT NULL;
+        ALTER TABLE task_definitions ADD COLUMN calendar_offset_days INTEGER NOT NULL DEFAULT 0;
+
+        -- 家族カレンダーの予定を日付に展開したもの。Home Assistant の同期
+        -- （absence_sync.py）が source='calendar' の行を毎回まるごと入れ替える。
+        -- キーワードでは絞らずに全予定を持つので、アプリ側でキーワードを足した瞬間から効く。
+        CREATE TABLE IF NOT EXISTS calendar_days (
+          date TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'calendar',
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (date, summary)
+        );
+      `);
+    },
+  },
 ];
 
 export function seedHolidays(db: Database.Database): void {

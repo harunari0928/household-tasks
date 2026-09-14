@@ -89,6 +89,8 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     task?.nth_weekday_position ?? undefined,
   );
   const [scheduledHour, setScheduledHour] = useState<number>(task?.scheduled_hour ?? 0);
+  const [calendarKeywords, setCalendarKeywords] = useState<string>(task?.calendar_keywords ?? '');
+  const [calendarOffsetDays, setCalendarOffsetDays] = useState<number>(task?.calendar_offset_days ?? 0);
   const [excludeHoliday, setExcludeHoliday] = useState<boolean>(!!task?.exclude_holiday);
   const [excludeDayBeforeHoliday, setExcludeDayBeforeHoliday] = useState<boolean>(
     !!task?.exclude_day_before_holiday,
@@ -240,6 +242,12 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
       return;
     }
 
+    if (frequencyType === 'calendar' && calendarKeywords.split(',').every((k) => k.trim() === '')) {
+      setFrequencyError('予定名のキーワードを1つ以上入力してください');
+      scrollToError(frequencyErrorRef);
+      return;
+    }
+
     if (frequencyType === 'yearly') {
       const hasMonth = !!monthOfYear;
       const hasDay = !!dayOfMonth;
@@ -304,6 +312,10 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     if (frequencyType === 'yearly' && monthOfYear && dayOfMonth) {
       input.month_of_year = monthOfYear;
       input.day_of_month = dayOfMonth;
+    }
+    if (frequencyType === 'calendar') {
+      input.calendar_keywords = calendarKeywords.split(',').map((k) => k.trim()).filter((k) => k !== '');
+      input.calendar_offset_days = calendarOffsetDays;
     }
     if (frequencyType === 'nth_weekday_of_month') {
       input.days_of_week = daysOfWeek;
@@ -544,8 +556,12 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
                 scheduled_hour: scheduledHour,
                 exclude_holiday: excludeHoliday,
                 exclude_day_before_holiday: excludeDayBeforeHoliday,
+                calendar_keywords: calendarKeywords,
+                calendar_offset_days: calendarOffsetDays,
               }}
               onChange={(val) => {
+                setCalendarKeywords(val.calendar_keywords ?? '');
+                setCalendarOffsetDays(val.calendar_offset_days ?? 0);
                 setFrequencyType(val.frequency_type);
                 setFrequencyInterval(val.frequency_interval);
                 setDaysOfWeek(val.days_of_week || []);

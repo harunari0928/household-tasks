@@ -169,6 +169,34 @@ git worktreeで並行作業する場合、Docker Compose環境のポート競合
 - CLI は `ht task add --priority` / `ht task edit --priority | --no-priority`。
   `ht task edit` は **GET した行を丸ごと土台にして PUT する**（PUT が全置換のため。以前は書き忘れた列——実行期間・祝日除外など——が編集のたびに消えていた）。
 
+## カレンダー連動（来客・シッターの受け入れ準備）
+
+- **頻度 `calendar`（UI では「カレンダー連動」）は、家族カレンダーの予定名にキーワードが含まれる日に起票する**
+  （2026-09-14 導入）。定義が `calendar_keywords`（CSV、例 `来客,シッター`）と
+  `calendar_offset_days`（0=当日 / 1=前日 / …最大7）を持つ。「前日に準備できるもの」は offset=1 の別定義にする
+  （1つの定義は1つの起票日しか持たない）。
+- **予定は `calendar_days` テーブル**（`date, summary`）。Home Assistant の `absence_sync.py`（05:50/12:50/21:50 JST）が
+  家族カレンダーの**全予定**を日付に展開して `POST /api/calendar-days` で**全置換**する（不在日と同じ冪等方式。
+  予定が消えれば行も消える）。**キーワードで絞るのはアプリ側**（定義ごと）なので、HA にはキーワードが無い。
+  キーワードを足した瞬間から次のスケジューラ実行で効く。
+  - 期間の日付展開（終日予定の end 排他など）は不在日と同じく HA 側だけが持つ。こちらに書かない。
+  - 判定は NFKC 正規化 + 小文字化の部分一致（`matcher.ts` の `matchesCalendarSummary`。HA の
+    `match_keyword` と同じ規則）。「ｼｯﾀｰ」と「シッター」は同一視する。
+  - `shouldCreateToday()` は `calendar` で常に false。DB 参照が要るので `scheduler/src/index.ts` の
+    main ループが `getCalendarSummaries(today + offset)` を見て呼び分ける（再試行ループも同じ判定を通す）。
+  - **表が読めないときは「予定なし」に倒す**（起票しない）。不在日・祝日の「読めなければ通常どおり起票」とは
+    向きが逆。カレンダー連動は予定がある日だけの頻度なので、判定不能なら出さない方が安全。
+- **連日の来客で前日のカードが未完了だと、2日目ぶんは起票されない**（`hasRecentInstance` の既存挙動。
+  定期タスクと同じ）。予定名が「シッター(お泊り)」なら `来客,シッター` と `お泊り,泊` の両方の定義が起票される。
+  **泊を含まない複数日の予定はお泊り扱いにならない**（キーワード判定のみ。日数は見ていない）。
+- `next_due_date` は持たない（`on_demand` と同じ）。風邪の日・不在時の扱い・実行期間・起票時刻は**効く**
+  （起票日が決まる頻度なので `on_demand` のように非活性にはしない）。`complete-from-definition` は
+  `on_demand` 以外なので 400（板のカードを完了にする）。
+- 設定画面の「カレンダー同期」は最終同期時刻と今日以降の予定件数を出す**だけ**（`GET /api/calendar-days`）。
+  同期が止まると来客準備が黙って起票されなくなるので、止まっていることに気付く口として置いてある。
+- HA 側の `ht`（REST シム）は `ht task add/edit --calendar-keywords 来客,シッター --calendar-offset-days 1`。
+  対応表と運用は `~/repos/homeassistant/CLAUDE.md` の「来客・シッター」節を参照。
+
 ## Key conventions
 
 - All dates use JST (Asia/Tokyo). `getTodayJST()` in shared/ returns `YYYY-MM-DD`.

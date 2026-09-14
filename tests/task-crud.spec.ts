@@ -1520,3 +1520,74 @@ test.describe('優先タスク', () => {
     await expect(page.getByText('⭐ 優先')).toHaveCount(0);
   });
 });
+
+test.describe('カレンダー連動タスク', () => {
+  test('「カレンダー連動」を選ぶと予定名のキーワード欄と起票日が表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+
+    await page.getByLabel('頻度').selectOption('calendar');
+
+    await test.step('予定名のキーワード欄が表示される', async () => {
+      await expect(page.getByLabel('予定名のキーワード（カンマ区切り）')).toBeVisible();
+    });
+    await test.step('起票日は既定で「当日」になっている', async () => {
+      await expect(page.getByLabel('起票日')).toHaveValue('0');
+    });
+  });
+
+  test('キーワードを入れずに保存するとエラーが表示され保存されない', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト来客準備');
+    await page.getByLabel('頻度').selectOption('calendar');
+
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await test.step('キーワードが必要だとエラーが出る', async () => {
+      await expect(page.getByRole('alert')).toContainText('予定名のキーワードを1つ以上入力してください');
+    });
+    await test.step('フォームが閉じず一覧にタスクが増えていない', async () => {
+      await expect(page.getByLabel('タスク名')).toBeVisible();
+    });
+  });
+
+  test('保存すると一覧の頻度にキーワードと起票日が表示される', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト来客用スリッパ');
+    await page.getByLabel('頻度').selectOption('calendar');
+    await page.getByLabel('予定名のキーワード（カンマ区切り）').fill('来客, シッター');
+    await page.getByLabel('起票日').selectOption({ label: '前日' });
+
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テスト来客用スリッパ').waitFor();
+
+    await expect(page.getByText('カレンダー連動(来客,シッター・前日)')).toBeVisible();
+  });
+
+  test('編集を開き直すとキーワードと起票日が保存どおりに入っている', async ({ page }) => {
+    await page.goto('/#/tasks');
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByRole('button', { name: /タスクを追加/ }).click();
+    await page.getByLabel('タスク名').fill('テスト申し送り更新');
+    await page.getByLabel('頻度').selectOption('calendar');
+    await page.getByLabel('予定名のキーワード（カンマ区切り）').fill('シッター');
+    await page.getByLabel('起票日').selectOption({ label: '2日前' });
+    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByText('テスト申し送り更新').waitFor();
+
+    await page.reload();
+    await page.getByRole('button', { name: /生活/ }).click();
+    await page.getByText('テスト申し送り更新').click();
+
+    await test.step('キーワードが復元される', async () => {
+      await expect(page.getByLabel('予定名のキーワード（カンマ区切り）')).toHaveValue('シッター');
+    });
+    await test.step('起票日が「2日前」で復元される', async () => {
+      await expect(page.getByLabel('起票日')).toHaveValue('2');
+    });
+  });
+});

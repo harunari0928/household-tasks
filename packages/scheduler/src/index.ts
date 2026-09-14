@@ -19,9 +19,18 @@ import {
   getLastCompletedDateJST,
   getHiddenGarbageTypes,
   getHolidaySet,
+  getCalendarSummaries,
   type TaskDefinitionRow,
 } from './db.js';
-import { shouldCreateToday, shouldCreateThisHour, isWithinActivePeriod, isExcludedByHoliday, calculateNextDueDate } from './matcher.js';
+import {
+  shouldCreateToday,
+  shouldCreateThisHour,
+  isWithinActivePeriod,
+  isExcludedByHoliday,
+  calculateNextDueDate,
+  matchesCalendarSummary,
+  addDays,
+} from './matcher.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -90,7 +99,16 @@ async function main() {
       task.frequency_type === 'days_after_completion'
         ? getLastCompletedDateJST(db, task.id)
         : null;
-    if (!shouldCreateToday(task, today, lastCompletedDate)) continue;
+    if (task.frequency_type === 'calendar') {
+      // カレンダー連動: 「今日 + offset 日」に予定があるか。前日起票（offset=1）なら明日の予定を見る。
+      // 予定が無ければ普通に何もしない日。
+      const target = addDays(today, task.calendar_offset_days);
+      const hit = matchesCalendarSummary(task, getCalendarSummaries(db, target));
+      if (!hit) continue;
+      console.log(`  calendar match: "${task.name}" ← ${target} 「${hit}」`);
+    } else if (!shouldCreateToday(task, today, lastCompletedDate)) {
+      continue;
+    }
     if (!isWithinActivePeriod(task, today)) continue;
     if (!shouldCreateThisHour(task, currentHour)) continue;
 
@@ -165,6 +183,11 @@ async function main() {
       const task = tasks.find((t) => t.id === task_definition_id);
       if (!task) continue;
       if (isExcludedByHoliday(task, today, holidays)) continue;
+      // 前日に失敗したカレンダー連動タスクを、予定の無い日に再試行で起票しない
+      if (
+        task.frequency_type === 'calendar' &&
+        !matchesCalendarSummary(task, getCalendarSummaries(db, addDays(today, task.calendar_offset_days)))
+      ) continue;
 
       // 再試行でも同じ判定を通す（失敗を引きずって収集の無い日に起票しないため）
       const retryGarbage = resolveGarbageTask(task, today, hiddenGarbageTypes);

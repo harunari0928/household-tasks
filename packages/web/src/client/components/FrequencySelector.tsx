@@ -1,4 +1,4 @@
-import { FREQUENCY_TYPES, DAYS_OF_WEEK, FIELD_VISIBILITY, type FrequencyTypeKey, type DayOfWeek } from '../types.js';
+import { FREQUENCY_TYPES, DAYS_OF_WEEK, FIELD_VISIBILITY, CALENDAR_OFFSET_DAYS, type FrequencyTypeKey, type DayOfWeek } from '../types.js';
 
 interface FrequencyValue {
   frequency_type: FrequencyTypeKey;
@@ -10,6 +10,9 @@ interface FrequencyValue {
   scheduled_hour: number;
   exclude_holiday?: boolean;
   exclude_day_before_holiday?: boolean;
+  /** カレンダー連動: カンマ区切りの入力そのまま（保存時に配列へ） */
+  calendar_keywords?: string;
+  calendar_offset_days?: number;
 }
 
 interface Props {
@@ -39,6 +42,8 @@ export default function FrequencySelector({ value, onChange, error }: Props) {
               nth_weekday_position: undefined,
               exclude_holiday: false,
               exclude_day_before_holiday: false,
+              calendar_keywords: undefined,
+              calendar_offset_days: undefined,
             })
           }
           className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -56,6 +61,42 @@ export default function FrequencySelector({ value, onChange, error }: Props) {
           </p>
         )}
       </div>
+
+      {visibleFields.includes('calendar_keywords') && (
+        <div>
+          <label htmlFor="calendar-keywords" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">予定名のキーワード（カンマ区切り）</label>
+          <input
+            id="calendar-keywords"
+            type="text"
+            value={value.calendar_keywords ?? ''}
+            onChange={(e) => onChange({ ...value, calendar_keywords: e.target.value })}
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            placeholder="来客,シッター"
+          />
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            家族カレンダーの予定名にどれかが含まれる日に起票します（予定は Home Assistant が1日3回同期）
+          </p>
+        </div>
+      )}
+
+      {visibleFields.includes('calendar_offset_days') && (
+        <div>
+          <label htmlFor="calendar-offset-days" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">起票日</label>
+          <select
+            id="calendar-offset-days"
+            value={value.calendar_offset_days ?? 0}
+            onChange={(e) => onChange({ ...value, calendar_offset_days: parseInt(e.target.value) || 0 })}
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-base min-h-[44px] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          >
+            {Object.entries(CALENDAR_OFFSET_DAYS).map(([days, label]) => (
+              <option key={days} value={days}>{label}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            「前日」なら予定の前の日に起票します（前日に準備できるもの向け）
+          </p>
+        </div>
+      )}
 
       {visibleFields.includes('frequency_interval') && (
         <div>

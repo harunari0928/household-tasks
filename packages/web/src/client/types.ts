@@ -23,6 +23,7 @@ export const FREQUENCY_TYPES = {
   nth_weekday_of_month: '第N曜日(毎月)',
   days_after_completion: '完了後N日',
   on_demand: '即時（都度）',
+  calendar: 'カレンダー連動',
 } as const;
 
 export type FrequencyTypeKey = keyof typeof FREQUENCY_TYPES;
@@ -82,6 +83,10 @@ export interface TaskDefinition {
   exclude_day_before_holiday: number;
   /** 優先タスク（今日必ずやる）。カンバンの未着手列で先頭にまとまり、カードに目印が付く */
   is_priority: number;
+  /** カレンダー連動: 予定名に含まれていれば起票するキーワード（CSV）。他の頻度では null */
+  calendar_keywords: string | null;
+  /** カレンダー連動: 予定日の何日前に起票するか（0=当日, 1=前日） */
+  calendar_offset_days: number;
   created_at: string;
   updated_at: string;
 }
@@ -107,7 +112,21 @@ export interface TaskDefinitionInput {
   exclude_holiday?: boolean;
   exclude_day_before_holiday?: boolean;
   is_priority?: boolean;
+  calendar_keywords?: string[];
+  calendar_offset_days?: number;
 }
+
+/** カレンダー連動の起票日（予定の何日前か）の選択肢 */
+export const CALENDAR_OFFSET_DAYS = {
+  0: '当日',
+  1: '前日',
+  2: '2日前',
+  3: '3日前',
+  4: '4日前',
+  5: '5日前',
+  6: '6日前',
+  7: '1週間前',
+} as const;
 
 export interface ExecutionLog {
   id: number;
@@ -165,4 +184,5 @@ export const FIELD_VISIBILITY: Record<FrequencyTypeKey, string[]> = {
   nth_weekday_of_month: ['nth_weekday_position', 'days_of_week'],
   days_after_completion: ['frequency_interval'],
   on_demand: [],
+  calendar: ['calendar_keywords', 'calendar_offset_days'],
 };

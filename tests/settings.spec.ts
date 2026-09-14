@@ -154,3 +154,46 @@ test.describe('設定画面のユーザー管理', () => {
     await expect(page.getByRole('alert').filter({ hasText: '担当者の取得に失敗しました' }).first()).toBeVisible();
   });
 });
+
+test.describe('カレンダー同期の状況', () => {
+  test('一度も同期されていなければ、カレンダー連動が起票されないことが表示される', async ({ page }) => {
+    await goToSettings(page);
+
+    await expect(page.getByTestId('calendar-sync-status')).toContainText('まだ同期されていません');
+  });
+
+  test('予定が1件も無い同期が届いても「同期済み・0件」と表示され、未同期扱いにならない', async ({ page, baseURL }) => {
+    // Arrange: 先の予定が何も無い時期の同期
+    await page.request.post(`${baseURL}/api/calendar-days`, { data: { days: [] } });
+
+    // Act
+    await goToSettings(page);
+
+    // Assert
+    await test.step('最終同期の時刻が表示される', async () => {
+      await expect(page.getByTestId('calendar-sync-status')).toContainText('最終同期');
+    });
+    await test.step('予定は0件と表示される', async () => {
+      await expect(page.getByTestId('calendar-sync-status')).toContainText('今日以降の予定 0 件');
+    });
+  });
+
+  test('同期が届くと今日以降の予定の件数が表示される', async ({ page, baseURL }) => {
+    // Arrange: 家族カレンダーの予定が同期されてきた（過去の予定は数に入れない）
+    await page.request.post(`${baseURL}/api/calendar-days`, {
+      data: {
+        days: [
+          { date: '2027-03-10', summary: 'シッター' },
+          { date: '2027-03-12', summary: '来客' },
+          { date: '2020-01-01', summary: '昔の予定' },
+        ],
+      },
+    });
+
+    // Act
+    await goToSettings(page);
+
+    // Assert
+    await expect(page.getByTestId('calendar-sync-status')).toContainText('今日以降の予定 2 件');
+  });
+});
