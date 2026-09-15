@@ -121,6 +121,11 @@ export default function TaskList({ tasks, onEdit, onToggleActive }: Props) {
             <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{task.name}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
               <span>{[formatFrequency(task), formatScheduledHour(task)].filter(Boolean).join(' ')}</span>
+              {task.personal_owner && (
+                <span className="flex-shrink-0 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 rounded-full px-2 py-0.5">
+                  👤 個人（{task.personal_owner}）
+                </span>
+              )}
               {!!task.is_priority && (
                 <span className="flex-shrink-0 text-xs font-semibold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/30 rounded-full px-2 py-0.5">
                   ⭐ 優先

@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { CATEGORIES, SICK_DAY_BEHAVIORS, ABSENCE_BEHAVIORS, type CategoryKey, type TaskDefinition, type FrequencyTypeKey, type SickDayBehaviorKey, type AbsenceBehaviorKey } from '../types.js';
 import FrequencySelector from './FrequencySelector.js';
 import MarkdownEditor, { type PendingFile } from './MarkdownEditor.js';
 import AttachmentsList from './AttachmentsList.js';
 import { apiFetch, type ApiResult } from '../lib/api.js';
 import { useToast } from '../contexts/ToastContext.js';
+import { useAssignees } from '../hooks/useAssignees.js';
 
 /**
  * 在宅が前提になりやすいカテゴリ。新規タスクの「不在時の扱い」の初期値に使う。
@@ -96,6 +97,17 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     !!task?.exclude_day_before_holiday,
   );
   const [points, setPoints] = useState<string>(String(task?.points ?? 1));
+  // 個人タスクの所有者。空文字が「共有」。
+  const [personalOwner, setPersonalOwner] = useState<string>(task?.personal_owner ?? '');
+  const { assignees, loaded: assigneesLoaded, fetchAssignees } = useAssignees();
+  useEffect(() => {
+    fetchAssignees();
+  }, [fetchAssignees]);
+  const isPersonal = personalOwner !== '';
+  // 所有者が登録から消えていても（後から削除された場合）選択肢に残して、保存時に API の検証に任せる
+  const ownerOptions = isPersonal && !assignees.includes(personalOwner)
+    ? [...assignees, personalOwner]
+    : assignees;
   const [isPriority, setIsPriority] = useState<boolean>(!!task?.is_priority);
   const [sickDayBehavior, setSickDayBehavior] = useState<SickDayBehaviorKey>(
     task?.sick_day_behavior ?? 'normal_only',
@@ -285,13 +297,17 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
     let currentNotes = notes.trim();
 
     const parsedPoints = parseInt(points, 10);
-    const pointsValue = Number.isNaN(parsedPoints) ? 1 : Math.max(0, Math.min(10, parsedPoints));
+    // 個人タスクはポイントを付けない（API 側でも 0 に倒す）
+    const pointsValue = isPersonal
+      ? 0
+      : Number.isNaN(parsedPoints) ? 1 : Math.max(0, Math.min(10, parsedPoints));
 
     const input: any = {
       name: name.trim(),
       category,
       frequency_type: frequencyType,
       points: pointsValue,
+      personal_owner: isPersonal ? personalOwner : null,
       scheduled_hour: scheduledHour,
       sick_day_behavior: effectiveSickDayBehavior,
       absence_behavior: effectiveAbsenceBehavior,
@@ -456,6 +472,32 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
           </div>
 
           <div>
+            <label htmlFor="personal-owner" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              種類
+            </label>
+            <select
+              id="personal-owner"
+              value={personalOwner}
+              onChange={(e) => setPersonalOwner(e.target.value)}
+              className={inputBase}
+            >
+              <option value="">共有（家族みんなのタスク）</option>
+              {ownerOptions.map((name) => (
+                <option key={name} value={name}>
+                  個人（{name}）
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {isPersonal
+                ? `${personalOwner} を選択しているときだけカンバンに表示されます。ポイントは付かず、家事の集計にも入りません`
+                : assigneesLoaded && assignees.length === 0
+                  ? '個人タスクにするには、先に設定画面でユーザーを登録してください'
+                  : '個人にすると、その人を選択しているときだけカンバンに表示されます（他の人には見えません）'}
+            </p>
+          </div>
+
+          <div>
             <label htmlFor="sick-day-behavior" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               風邪の日の扱い
             </label>
@@ -501,6 +543,8 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
             </p>
           </div>
 
+          {/* 個人タスクは家事の分担ではないのでポイントを持たない。欄ごと出さない */}
+          {!isPersonal && (
           <div>
             <label htmlFor="points" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               ポイント <span className="text-gray-400 font-normal">(0〜10)</span>
@@ -523,6 +567,7 @@ export default function TaskForm({ task, defaultCategory, onSaved, onCancel, onD
               <span className="text-sm text-gray-600 dark:text-gray-400">pt</span>
             </div>
           </div>
+          )}
 
           <div>
             <label className={`flex items-center gap-2 min-h-[44px] text-sm text-gray-700 dark:text-gray-300 ${isOnDemand ? 'cursor-not-allowed text-gray-400 dark:text-gray-500' : 'cursor-pointer'}`}>

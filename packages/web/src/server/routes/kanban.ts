@@ -7,6 +7,20 @@ import { isAbsentToday } from './absence.js';
 
 const router: ReturnType<typeof Router> = Router();
 
+/**
+ * タスク定義から起票するときの個人タスク用の列。所有者付きの定義は所有者を担当者にして
+ * ポイント0で起票する（統計に入れない）。scheduler 側の createTaskInstance と同じ形。
+ */
+function personalColumns(taskDef: { points: number; personal_owner: string | null }) {
+  const owner = taskDef.personal_owner;
+  return {
+    assignee: owner ?? null,
+    points: owner ? 0 : taskDef.points,
+    is_personal: owner ? 1 : 0,
+    personal_owner: owner ?? null,
+  };
+}
+
 // GET /api/kanban — list task instances
 router.get('/', (req: Request, res: Response) => {
   const db = getDb();
@@ -226,8 +240,12 @@ router.put('/assignees', (req: Request, res: Response) => {
     const placeholders = removedNames.map(() => '?').join(',');
     const personalTask = db.prepare(
       `SELECT personal_owner FROM task_instances
-       WHERE is_personal = 1 AND personal_owner IN (${placeholders}) LIMIT 1`,
-    ).get(...removedNames) as { personal_owner: string } | undefined;
+       WHERE is_personal = 1 AND personal_owner IN (${placeholders})
+       UNION
+       SELECT personal_owner FROM task_definitions
+       WHERE personal_owner IN (${placeholders})
+       LIMIT 1`,
+    ).get(...removedNames, ...removedNames) as { personal_owner: string } | undefined;
     if (personalTask) {
       res.status(409).json({
         error: `個人タスクが残っているため「${personalTask.personal_owner}」は削除できません。先に個人タスクを削除してください。`,
@@ -251,47 +269,6 @@ router.put('/assignees', (req: Request, res: Response) => {
   syncAssignees();
 
   res.json({ success: true });
-});
-
-// POST /api/kanban/personal-tasks — 選択中ユーザー専用の単発タスクを起票する
-router.post('/personal-tasks', (req: Request, res: Response) => {
-  const db = getDb();
-  const { title, user } = req.body ?? {};
-
-  if (typeof title !== 'string' || title.trim().length < 1 || title.trim().length > 200) {
-    res.status(400).json({ error: 'タスク名は1〜200文字で入力してください' });
-    return;
-  }
-  if (typeof user !== 'string' || user.trim() === '') {
-    res.status(400).json({ error: '個人タスクの所有者を指定してください' });
-    return;
-  }
-
-  const owner = user.trim();
-  const registered = db.prepare('SELECT 1 FROM users WHERE name = ?').get(owner);
-  if (!registered) {
-    res.status(400).json({ error: '登録されていないユーザーです' });
-    return;
-  }
-
-  const maxRow = db.prepare(
-    "SELECT COALESCE(MAX(sort_order), -1) as max_order FROM task_instances WHERE status = 'todo'"
-  ).get() as { max_order: number };
-  const now = getNowISO();
-  const result = db.prepare(`
-    INSERT INTO task_instances
-      (task_definition_id, title, status, assignee, points, created_at, sort_order, is_personal, personal_owner)
-    VALUES (NULL, ?, 'todo', ?, 0, ?, ?, 1, ?)
-  `).run(title.trim(), owner, now, maxRow.max_order + 1, owner);
-
-  const created = db.prepare(`
-    SELECT ti.*, NULL AS category, 0 AS is_priority
-    FROM task_instances ti
-    WHERE ti.id = ?
-  `).get(result.lastInsertRowid);
-
-  broadcast({ type: 'tasks_changed' });
-  res.status(201).json(created);
 });
 
 // POST /api/kanban/create-from-definition/:taskDefId — manually create a task instance
@@ -318,9 +295,13 @@ router.post('/create-from-definition/:taskDefId', (req: Request, res: Response) 
   ).get() as { max_order: number };
   const sortOrder = maxRow.max_order + 1;
 
+  const personal = personalColumns(taskDef);
   const result = db.prepare(
-    "INSERT INTO task_instances (task_definition_id, title, status, points, created_at, sort_order) VALUES (?, ?, 'todo', ?, ?, ?)"
-  ).run(taskDefId, taskDef.name, taskDef.points, new Date().toISOString(), sortOrder);
+    "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, sort_order, is_personal, personal_owner) VALUES (?, ?, 'todo', ?, ?, ?, ?, ?, ?)"
+  ).run(
+    taskDefId, taskDef.name, personal.assignee, personal.points, new Date().toISOString(), sortOrder,
+    personal.is_personal, personal.personal_owner,
+  );
 
   const created = db.prepare(`
     SELECT ti.*, td.category, COALESCE(td.is_priority, 0) AS is_priority
@@ -372,6 +353,13 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
     return;
   }
 
+  // 個人タスクは所有者本人の記録としてしか成立しない
+  if (taskDef.personal_owner && assignee !== taskDef.personal_owner) {
+    res.status(400).json({ error: `個人タスクを完了にできるのは所有者「${taskDef.personal_owner}」だけです` });
+    return;
+  }
+
+  const personal = personalColumns(taskDef);
   const now = getNowISO();
 
   const result = db.transaction(() => {
@@ -394,8 +382,8 @@ router.post('/complete-from-definition/:taskDefId', (req: Request, res: Response
     }
 
     const inserted = db.prepare(
-      "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order) VALUES (?, ?, 'done', ?, ?, ?, ?, ?)"
-    ).run(taskDefId, taskDef.name, assignee, taskDef.points, now, now, sortOrder);
+      "INSERT INTO task_instances (task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order, is_personal, personal_owner) VALUES (?, ?, 'done', ?, ?, ?, ?, ?, ?, ?)"
+    ).run(taskDefId, taskDef.name, assignee, personal.points, now, now, sortOrder, personal.is_personal, personal.personal_owner);
     return { id: Number(inserted.lastInsertRowid), created: true };
   })();
 

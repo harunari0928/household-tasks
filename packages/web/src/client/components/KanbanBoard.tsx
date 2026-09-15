@@ -42,8 +42,6 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
   const [newAssigneeName, setNewAssigneeName] = useState('');
   const [selectedTask, setSelectedTask] = useState<TaskInstance | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<TaskInstance | null>(null);
-  const [personalTaskTitle, setPersonalTaskTitle] = useState('');
-  const [creatingPersonalTask, setCreatingPersonalTask] = useState(false);
   const prevTasksRef = useRef<TaskInstance[]>([]);
   const localMovedRef = useRef<Set<number>>(new Set());
   const [recentlyMovedIds, setRecentlyMovedIds] = useState<Set<number>>(new Set());
@@ -344,29 +342,6 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
     setDeleteConfirm(task);
   };
 
-  const createPersonalTask = async () => {
-    const title = personalTaskTitle.trim();
-    if (!title || !currentUser || creatingPersonalTask) return;
-
-    setCreatingPersonalTask(true);
-    const result = await request<TaskInstance>(
-      '/api/kanban/personal-tasks',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, user: currentUser }),
-      },
-      {
-        errorMessage: '個人タスクの起票に失敗しました',
-        onRetry: createPersonalTask,
-      },
-    );
-    setCreatingPersonalTask(false);
-    if (!result.ok) return;
-    setPersonalTaskTitle('');
-    await fetchTasks();
-  };
-
   // Filter tasks
   const filtered = tasks.filter((t) => {
     if (filterAssignee === '__unassigned') {
@@ -432,29 +407,6 @@ export default function KanbanBoard({ currentUser }: KanbanBoardProps) {
           filterCategory={filterCategory}
           onFilterCategoryChange={setFilterCategory}
         />
-      </div>
-
-      <div className="mb-4 flex gap-2">
-        <input
-          type="text"
-          value={personalTaskTitle}
-          onChange={(e) => setPersonalTaskTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') createPersonalTask();
-          }}
-          placeholder={currentUser ? `${currentUser}の個人タスクを追加` : 'ユーザーを選択してください'}
-          aria-label="個人タスク名"
-          disabled={!currentUser || creatingPersonalTask}
-          className="flex-1 min-w-0 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 min-h-[44px] text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-        />
-        <button
-          type="button"
-          onClick={createPersonalTask}
-          disabled={!currentUser || !personalTaskTitle.trim() || creatingPersonalTask}
-          className="px-4 py-2 min-h-[44px] text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          個人タスクを追加
-        </button>
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

@@ -62,7 +62,7 @@ export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
       setAttachments([]);
       return;
     }
-    if (taskInstance.is_personal || taskInstance.task_definition_id == null) {
+    if (taskInstance.task_definition_id == null) {
       setTaskDef(null);
       setAttachments([]);
       return;
@@ -99,8 +99,8 @@ export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
             </button>
           </div>
 
-          {taskInstance.is_personal ? (
-            <div className="space-y-3">
+          {!!taskInstance.is_personal && (
+            <div className="mb-3 space-y-1">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-16">種類</span>
                 <span className="text-sm text-gray-900 dark:text-gray-100">個人タスク</span>
@@ -109,7 +109,8 @@ export default function TaskDetailDialog({ taskInstance, onClose }: Props) {
                 このタスクは {taskInstance.personal_owner} 専用です。ポイントは加算されません。
               </p>
             </div>
-          ) : taskDef && (
+          )}
+          {taskDef && (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-16">カテゴリ</span>
