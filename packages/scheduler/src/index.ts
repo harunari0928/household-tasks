@@ -158,7 +158,7 @@ async function main() {
       }
 
       const now = new Date().toISOString();
-      const instanceId = createTaskInstance(db, task.id, garbage.title, task.points, now);
+      const instanceId = createTaskInstance(db, task, garbage.title, now);
       logExecution(db, task.id, instanceId, 'created', undefined, today);
       created++;
       console.log(`  CREATED: "${garbage.title}" (instance_id=${instanceId})`);
@@ -210,7 +210,7 @@ async function main() {
         }
 
         const now = new Date().toISOString();
-        const instanceId = createTaskInstance(db, task.id, retryGarbage.title, task.points, now);
+        const instanceId = createTaskInstance(db, task, retryGarbage.title, now);
         logExecution(db, task.id, instanceId, 'created', undefined, today);
         created++;
         console.log(`  RETRY OK: "${retryGarbage.title}" (instance_id=${instanceId})`);
