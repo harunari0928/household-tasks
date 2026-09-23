@@ -36,6 +36,8 @@ interface TaskInput {
   is_priority?: boolean | number;
   calendar_keywords?: string[] | string | null;
   calendar_offset_days?: number | null;
+  /** 個人タスクの所有者（登録ユーザー名）。null / 未指定なら共有タスク */
+  personal_owner?: string | null;
 }
 
 /**
@@ -67,6 +69,30 @@ function calendarKeywordsForDb(body: TaskInput): string | null {
 
 function calendarOffsetForDb(body: TaskInput): number {
   return body.frequency_type === 'calendar' ? (body.calendar_offset_days ?? 0) : 0;
+}
+
+/**
+ * 個人タスクの所有者。空文字は「共有」として扱う（フォームのセレクトが空値で共有を表すため）。
+ */
+function personalOwnerFromInput(body: TaskInput): string | null {
+  if (typeof body.personal_owner !== 'string') return null;
+  const owner = body.personal_owner.trim();
+  return owner === '' ? null : owner;
+}
+
+/**
+ * 個人タスクの所有者は登録ユーザーに限る。カンバンは選択中ユーザー名で所有者を照合するので、
+ * 登録の無い名前で保存できると誰にも見えないカードが起票され続ける。
+ */
+function unregisteredOwnerError(db: ReturnType<typeof getDb>, owner: string | null): string | null {
+  if (owner === null) return null;
+  const registered = db.prepare('SELECT 1 FROM users WHERE name = ?').get(owner);
+  return registered ? null : '個人タスクの所有者は登録済みのユーザーから選んでください';
+}
+
+/** 個人タスクは家事の分担ではないのでポイントを付けない（統計にも入れない） */
+function pointsForDb(body: TaskInput, owner: string | null): number {
+  return owner ? 0 : (body.points ?? 1);
 }
 
 function isValidMonthDay(mm: number, dd: number): boolean {
@@ -219,6 +245,12 @@ function validateTaskInput(body: TaskInput): string | null {
     }
   }
 
+  if (body.personal_owner !== undefined && body.personal_owner !== null) {
+    if (typeof body.personal_owner !== 'string' || body.personal_owner.length > 100) {
+      return '個人タスクの所有者が不正です';
+    }
+  }
+
   if (body.absence_behavior !== undefined && body.absence_behavior !== null) {
     if (!VALID_ABSENCE_BEHAVIORS.includes(body.absence_behavior)) {
       return '無効な不在時の扱いです（normal / hidden）';
@@ -330,6 +362,13 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
 
+  const personalOwner = personalOwnerFromInput(body);
+  const ownerError = unregisteredOwnerError(db, personalOwner);
+  if (ownerError) {
+    res.status(400).json({ error: ownerError });
+    return;
+  }
+
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
   const monthOfYear = body.month_of_year ?? null;
@@ -337,7 +376,7 @@ router.post('/', (req: Request, res: Response) => {
   const interval = body.frequency_interval ?? null;
   const nextDueDate = calculateNextDueDate(body.frequency_type, interval, today, monthOfYear, dayOfMonth);
 
-  const points = body.points ?? 1;
+  const points = pointsForDb(body, personalOwner);
   const scheduledHour = body.scheduled_hour ?? 0;
   const sickDayBehavior = body.sick_day_behavior ?? 'normal_only';
   const absenceBehavior = body.absence_behavior ?? defaultAbsenceBehavior(body.category);
@@ -350,8 +389,8 @@ router.post('/', (req: Request, res: Response) => {
   const isPriority = body.is_priority ? 1 : 0;
   const now = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, exclude_holiday, exclude_day_before_holiday, is_priority, calendar_keywords, calendar_offset_days, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_definitions (name, category, frequency_type, frequency_interval, days_of_week, day_of_month, month_of_year, nth_weekday_position, period_start_mm, period_start_dd, period_end_mm, period_end_dd, next_due_date, notes, points, scheduled_hour, sick_day_behavior, absence_behavior, exclude_holiday, exclude_day_before_holiday, is_priority, calendar_keywords, calendar_offset_days, personal_owner, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
@@ -378,6 +417,7 @@ router.post('/', (req: Request, res: Response) => {
     isPriority,
     calendarKeywordsForDb(body),
     calendarOffsetForDb(body),
+    personalOwner,
     now,
     now,
   );
@@ -410,6 +450,13 @@ router.put('/:id', (req: Request, res: Response) => {
     return;
   }
 
+  const personalOwner = personalOwnerFromInput(body);
+  const ownerError = unregisteredOwnerError(db, personalOwner);
+  if (ownerError) {
+    res.status(400).json({ error: ownerError });
+    return;
+  }
+
   const daysOfWeek = body.days_of_week ? body.days_of_week.join(',') : null;
   const dayOfMonth = body.day_of_month ?? null;
   const monthOfYear = body.month_of_year ?? null;
@@ -427,7 +474,7 @@ router.put('/:id', (req: Request, res: Response) => {
     ? calculateNextDueDate(body.frequency_type, interval, today, monthOfYear, dayOfMonth)
     : existing.next_due_date;
 
-  const points = body.points ?? 1;
+  const points = pointsForDb(body, personalOwner);
   const scheduledHour = body.scheduled_hour ?? 0;
   const sickDayBehavior = body.sick_day_behavior ?? existing.sick_day_behavior;
   const absenceBehavior = body.absence_behavior ?? existing.absence_behavior;
@@ -445,7 +492,7 @@ router.put('/:id', (req: Request, res: Response) => {
         period_start_mm = ?, period_start_dd = ?, period_end_mm = ?, period_end_dd = ?,
         next_due_date = ?, notes = ?, points = ?, scheduled_hour = ?, sick_day_behavior = ?,
         absence_behavior = ?, exclude_holiday = ?, exclude_day_before_holiday = ?, is_priority = ?,
-        calendar_keywords = ?, calendar_offset_days = ?, updated_at = ?
+        calendar_keywords = ?, calendar_offset_days = ?, personal_owner = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -473,6 +520,7 @@ router.put('/:id', (req: Request, res: Response) => {
     isPriority,
     calendarKeywordsForDb(body),
     calendarOffsetForDb(body),
+    personalOwner,
     new Date().toISOString(),
     req.params.id,
   );

@@ -87,6 +87,8 @@ export interface TaskDefinition {
   calendar_keywords: string | null;
   /** カレンダー連動: 予定日の何日前に起票するか（0=当日, 1=前日） */
   calendar_offset_days: number;
+  /** 個人タスクの所有者。null なら共有タスク。起票したカードは所有者にしか見えず、ポイントは付かない */
+  personal_owner: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -114,6 +116,7 @@ export interface TaskDefinitionInput {
   is_priority?: boolean;
   calendar_keywords?: string[];
   calendar_offset_days?: number;
+  personal_owner?: string | null;
 }
 
 /** カレンダー連動の起票日（予定の何日前か）の選択肢 */
@@ -155,7 +158,6 @@ export const KANBAN_COLUMNS = {
 
 export interface TaskInstance {
   id: number;
-  /** 個人タスクはスケジュール定義を持たない */
   task_definition_id: number | null;
   title: string;
   status: TaskInstanceStatus;
@@ -167,7 +169,7 @@ export interface TaskInstance {
   sort_order: number;
   /** 定義側の値をカンバン取得時に join したもの（category と同様、インスタンスには保存しない） */
   is_priority: number;
-  /** 個人タスクなら 1。points は常に 0 で、ポイント集計には含まれない */
+  /** 個人タスク（所有者付きの定義から起票されたもの）なら 1。points は常に 0 で、ポイント集計には含まれない */
   is_personal: number;
   /** 個人タスクを表示・操作できるユーザー名 */
   personal_owner: string | null;

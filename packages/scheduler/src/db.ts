@@ -39,6 +39,8 @@ export interface TaskDefinitionRow {
   calendar_keywords: string | null;
   /** カレンダー連動: 予定日の何日前に起票するか（0=当日, 1=前日） */
   calendar_offset_days: number;
+  /** 個人タスクの所有者。null なら共有タスク。起票したカードは所有者にしか見えず、ポイントは付かない */
+  personal_owner: string | null;
 }
 
 type Migration = {
@@ -289,6 +291,45 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 22,
+    up: (db) => {
+      // 個人タスクをタスク定義として持つ（personal_owner が NULL なら共有タスク）。
+      // v20 では個人タスクを「定義を持たない単発カード」として作ったが、定期で起票したい
+      // という要望で定義側に所有者を持たせる形に変えた。task_instances の CHECK 制約は
+      // 「定義なし」を要求していたので、表を作り直して所有者とポイント0だけを要求する。
+      // 列定義は web 側の v22 と必ず揃えること。
+      db.exec(`
+        ALTER TABLE task_definitions ADD COLUMN personal_owner TEXT DEFAULT NULL;
+
+        CREATE TABLE task_instances_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_definition_id INTEGER DEFAULT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'done')),
+          assignee TEXT DEFAULT NULL,
+          points INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          completed_at TEXT DEFAULT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_personal INTEGER NOT NULL DEFAULT 0 CHECK(is_personal IN (0, 1)),
+          personal_owner TEXT DEFAULT NULL,
+          CHECK(is_personal = 0 OR (personal_owner IS NOT NULL AND points = 0)),
+          FOREIGN KEY (task_definition_id) REFERENCES task_definitions(id)
+        );
+        INSERT INTO task_instances_new
+          (id, task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order, is_personal, personal_owner)
+          SELECT id, task_definition_id, title, status, assignee, points, created_at, completed_at, sort_order, is_personal, personal_owner
+          FROM task_instances;
+        DROP TABLE task_instances;
+        ALTER TABLE task_instances_new RENAME TO task_instances;
+        CREATE INDEX idx_task_instances_status ON task_instances(status);
+        CREATE INDEX idx_task_instances_task_def ON task_instances(task_definition_id);
+        CREATE INDEX idx_task_instances_completed ON task_instances(completed_at);
+        CREATE INDEX idx_task_instances_personal_owner ON task_instances(personal_owner);
+      `);
+    },
+  },
 ];
 
 function runMigrations(db: Database.Database): void {
@@ -465,9 +506,8 @@ export function getLastCompletedDateJST(db: Database.Database, taskDefId: number
 
 export function createTaskInstance(
   db: Database.Database,
-  taskDefId: number,
+  task: Pick<TaskDefinitionRow, 'id' | 'points' | 'personal_owner'>,
   title: string,
-  points: number,
   createdAt: string,
 ): number {
   const maxRow = db.prepare(
@@ -475,10 +515,23 @@ export function createTaskInstance(
   ).get() as { max_order: number };
   const sortOrder = maxRow.max_order + 1;
 
+  // 個人タスクは所有者を担当者にして起票し、ポイントは付けない（集計にも入らない）。
+  // web 側の create-from-definition と同じ形で入れること。
+  const owner = task.personal_owner;
   const result = db.prepare(`
-    INSERT INTO task_instances (task_definition_id, title, status, points, created_at, sort_order)
-    VALUES (?, ?, 'todo', ?, ?, ?)
-  `).run(taskDefId, title, points, createdAt, sortOrder);
+    INSERT INTO task_instances
+      (task_definition_id, title, status, assignee, points, created_at, sort_order, is_personal, personal_owner)
+    VALUES (?, ?, 'todo', ?, ?, ?, ?, ?, ?)
+  `).run(
+    task.id,
+    title,
+    owner ?? null,
+    owner ? 0 : task.points,
+    createdAt,
+    sortOrder,
+    owner ? 1 : 0,
+    owner ?? null,
+  );
   return Number(result.lastInsertRowid);
 }
 

@@ -23,7 +23,7 @@ React 19 + Vite SPA frontend with Express.js API backend, sharing a single packa
 - `POST /api/tasks/:id/toggle` — Toggle is_active
 - `POST /api/tasks/import` — Bulk import (skips manually edited records where `updated_at !== created_at`)
 - `GET /api/kanban` — List shared task instances (filter: status, assignee, category). Pass `user=<name>` to include that user's personal tasks; omit it to never return personal tasks.
-- `POST /api/kanban/personal-tasks` — Create a one-off personal task (`title`, `user`); it is not scheduled and never earns points
+- Personal tasks are task definitions with `personal_owner` set (see root CLAUDE.md「個人タスク」). Instances carry `is_personal=1`, `personal_owner`, `points=0`; the scheduler and `create-from-definition` both stamp them.
 - `PATCH /api/kanban/:id/status` — Change status (with optional assignee)
 - `PATCH /api/kanban/:id/assignee` — Change assignee
 - `GET/PUT /api/kanban/assignees` — Manage registered assignees
